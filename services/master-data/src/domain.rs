@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(Clone, Copy)]
@@ -29,7 +29,8 @@ pub(crate) struct Article {
     pub(crate) created_by: Uuid,
     pub(crate) schema_version: u32,
     pub(crate) revision: u32,
-    pub(crate) created_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub(crate) created_at: OffsetDateTime,
     pub(crate) sku: String,
     pub(crate) name: String,
 }
@@ -58,7 +59,7 @@ impl Article {
             created_by: scope.actor,
             schema_version: 1,
             revision: 1,
-            created_at: Utc::now(),
+            created_at: OffsetDateTime::now_utc(),
             sku,
             name,
         })
