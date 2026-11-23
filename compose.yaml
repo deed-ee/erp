@@ -1,0 +1,35 @@
+services:
+  mongo:
+    image: mongo:8.0.24@sha256:1d5421397c3ef6086739de7c482eec81eed93840c774e85f98e99765806809cc
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dev_mongo_admin
+      MONGO_INITDB_ROOT_PASSWORD: ${DEV_MONGO_ROOT_PASSWORD:?Run sh scripts/init-dev.sh first}
+      DEV_MASTER_DATA_PASSWORD: ${DEV_MASTER_DATA_PASSWORD:?Run sh scripts/init-dev.sh first}
+    volumes:
+      - mongo-data:/data/db
+      - ./infrastructure/compose/init-master-data.sh:/docker-entrypoint-initdb.d/init-master-data.sh:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand({hello:1}).isWritablePrimary ? 0 : 1)", "mongodb://mongo:27017/admin"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+  master-data:
+    build:
+      context: .
+      dockerfile: services/master-data/Dockerfile
+    environment:
+      ERP4US_MODE: local-demo
+      ERP4US_BIND: 0.0.0.0:8080
+      ERP4US_DEMO_TOKEN: ${ERP4US_DEMO_TOKEN:?Run sh scripts/init-dev.sh first}
+      MASTER_DATA_MONGODB_URI: mongodb://master_data_app:${DEV_MASTER_DATA_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/master_data?serverSelectionTimeoutMS=3000&connectTimeoutMS=3000
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${ERP4US_PORT:-8080}:8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  mongo-data:

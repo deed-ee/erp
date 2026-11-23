@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Business event envelope v1 (proposed)",
+  "type": "object",
+  "required": ["messageId", "messageType", "schemaVersion", "timestamp", "tenantId", "sourceService", "actor", "correlationId", "payload"],
+  "properties": {
+    "messageId": { "type": "string", "format": "uuid" },
+    "messageType": { "type": "string", "pattern": "^business\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*\\.v[1-9][0-9]*$" },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "organizationId": { "type": "string", "format": "uuid" },
+    "sourceService": { "type": "string", "minLength": 1 },
+    "actor": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["user", "service", "agent"] }
+      }
+    },
+    "correlationId": { "type": "string", "format": "uuid" },
+    "causationId": { "type": "string", "format": "uuid" },
+    "traceparent": { "type": "string" },
+    "tracestate": { "type": "string" },
+    "payload": { "type": "object" }
+  }
+}

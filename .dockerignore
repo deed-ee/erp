@@ -1,0 +1,9 @@
+**
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
+!services/
+!services/master-data/
+!services/master-data/Cargo.toml
+!services/master-data/src/
+!services/master-data/src/**

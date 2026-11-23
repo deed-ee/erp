@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Article v1",
+  "type": "object",
+  "required": ["id", "tenant_id", "organization_id", "created_by", "schema_version", "revision", "created_at", "sku", "name"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "organization_id": { "type": "string", "format": "uuid" },
+    "created_by": { "type": "string", "format": "uuid" },
+    "schema_version": { "const": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "sku": { "$ref": "register-article-v1.json#/properties/sku" },
+    "name": { "$ref": "register-article-v1.json#/properties/name" }
+  }
+}

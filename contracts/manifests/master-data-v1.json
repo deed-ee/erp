@@ -1,0 +1,13 @@
+{
+  "protocolVersion": "1.0-draft",
+  "service": "erp4us.master-data",
+  "version": "0.1.0",
+  "publisher": "erp4us maintainers",
+  "license": "NOASSERTION",
+  "platformCompatibility": ["1.0-draft"],
+  "dependencies": {},
+  "capabilities": ["master-data.article"],
+  "openapi": "../openapi/master-data-v1.yaml",
+  "entities": ["../entities/article-v1.json"],
+  "health": { "live": "/health/live", "ready": "/health/ready" }
+}

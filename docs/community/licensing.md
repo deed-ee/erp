@@ -1,0 +1,13 @@
+# Licensing decision (pending)
+
+**Recommendation: Apache-2.0 for the complete project.** Its permissive reuse and express patent grant simplify adoption, commercial use, embedded deployments, proprietary integrations, independent forks and contributions. Notices and license obligations still apply when distributing covered work. Hosted modifications do not generally have to be offered as source. This option puts interoperability and broad adoption ahead of reciprocity.
+
+**Alternative: AGPL-3.0 for the platform and business services; Apache-2.0 for SDKs, specifications and integration examples.** The AGPL network interaction provision requires offering corresponding source to users interacting remotely with a modified version. Commercial hosting and forks remain allowed. Reciprocity protects access to covered modifications, but can slow legal review and contributor adoption. A separate service using documented APIs can often remain independently licensed; the consequences depend on how components are combined or distributed. A split policy requires clear file-level licensing, release inventories and legal review of shared code, SDKs and extension boundaries.
+
+## Infrastructure and toolchain
+
+- MongoDB Community Server uses the [SSPL](https://www.mongodb.com/legal/licensing/server-side-public-license), which is **not OSI-approved**. The official Rust driver is Apache-2.0. Self-hostable does not mean every infrastructure component is OSI-licensed; distributing the server or offering it as a service requires its own license review.
+- NATS Server and common self-hosted OIDC candidates such as Keycloak use Apache-2.0; Helm/Kubernetes are Apache-2.0. S3 is an interface, not a license: evaluate the exact storage distribution (e.g. Apache-2.0 SeaweedFS vs. AGPL-licensed distributions), features and packaged dependencies before choosing.
+- Rust is generally dual MIT/Apache-2.0; Tokio, Axum and Angular use permissive terms. OCI base images, Debian packages, binaries in vendor images, Docker distributions and third-party frontend assets each require a component inventory and their own notices. GitHub Actions/GHCR are optional for development automation and image hosting, not runtime requirements.
+
+Maintainer approval is required for the project license and any licensing split, contribution terms (recommend an approved DCO rather than a CLA), S3/IdP distributions after evaluation, and artifact publication. Until a license is approved, no `LICENSE` file, SPDX designation for project code or broad reuse grant is implied by a public repository. Do not solicit third-party code contributions before the terms are in place. This is a project recommendation, not legal advice.

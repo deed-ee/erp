@@ -1,0 +1,20 @@
+{
+  "specVersion": "1.0-draft",
+  "entity": "master-data.article",
+  "schema": "../schemas/article-v1.json",
+  "labelKey": "masterData.article.title",
+  "operations": {
+    "register": {
+      "kind": "command",
+      "operationId": "registerArticle",
+      "permission": "master-data.article.register",
+      "labelKey": "masterData.article.register"
+    },
+    "get": {
+      "kind": "query",
+      "operationId": "getArticle",
+      "permission": "master-data.article.read",
+      "labelKey": "masterData.article.read"
+    }
+  }
+}

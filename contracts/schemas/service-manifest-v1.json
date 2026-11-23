@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Open Business Service Protocol draft manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "service", "version", "publisher", "license", "platformCompatibility", "dependencies", "capabilities", "openapi", "entities", "health"],
+  "properties": {
+    "protocolVersion": { "const": "1.0-draft" },
+    "service": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "publisher": { "type": "string", "minLength": 1 },
+    "license": { "type": "string", "minLength": 1 },
+    "platformCompatibility": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "const": "1.0-draft" } },
+    "dependencies": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" },
+      "additionalProperties": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+    },
+    "capabilities": {
+      "type": "array", "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "openapi": { "type": "string", "format": "uri-reference" },
+    "entities": {
+      "type": "array", "uniqueItems": true,
+      "items": { "type": "string", "format": "uri-reference" }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live", "ready"],
+      "properties": {
+        "live": { "type": "string", "pattern": "^/[a-zA-Z0-9/_-]+$" },
+        "ready": { "type": "string", "pattern": "^/[a-zA-Z0-9/_-]+$" }
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+openapi: 3.1.0
+info:
+  title: erp4us Master Data (local demo)
+  version: 0.1.0
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - LocalDemoBearer: []
+paths:
+  /v1/articles:register:
+    post:
+      operationId: registerArticle
+      description: Register a unique SKU in the authenticated scope. A repeated SKU returns 409. Request bodies are limited to 4096 bytes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/register-article-v1.json
+      responses:
+        '201':
+          description: Article registered.
+          headers:
+            Location:
+              required: true
+              schema: { type: string, format: uri-reference }
+          content:
+            application/json:
+              schema: { $ref: ../schemas/article-v1.json }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/articles/{id}:
+    get:
+      operationId: getArticle
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Article in the authenticated scope.
+          content:
+            application/json:
+              schema: { $ref: ../schemas/article-v1.json }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /health/live:
+    get:
+      operationId: live
+      security: []
+      responses:
+        '204': { description: Process is listening. }
+  /health/ready:
+    get:
+      operationId: ready
+      security: []
+      responses:
+        '204': { description: Database is reachable. }
+        '503': { description: Database is unavailable. }
+components:
+  securitySchemes:
+    LocalDemoBearer:
+      type: http
+      scheme: bearer
+      description: Local development only; not an OAuth access token.
+  responses:
+    Unauthorized:
+      description: A valid demo bearer token is required.
+      headers:
+        WWW-Authenticate:
+          required: true
+          schema: { const: Bearer }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Problem:
+      description: The request was rejected or the persistence service is unavailable.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [status, detail]
+      properties:
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }

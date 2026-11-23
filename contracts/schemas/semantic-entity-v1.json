@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Semantic entity descriptor v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specVersion", "entity", "schema", "labelKey", "operations"],
+  "properties": {
+    "specVersion": { "const": "1.0-draft" },
+    "entity": { "type": "string", "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$" },
+    "schema": { "type": "string", "format": "uri-reference" },
+    "labelKey": { "type": "string", "minLength": 1 },
+    "operations": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "operationId", "permission", "labelKey"],
+        "properties": {
+          "kind": { "enum": ["command", "query"] },
+          "operationId": { "type": "string", "minLength": 1 },
+          "permission": { "type": "string", "minLength": 1 },
+          "labelKey": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
