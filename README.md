@@ -20,6 +20,20 @@ The script waits for readiness, registers a synthetic article, verifies authoriz
 
 Use the pinned Rust toolchain for `cargo test --locked`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets --locked -- -D warnings`. For contracts, install `tests/contracts/requirements.txt` in a Python virtual environment and run `python tests/contracts/check.py`.
 
+## Try the local Angular workspace
+
+With the Compose slice above running, use Node 24 (pinned in `ui/.nvmrc`):
+
+```sh
+cd ui
+npm ci
+npm start
+```
+
+Open **http://127.0.0.1:4200/**. Paste only the `ERP4US_DEMO_TOKEN` value from the repository's local `.env` into the password field. The UI holds it in memory until reload; do not share it. Register a synthetic article, then use its returned ID to retrieve it. The language button switches between German and English. Each action button has a decorative icon and a visible translated label.
+
+The Angular development server forwards `/v1/` to the loopback API. If you changed the API port in `.env`, start the UI with `ERP4US_PORT=<port> npm start`. This is a local preview on the existing demo auth contract, not the planned registry-driven UI or an OIDC login. From `ui/`, `npm run build` creates the static bundle; `npx playwright install chromium` and `npm run test:e2e` exercise the UI against the running demo API with synthetic data.
+
 ## Help shape the first workflow
 
 - **Try the quickstart above.** Could you register and retrieve an article on your machine? If a step failed, [report where you got stuck](https://github.com/deed-ee/erp4us/issues/new?template=bug.md) with your OS, Docker version and the first failing step. Leave out credentials and use synthetic data.
