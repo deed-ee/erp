@@ -1,6 +1,6 @@
 services:
   mongo:
-    image: mongo:8.0.24@sha256:1d5421397c3ef6086739de7c482eec81eed93840c774e85f98e99765806809cc
+    image: mongo:8.0.38@sha256:479e85ced54ffb8a40dade1dcde2da2a9ae858515b9415e9cc54bfb8f0575d01
     environment:
       MONGO_INITDB_ROOT_USERNAME: dev_mongo_admin
       MONGO_INITDB_ROOT_PASSWORD: ${DEV_MONGO_ROOT_PASSWORD:?Run sh scripts/init-dev.sh first}
