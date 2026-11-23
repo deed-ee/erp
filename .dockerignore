@@ -7,3 +7,7 @@
 !services/master-data/Cargo.toml
 !services/master-data/src/
 !services/master-data/src/**
+!services/article-delivery/
+!services/article-delivery/Cargo.toml
+!services/article-delivery/src/
+!services/article-delivery/src/**
