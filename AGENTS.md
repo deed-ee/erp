@@ -19,3 +19,7 @@ Before finishing or pausing a task, update the PR description with the outcome, 
 ## Requirements engineering
 
 Check the [catalog](docs/requirements/index.md), linked issues and open PRs before proposing a capability. Use stable IDs, a business example and a counterexample; separate a requirement, a policy option and a deployment decision. Follow the [review process](docs/requirements/guide.md), preserve earlier IDs and decision history, and link contracts, PRs, tests and evidence as work lands. Never infer approval from an issue or verification from an open PR. Validate changed records and regenerate the public index.
+
+## Dependency changes
+
+Follow the [monthly maintenance policy](https://github.com/erp4us-org/.github/blob/main/docs/dependency-maintenance.md). Keep alerts and grouped security updates enabled, scheduled version PRs and auto-merge disabled. Preserve lockfiles and pins; review advisories, licenses, migration and rollback, and require passing gates before manual merge. Expedite critical fixes.
