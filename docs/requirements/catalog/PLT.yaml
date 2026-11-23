@@ -10,7 +10,7 @@
   actors:
   - Operator
   priority: P0
-  status: proposed
+  status: in-implementation
   dependencies: []
   milestone: M0
   acceptance:
@@ -27,11 +27,13 @@
   prs:
   - 37
   contracts: []
-  tests: []
-  evidence: []
+  tests:
+  - tests/integration/smoke.py
+  evidence:
+  - https://github.com/erp4us-org/erp4us/actions/runs/45273562523
   questions:
   - Which measured RPO/RTO is affordable?
-  revision: 1
+  revision: 2
 - id: PLT-002
   title: Make deployment and migrations reproducible
   description: Rebuild the supported local environment from reviewed versions and a known checkpoint.

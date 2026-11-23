@@ -21,7 +21,7 @@ ERP by everyone, for everyone. Start with the [review guide](guide.md), [scenari
 | [IAM-002](catalog/IAM.yaml) | Separate read and write grants | M0 | P0 | proposed |
 | [IAM-003](catalog/IAM.yaml) | Protect service and agent identity lifecycle | M0 | P0 | proposed |
 | [IND-001](catalog/IND.yaml) | Prevent package authority escalation | M7 | P1 | proposed |
-| [INT-001](catalog/INT.yaml) | Deliver durable events with one local effect | M0 | P0 | proposed |
+| [INT-001](catalog/INT.yaml) | Deliver durable events with one local effect | M0 | P0 | in-implementation |
 | [INT-002](catalog/INT.yaml) | Reject incompatible contract changes | M0 | P1 | proposed |
 | [INT-003](catalog/INT.yaml) | Retry a command without duplicating its effect | M1 | P1 | proposed |
 | [INT-004](catalog/INT.yaml) | Resolve typed references under authorization | M1 | P1 | proposed |
@@ -44,7 +44,7 @@ ERP by everyone, for everyone. Start with the [review guide](guide.md), [scenari
 | [ORG-004](catalog/ORG.yaml) | Allocate scoped business numbers | M1 | P1 | proposed |
 | [PIM-001](catalog/PIM.yaml) | Publish a market-specific product description | M2 | P2 | proposed |
 | [PLM-001](catalog/PLM.yaml) | Compare delivered and maintained configuration | M5 | P2 | proposed |
-| [PLT-001](catalog/PLT.yaml) | Restore a synthetic installation | M0 | P0 | proposed |
+| [PLT-001](catalog/PLT.yaml) | Restore a synthetic installation | M0 | P0 | in-implementation |
 | [PLT-002](catalog/PLT.yaml) | Make deployment and migrations reproducible | M0 | P1 | proposed |
 | [PLT-003](catalog/PLT.yaml) | Measure resource and latency baselines | M0 | P2 | proposed |
 | [PLT-004](catalog/PLT.yaml) | Port business data to a fresh installation | M1 | P1 | proposed |

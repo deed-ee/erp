@@ -2,11 +2,16 @@
 
 **Vision:** ERP by everyone, for everyone. A solo consultant must not create a warehouse to send a service order. A manufacturer that also sells engineering time should add physical fulfillment per line, not migrate to a different core. These are product principles, not a claim that either flow exists today.
 
-## Inventory at the start of this iteration
+## Delivery baseline
 
-At application `main` commit `c48946c`, only local Article register/get is executable: [domain](../../services/master-data/src/domain.rs), [HTTP](../../services/master-data/src/http.rs), [persistence](../../services/master-data/src/store.rs), [API](../../contracts/openapi/master-data-v1.yaml), [semantic descriptor](../../contracts/entities/article-v1.json), [contract checks](../../tests/contracts/check.py) and [restart smoke](../../tests/integration/smoke.py). Fixed scope and a demo bearer do **not** establish tenant isolation. ADRs 0001–0003 establish ownership, at-least-once delivery and semantic layering; no durable messaging or production tenancy is shipped on this baseline.
+At application `main` commit `0313eee`, the executable business flow is local Article register/get: [domain](../../services/master-data/src/domain.rs), [HTTP](../../services/master-data/src/http.rs), [API](../../contracts/openapi/master-data-v1.yaml) and [semantic descriptor](../../contracts/entities/article-v1.json). The demo bearer still has fixed scope. ADRs 0001–0003 establish ownership, messaging semantics and contract layering; they do not establish production tenant isolation.
 
-Reviewed open work: [identity #15](https://github.com/erp4us-org/erp4us/pull/15), [community roadmap #28](https://github.com/erp4us-org/erp4us/pull/28), [industry model #31](https://github.com/erp4us-org/erp4us/pull/31), [restore #37](https://github.com/erp4us-org/erp4us/pull/37), [local UI #38](https://github.com/erp4us-org/erp4us/pull/38). PRs are context, **not delivery evidence**. At inspection the public forum had no discussions; no practitioner consensus is assumed. Existing #16 and its five delivery sub-issues remain the first process epic. See [live milestones](https://github.com/erp4us-org/erp4us/milestones).
+| Requirement | Demonstrated on this baseline | Still needed for acceptance |
+|---|---|---|
+| INT-001 | [#68](https://github.com/erp4us-org/erp4us/pull/68) persists the article and pending event in one local transaction. Rejecting the outbox insert rolls back the article. | A persisted event is not delivery. Broker outage, relay restart and one consumer effect after replay require separate evidence; [#70](https://github.com/erp4us-org/erp4us/pull/70) is proposed delivery work. |
+| PLT-001 | [#37](https://github.com/erp4us-org/erp4us/pull/37) restores the synthetic database to a separate Compose project and checks the article and duplicate-SKU constraint. | A successful restore does not demonstrate handling a damaged backup, reconciliation of counts or measured recovery time and data gap. |
+
+Evidence: [passing CI on the baseline commit](https://github.com/erp4us-org/erp4us/actions/runs/45273562523), [contract checks](../../tests/contracts/check.py), [outbox and restore checks](../../tests/integration/smoke.py). Both broader requirements are **in implementation**, not verified. Open [identity #15](https://github.com/erp4us-org/erp4us/pull/15), [roadmap #28](https://github.com/erp4us-org/erp4us/pull/28), [industry model #31](https://github.com/erp4us-org/erp4us/pull/31) and [local UI #38](https://github.com/erp4us-org/erp4us/pull/38) are context, not default-branch capabilities. The [public forum](https://github.com/erp4us-org/erp4us/discussions) is open for practitioner feedback; no consensus is assumed. #16 remains the first cross-service process epic.
 
 ## Record of authority
 

@@ -500,10 +500,10 @@
       "domain": "INT",
       "capability": "INT.01",
       "type": "functional",
-      "status": "proposed",
+      "status": "in-implementation",
       "priority": "P0",
       "milestone": "M0",
-      "revision": 1,
+      "revision": 2,
       "scenarios": [
         "SC-05"
       ],
@@ -515,9 +515,16 @@
         4,
         44
       ],
-      "prs": [],
-      "tests": [],
-      "evidence": []
+      "prs": [
+        68,
+        70
+      ],
+      "tests": [
+        "tests/integration/smoke.py"
+      ],
+      "evidence": [
+        "https://github.com/erp4us-org/erp4us/actions/runs/45273562523"
+      ]
     },
     {
       "id": "INT-002",
@@ -1169,10 +1176,10 @@
       "domain": "PLT",
       "capability": "PLT.01",
       "type": "non-functional",
-      "status": "proposed",
+      "status": "in-implementation",
       "priority": "P0",
       "milestone": "M0",
-      "revision": 1,
+      "revision": 2,
       "scenarios": [
         "SC-05"
       ],
@@ -1186,8 +1193,12 @@
       "prs": [
         37
       ],
-      "tests": [],
-      "evidence": []
+      "tests": [
+        "tests/integration/smoke.py"
+      ],
+      "evidence": [
+        "https://github.com/erp4us-org/erp4us/actions/runs/45273562523"
+      ]
     },
     {
       "id": "PLT-002",

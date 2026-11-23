@@ -10,7 +10,7 @@
   actors:
   - Integration operator
   priority: P0
-  status: proposed
+  status: in-implementation
   dependencies: []
   milestone: M0
   acceptance:
@@ -25,14 +25,19 @@
   issues:
   - 4
   - 44
-  prs: []
+  prs:
+  - 68
+  - 70
   contracts:
   - contracts/schemas/event-envelope-v1.json
-  tests: []
-  evidence: []
+  - contracts/schemas/article-registered-v1.json
+  tests:
+  - tests/integration/smoke.py
+  evidence:
+  - https://github.com/erp4us-org/erp4us/actions/runs/45273562523
   questions:
   - How long are deduplication markers retained?
-  revision: 1
+  revision: 2
 - id: INT-002
   title: Reject incompatible contract changes
   description: Retain versioned OpenAPI, message and semantic contracts independently of implementation language.
