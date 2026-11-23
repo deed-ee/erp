@@ -1,0 +1,22 @@
+body:
+  - type: markdown
+    attributes:
+      value: Search for similar posts first. Use a fictional example and omit confidential or customer information. You do not need to propose a design.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and who it affects
+      description: What are people trying to do? When and how often does it go wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Desired result
+      description: What should people be able to do, and how could they tell that it works?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Workarounds and related discussions

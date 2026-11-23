@@ -1,0 +1,23 @@
+body:
+  - type: markdown
+    attributes:
+      value: Contributions in all languages are welcome. Use fictional samples; do not upload real invoices, customer records or confidential documents.
+  - type: input
+    id: locale
+    attributes:
+      label: Language, locale or region
+      placeholder: French for Canada, or cross-border transactions
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Workflow and expected behavior
+      description: Show where the term, formatting, currency, unit or document convention matters.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Variations and public references
+      description: If applicable, distinguish a legal requirement from a preference and link a public source.

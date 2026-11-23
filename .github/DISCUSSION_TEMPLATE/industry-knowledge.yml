@@ -1,0 +1,23 @@
+body:
+  - type: markdown
+    attributes:
+      value: Use fictional or anonymized examples. Do not share real customer records, internal procedures that are confidential, or credentials.
+  - type: input
+    id: industry
+    attributes:
+      label: Industry and business context
+      placeholder: Repair services that also sell spare parts
+    validations:
+      required: true
+  - type: textarea
+    id: flow
+    attributes:
+      label: Process and roles
+      description: Where does the work start and end? Who does what, and where are the handoffs?
+    validations:
+      required: true
+  - type: textarea
+    id: variants
+    attributes:
+      label: Exceptions and industry differences
+      description: Which rules are industry-specific? What happens when a usual step cannot be completed?

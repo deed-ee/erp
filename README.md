@@ -27,7 +27,7 @@ The Compose CI job also runs the smoke test with `--outbox --restore`. Use these
 ## Help shape the first workflow
 
 - **Try the quickstart above.** Could you register and retrieve an article on your machine? If a step failed, [report where you got stuck](https://github.com/deed-ee/erp4us/issues/new?template=bug.md) with your OS, Docker version and the first failing step. Leave out credentials and use synthetic data.
-- **Bring an ERP example.** Suppose a customer orders ten units but only six are available. What should the salesperson see, and who decides what happens to the remaining four? Add an anonymized example and the outcome you would expect to the [order-to-procurement discussion in issue #16](https://github.com/deed-ee/erp4us/issues/16).
+- **Bring an ERP example.** Suppose a customer orders ten units but only six are available. What should the salesperson see, and who decides what happens to the remaining four? Share a fictional example in [GitHub Discussions](https://github.com/erp4us-org/erp4us/discussions). No coding or technical design is needed.
 
 Feedback and focused pull requests are welcome. See [Contributing](CONTRIBUTING.md) for the checks and commit sign-off.
 

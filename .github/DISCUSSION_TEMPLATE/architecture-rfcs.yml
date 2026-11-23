@@ -1,0 +1,25 @@
+body:
+  - type: markdown
+    attributes:
+      value: Describe a proposal, not an accepted decision. Keep private designs, credentials and customer data out of the discussion.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem, constraints and related requirements
+      description: Link existing discussion, requirement, RFC or ADR records if available.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options and trade-offs
+      description: Include keeping the current approach where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: impacts
+    attributes:
+      label: Impact and verification
+      description: Explain compatibility, migration, security and how you would verify the outcome.
+    validations:
+      required: true

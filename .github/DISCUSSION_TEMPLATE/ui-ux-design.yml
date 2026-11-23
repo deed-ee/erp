@@ -1,0 +1,23 @@
+body:
+  - type: markdown
+    attributes:
+      value: Describe the experience in your own words. Sketches are optional and should use fictional data. Do not upload real customer or confidential information.
+  - type: textarea
+    id: task
+    attributes:
+      label: Task and context
+      description: What were you trying to do, and where did it become difficult?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired experience
+      description: What would make the task easier or safer, and how could we check that it improves?
+    validations:
+      required: true
+  - type: textarea
+    id: accessibility
+    attributes:
+      label: Accessibility and device context
+      description: If relevant, mention keyboard use, assistive technology or device constraints.

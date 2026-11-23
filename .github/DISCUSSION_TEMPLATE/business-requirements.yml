@@ -1,0 +1,25 @@
+body:
+  - type: markdown
+    attributes:
+      value: Use a fictional or anonymized example. No technical solution is needed. Do not include customer data or confidential information.
+  - type: textarea
+    id: need
+    attributes:
+      label: Who needs what and why?
+      description: Describe the role, the task and what triggers it.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example and exceptions
+      description: Walk through an example, including where the current process falls short and which cases differ.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What would success look like?
+      description: Describe an outcome you could see or check.
+    validations:
+      required: true
