@@ -1,0 +1,35 @@
+name: Database image advisories
+on:
+  pull_request:
+    paths: [compose.yaml]
+  schedule:
+    - cron: '37 7 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scan-mongo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with: { persist-credentials: false, fetch-depth: 2 }
+      - name: Scan published MongoDB digest on changes and during monitoring
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          ref() { docker compose -f "$1" config --no-interpolate --format json | jq -er '.services.mongo.image'; }
+          image=$(ref compose.yaml)
+          if [ -n "$BASE" ]; then
+            git show "$BASE:compose.yaml" > "$RUNNER_TEMP/base.yaml"
+            previous=$(ref "$RUNNER_TEMP/base.yaml")
+            if [ "$previous" = "$image" ]; then
+              echo "MongoDB image unchanged; weekly monitoring covers the existing pin."
+              exit 0
+            fi
+          fi
+          sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/trivy" image --image-src remote --scanners vuln --severity HIGH,CRITICAL \
+            --format json --output "$RUNNER_TEMP/mongo.json" "$image"
+          "$RUNNER_TEMP/tools/trivy" convert --format table "$RUNNER_TEMP/mongo.json"
+          jq -e '[.Results[].Vulnerabilities[]? | select((.FixedVersion // "") != "")] | length == 0' "$RUNNER_TEMP/mongo.json"
