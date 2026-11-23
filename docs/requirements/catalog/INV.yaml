@@ -1,6 +1,6 @@
 - id: INV-001
   title: Conserve available stock under competing reservations
-  description: Reserve only eligible stock within the warehouse and scope.
+  description: For an ordinary stocked item in SC-05, reserve eligible on-hand stock immediately and leave outstanding demand open.
   rationale: Two sales confirmations must not promise the same six units.
   type: functional
   domain: INV
@@ -10,7 +10,9 @@
   actors:
   - Warehouse operator
   priority: P1
-  status: proposed
+  status: approved
+  reviewedOn: '2026-11-23'
+  disposition: Maintainer selected partial reservation for the first Demo Trading flow (#58). Waiting for all ten is not the reference policy; this does not mandate partial shipment or purchasing.
   dependencies:
   - UOM-001
   - INT-001
@@ -18,6 +20,9 @@
   acceptance:
   - Two concurrent requests for six against six result in at most six reserved; replay creates no extra movement
     and reversal restores the eligible quantity.
+  - Order A requests ten; six are eligible and four expected. Reserve six for A and leave four open. Order B cannot reserve the same six; expected receipts count as zero eligible units until posted.
+  - With ship-complete terms the six remain reserved but none may ship alone. A shortage does not authorize a purchase order. After separate purchase approval and receipt, reserve the remaining four once.
+  - If A cancels before receipt, release exactly six. Replaying cancellation releases zero additional units and does not automatically cancel or approve a purchase commitment.
   scenarios:
   - SC-05
   decisions:
@@ -33,5 +38,5 @@
   tests: []
   evidence: []
   questions:
-  - Do we reserve a partial amount or wait?
-  revision: 1
+  - Which other order types require a different allocation policy?
+  revision: 2

@@ -73,7 +73,7 @@
   revision: 1
 - id: ORG-003
   title: Share only nominated master records
-  description: Resolve explicit tenant-level sharing and permitted organization overrides.
+  description: In SC-08, keep one Article identity and explicitly grant each participating company access to it.
   rationale: A blank organization selector must never mean global read access.
   type: functional
   domain: ORG
@@ -83,16 +83,17 @@
   actors:
   - Company administrator
   priority: P1
-  status: proposed
+  status: approved
+  reviewedOn: '2026-11-23'
+  disposition: Maintainer selected shared identity with explicit company grants for the first Demo Global case (#54), rather than separate mapped copies.
   dependencies:
   - ORG-001
   - ORG-002
   milestone: M1
   acceptance:
-  - Publish G1 to two organizations; each sees its own approved override; an unrelated local item remains absent
-    from both search counts and exports.
-  - A viewer allowed to read a shared party but not its personal contact fields cannot recover those fields through
-    search, export or a related-object preview.
+  - Grant A and B access to G1. B changes its local description; both still refer to G1, A's description is unchanged and a confirmed order retains its original wording.
+  - A's negotiated purchase price remains a local commercial fact. Sharing G1 does not expose that price to B, including in exports.
+  - Company C has no grant. G1 is absent from its lookup, search counts and export even though C is in the same tenant.
   scenarios:
   - SC-08
   decisions:
@@ -108,7 +109,7 @@
   evidence: []
   questions:
   - What takes precedence if an override expires?
-  revision: 1
+  revision: 2
 - id: ORG-004
   title: Allocate scoped business numbers
   description: Allocate a business number separately from immutable internal identity.

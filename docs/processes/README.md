@@ -6,8 +6,8 @@
 flowchart LR
  Q[Accepted quote] --> O[Sales confirms order]
  O -->|physical line| R{Inventory can reserve?}
- R -->|yes| S[Reserve eligible stock]
- R -->|no| P[Procurement proposal]
+ R -->|eligible units| S[Reserve eligible stock]
+ R -->|unmet demand| P[Procurement proposal]
  P --> A{Authorized approval?}
  A -->|no| W[Wait or reject with reason]
  A -->|yes| PO[Issue purchase order]
@@ -16,6 +16,6 @@ flowchart LR
  O -->|service line| T[Accept delivered work]
 ```
 
-A warehouse reports six available against ten ordered. Whether to reserve six now or hold the whole order is an unresolved commercial policy, not an architectural default. Acceptance of a proposed partial-fill policy must not silently authorize procurement. A service-only engagement never enters the inventory branch.
+In the approved SC-05 reference flow both branches apply: reserve the six eligible units now and leave four open. Ship-complete terms prevent dispatch of the six alone; they do not prevent holding the six. Procurement requires separate approval. A service-only engagement never enters the inventory branch.
 
 **Reading a card:** `objects` names the records, `result` gives the measurable business outcome, and `outcomeEvent` names what another participant may observe. `alternative` describes a legitimate variant; `exception` describes a failure or blocked path. For example, *Purchase requisition to purchase order* starts with unmet demand, creates a proposal, then an authorized PO; rejection produces no supplier commitment. These are logical processes: no requirement to run a workflow engine before any given step.

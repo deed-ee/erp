@@ -4,11 +4,14 @@ Use the existing [RFC process](../../GOVERNANCE.md#rfc-process). A research tick
 
 | Question | Example that should distinguish options | Decision owner for review (not an appointment) |
 |---|---|---|
-| [Sharing and overrides #54](https://github.com/erp4us-org/erp4us/issues/54) | G1 shared, company-local price/access hidden from a sibling | Organizations and Master Data maintainers with company stewards |
 | [Retroactive facts #55](https://github.com/erp4us-org/erp4us/issues/55) | Address entered today, valid last week, invoice already sent | Record owner and commercial document owner |
 | [Conversions #56](https://github.com/erp4us-org/erp4us/issues/56) | Fixed pack versus measured timber volume and mass | Unit steward and Inventory posting owner |
 | [Translation review #57](https://github.com/erp4us-org/erp4us/issues/57) | Source revised while a translation candidate is awaiting approval | Resource owner and localization reviewers |
-| [Partial reservations #58](https://github.com/erp4us-org/erp4us/issues/58) | Two buyers, six available, ten promised; service-only line mixed in | Sales and Inventory owners with sales/warehouse practitioners |
 | [Business numbers #59](https://github.com/erp4us-org/erp4us/issues/59) | Cancelled draft and simultaneous confirmations in two entities | Document owner with local finance reviewer |
 
 Do not reopen ADR 0002 to choose a different messaging platform. The outstanding question is how long replay evidence is kept and how its effects are reconciled. Likewise, ADR 0001 decides service ownership, not the master-data override policy.
+
+## Decided for the first reference flows
+
+- [#54](https://github.com/erp4us-org/erp4us/issues/54): [ORG-003](../requirements/catalog/ORG.yaml), Demo Global. One explicitly shared Article identity; description overrides and negotiated prices remain company-local. Override expiry remains a separate question.
+- [#58](https://github.com/erp4us-org/erp4us/issues/58): [INV-001](../requirements/catalog/INV.yaml), Demo Trading. Reserve six of ten immediately; separate allocation from dispatch and purchase authorization. Other operating models may need a different policy.

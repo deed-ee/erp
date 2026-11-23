@@ -53,7 +53,7 @@ SC-05:
   industry: trade
   actors: Sales clerk, buyer and warehouse operator
   given: Order O1 for 10 units, six available at warehouse W1, supplier P1; second warehouse W2
-  when: Confirm quoted price and discount; record shortage; approve four more; receive, reserve and ship; later
+  when: Confirm quoted price and discount; reserve six, leave four open; separately approve procurement, receive the four, complete the reservation and ship; later
     return one.
   then: No duplicate reservation on replay; original package ratio and line amounts survive a catalog change.
   domains:
@@ -88,7 +88,7 @@ SC-08:
   company: Demo Global
   industry: international-group
   actors: Controller and local stewards
-  given: One tenant, entities DE/EUR and GB/GBP, shared item G1, separate local descriptions
+  given: One tenant; DE/EUR and GB/GBP explicitly share item G1 with company-local descriptions. A third company lacks a grant; negotiated purchase prices remain local.
   when: Sell between entities, ship internationally, invoice in local currency; change exchange rate and local tax
     policy next period.
   then: Each entity retains its own document, tax basis and applied rate; consolidation eliminates the matched pair

@@ -182,7 +182,7 @@
       "status": "proposed",
       "priority": "P1",
       "milestone": "M1",
-      "revision": 1,
+      "revision": 2,
       "scenarios": [
         "SC-04",
         "SC-08"
@@ -677,10 +677,10 @@
       "domain": "INV",
       "capability": "INV.01",
       "type": "functional",
-      "status": "proposed",
+      "status": "approved",
       "priority": "P1",
       "milestone": "M3",
-      "revision": 1,
+      "revision": 2,
       "scenarios": [
         "SC-05"
       ],
@@ -1060,10 +1060,10 @@
       "domain": "ORG",
       "capability": "ORG.01",
       "type": "functional",
-      "status": "proposed",
+      "status": "approved",
       "priority": "P1",
       "milestone": "M1",
-      "revision": 1,
+      "revision": 2,
       "scenarios": [
         "SC-08"
       ],

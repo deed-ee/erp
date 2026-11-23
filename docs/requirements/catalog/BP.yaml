@@ -55,6 +55,8 @@
   acceptance:
   - Store a multi-line address without a postal code where allowed; update the delivery contact after confirmation;
     the original order destination remains unchanged.
+  - A viewer allowed to read a shared party but not its personal contact fields cannot recover those fields through
+    search, export or a related-object preview.
   scenarios:
   - SC-04
   - SC-08
@@ -71,4 +73,4 @@
   evidence: []
   questions:
   - Who may read personal contact details?
-  revision: 1
+  revision: 2

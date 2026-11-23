@@ -27,7 +27,7 @@ ERP by everyone, for everyone. Start with the [review guide](guide.md), [scenari
 | [INT-004](catalog/INT.yaml) | Resolve typed references under authorization | M1 | P1 | proposed |
 | [INT-005](catalog/INT.yaml) | Report partial outcomes for bulk commands | M1 | P2 | proposed |
 | [INT-006](catalog/INT.yaml) | Exchange data through replaceable adapters | M7 | P3 | proposed |
-| [INV-001](catalog/INV.yaml) | Conserve available stock under competing reservations | M3 | P1 | proposed |
+| [INV-001](catalog/INV.yaml) | Conserve available stock under competing reservations | M3 | P1 | approved |
 | [LOC-001](catalog/LOC.yaml) | Keep resource keys independent of locale | M0 | P1 | proposed |
 | [LOC-002](catalog/LOC.yaml) | Protect approved translations across revisions | M1 | P2 | proposed |
 | [LOC-003](catalog/LOC.yaml) | Carry business date, zone and calendar | M1 | P1 | proposed |
@@ -40,7 +40,7 @@ ERP by everyone, for everyone. Start with the [review guide](guide.md), [scenari
 | [MNT-001](catalog/MNT.yaml) | Block use during repair | M5 | P2 | proposed |
 | [ORG-001](catalog/ORG.yaml) | Isolate equal identifiers across tenants | M0 | P0 | proposed |
 | [ORG-002](catalog/ORG.yaml) | Distinguish operating and legal responsibility | M1 | P1 | proposed |
-| [ORG-003](catalog/ORG.yaml) | Share only nominated master records | M1 | P1 | proposed |
+| [ORG-003](catalog/ORG.yaml) | Share only nominated master records | M1 | P1 | approved |
 | [ORG-004](catalog/ORG.yaml) | Allocate scoped business numbers | M1 | P1 | proposed |
 | [PIM-001](catalog/PIM.yaml) | Publish a market-specific product description | M2 | P2 | proposed |
 | [PLM-001](catalog/PLM.yaml) | Compare delivered and maintained configuration | M5 | P2 | proposed |

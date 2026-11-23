@@ -185,7 +185,7 @@
   - reservation
   - shipment
   result: Promised physical units can be matched to actual dispatch.
-  alternative: Wait for full stock or reserve a partial amount by policy.
+  alternative: For ship-complete terms in SC-05, retain the partial reservation and wait to dispatch until the line is complete.
   exception: Competing demand cannot make reservable stock negative.
 - id: PROC-10
   name: Plan to produce
