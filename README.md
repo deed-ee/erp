@@ -20,6 +20,8 @@ The script waits for readiness, registers a synthetic article, verifies authoriz
 
 Use the pinned Rust toolchain for `cargo test --locked`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets --locked -- -D warnings`. For contracts, install `tests/contracts/requirements.txt` in a Python virtual environment and run `python tests/contracts/check.py`.
 
+The Compose CI job also runs the smoke test with `--restore`. Use that flag only with a synthetic demo database and no concurrent writers: it takes a logical dump of `master_data`, restores it into a fresh Compose project, and checks that the original article is readable and its SKU still cannot be registered twice. The restore API uses `127.0.0.1:8081` by default; set `ERP4US_RESTORE_PORT` to a free port if needed. The test leaves the source volume in place and removes the temporary project and dump. This is a local recovery drill, not a production backup procedure.
+
 ## Try the local Angular workspace
 
 With the Compose slice above running, use Node 24 (pinned in `ui/.nvmrc`):

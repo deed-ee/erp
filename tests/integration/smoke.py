@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from tempfile import TemporaryFile
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -15,13 +16,13 @@ base = f"http://127.0.0.1:{os.getenv('ERP4US_PORT', env.get('ERP4US_PORT', '8080
 token = os.getenv("ERP4US_DEMO_TOKEN", env["ERP4US_DEMO_TOKEN"])
 
 
-def request(path, data=None, bearer=token):
+def request(path, data=None, bearer=token, *, origin=base):
     headers = {"Accept": "application/json"}
     if bearer is not None:
         headers["Authorization"] = f"Bearer {bearer}"
     if data is not None:
         headers["Content-Type"] = "application/json"
-    req = Request(base + path, data=data, headers=headers)
+    req = Request(origin + path, data=data, headers=headers)
     try:
         response = urlopen(req, timeout=7)
     except HTTPError as exc:
@@ -31,19 +32,63 @@ def request(path, data=None, bearer=token):
         return response.status, response.headers, json.loads(body) if body else None
 
 
-def wait_until_ready():
+def wait_until_ready(origin=base):
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         try:
-            if request("/health/ready", bearer=None)[0] == 204:
+            if request("/health/ready", bearer=None, origin=origin)[0] == 204:
                 return
         except (URLError, TimeoutError, ConnectionError):
             pass
         time.sleep(1)
-    raise RuntimeError("Master Data did not become ready")
+    raise RuntimeError(f"Master Data at {origin} did not become ready")
+
+
+def verify_restore(compose, path, article, payload):
+    target = [*compose, "-p", f"erp4us-restore-{uuid4().hex}"]
+    port = os.getenv("ERP4US_RESTORE_PORT", "8081")
+    target_env = {**os.environ, "ERP4US_PORT": port}
+
+    def mongo_tool(project, tool):
+        return [
+            *project, "exec", "-T", "mongo", "sh", "-ec",
+            f'exec {tool} --username "$MONGO_INITDB_ROOT_USERNAME" '
+            '--password "$MONGO_INITDB_ROOT_PASSWORD" '
+            '--authenticationDatabase admin',
+        ]
+
+    with TemporaryFile() as archive:
+        subprocess.run(
+            mongo_tool(compose, "mongodump --db master_data --archive"),
+            stdout=archive, check=True,
+        )
+        archive.seek(0)
+        try:
+            subprocess.run(
+                [*target, "up", "--wait", "--wait-timeout", "90", "mongo"],
+                env=target_env, check=True,
+            )
+            subprocess.run(
+                mongo_tool(target, "mongorestore --archive --stopOnError "
+                           "--nsInclude=master_data.*"),
+                stdin=archive, env=target_env, check=True,
+            )
+            subprocess.run(
+                [*target, "up", "--build", "-d", "master-data"],
+                env=target_env, check=True,
+            )
+            origin = f"http://127.0.0.1:{port}"
+            wait_until_ready(origin)
+            status, _, restored = request(path, origin=origin)
+            assert status == 200 and restored == article
+            assert request("/v1/articles:register", payload, origin=origin)[0] == 409
+            print("Master Data backup and restore passed")
+        finally:
+            subprocess.run([*target, "down", "-v", "--rmi", "local"], env=target_env, check=True)
 
 
 def main():
+    compose = [os.environ["COMPOSE_BIN"]] if "COMPOSE_BIN" in os.environ else ["docker", "compose"]
     wait_until_ready()
     assert request("/health/live", bearer=None)[0] == 204
     collection = "/v1/articles:register"
@@ -69,11 +114,12 @@ def main():
     assert status == problem["status"] == 409
     assert headers.get_content_type() == "application/problem+json"
     if "--restart" in sys.argv:
-        command = [os.environ["COMPOSE_BIN"]] if "COMPOSE_BIN" in os.environ else ["docker", "compose"]
-        subprocess.run([*command, "restart", "master-data"], check=True)
+        subprocess.run([*compose, "restart", "master-data"], check=True)
         wait_until_ready()
         assert request(path)[2] == body
     print("Master Data HTTP smoke passed" + (" (including restart)" if "--restart" in sys.argv else ""))
+    if "--restore" in sys.argv:
+        verify_restore(compose, path, body, payload)
 
 
 if __name__ == "__main__":
