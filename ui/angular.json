@@ -10,7 +10,8 @@
       "architect": {
         "build": {"builder": "@angular/build:application", "options": {
           "browser": "src/main.ts", "index": "src/index.html", "tsConfig": "tsconfig.json",
-          "outputPath": "dist/workspace", "styles": ["src/styles.css"]
+          "outputPath": "dist/workspace", "styles": ["src/styles.css"],
+          "assets": [{ "glob": "**/*", "input": "public", "output": "/" }]
         }},
         "serve": {"builder": "@angular/build:dev-server", "options": {
           "buildTarget": "workspace:build", "host": "127.0.0.1", "proxyConfig": "proxy.cjs"

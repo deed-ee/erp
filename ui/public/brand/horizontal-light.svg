@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 348 96">
+  <title>erp4us — light surfaces</title>
+  <rect width="96" height="96" rx="22" fill="#182230"/>
+  <path d="M56 22 28 56h41M56 38v36" fill="none" stroke="#e7ebf0" stroke-width="9" stroke-linejoin="round"/>
+  <g fill="#62b5ba"><rect x="48" y="14" width="16" height="16" rx="4"/><rect x="20" y="48" width="16" height="16" rx="4"/><rect x="48" y="66" width="16" height="16" rx="4"/></g>
+  <text x="114" y="68" font-family="Inter,DejaVu Sans,sans-serif" font-size="57" font-weight="700" fill="#182230">erp<tspan fill="#216f76">4</tspan>us</text>
+</svg>

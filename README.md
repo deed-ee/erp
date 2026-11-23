@@ -30,9 +30,11 @@ npm ci
 npm start
 ```
 
-Open **http://127.0.0.1:4200/**. Paste only the `ERP4US_DEMO_TOKEN` value from the repository's local `.env` into the password field. The UI holds it in memory until reload; do not share it. Register a synthetic article, then use its returned ID to retrieve it. The language button switches between German and English. Each action button has a decorative icon and a visible translated label.
+Open **http://127.0.0.1:4200/** and choose **Local demo access**. Paste only the `ERP4US_DEMO_TOKEN` value from the repository's local `.env` into the password field and select **Use for this session**. It lives in memory until reload; do not share it. In **Products**, register a synthetic article, then use the returned ID to retrieve it. Products cannot yet be browsed as a list, edited or deleted. Theme, language and density settings do not store business data or credentials.
 
 The Angular development server forwards `/v1/` to the loopback API. If you changed the API port in `.env`, start the UI with `ERP4US_PORT=<port> npm start`. This is a local preview on the existing demo auth contract, not the planned registry-driven UI or an OIDC login. From `ui/`, `npm run build` creates the static bundle; `npx playwright install chromium` and `npm run test:e2e` exercise the UI against the running demo API with synthetic data.
+
+See the [UI component guide](ui/README.md), [architecture decision](docs/adr/0004-ui-foundation.md) and [UI requirements](docs/requirements/ui-foundation.md).
 
 ## Help shape the first workflow
 
