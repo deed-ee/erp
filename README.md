@@ -4,7 +4,7 @@
 
 erp4us aims to make business software composable: organizations should be able to run their own ERP and combine independently maintained business services without handing over their data or depending on any particular cloud or AI provider. People and agents operate on the same business commands, under the same authorization and audit rules. An open protocol and semantic models make those commands discoverable without exposing a service's database.
 
-**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. It does not yet have real tenant authentication, a web UI, a broker, or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
+**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. Registration also records a pending event in MongoDB; no events are published yet. It does not yet have real tenant authentication, a web UI, a broker, or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
 
 ## Run the first slice
 
@@ -19,6 +19,10 @@ python3 tests/integration/smoke.py --restart
 The script waits for readiness, registers a synthetic article, verifies authorization and validation failures, restarts the service, and retrieves the same article. The command and response are documented in [OpenAPI](contracts/openapi/master-data-v1.yaml). The API listens on `127.0.0.1:8080`; set `ERP4US_PORT` in `.env` if needed. Stop with `docker compose down`; it preserves the local database. `docker compose down -v` **deletes** the demo data. Keep `.env` with the volume: regenerating it does not rotate existing MongoDB credentials.
 
 Use the pinned Rust toolchain for `cargo test --locked`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets --locked -- -D warnings`. For contracts, install `tests/contracts/requirements.txt` in a Python virtual environment and run `python tests/contracts/check.py`.
+
+Compose initializes a single-member MongoDB replica set for transactions. An existing demo volume can be reused with its original `.env`; take a logical dump before upgrading. Existing articles are not backfilled. To roll back, restore that dump into a fresh volume on the old Compose configuration rather than reusing the replica-set volume.
+
+The Compose CI job also runs the smoke test with `--outbox --restore`. Use these flags only with a disposable synthetic demo database and no concurrent writers. The outbox check temporarily rejects event inserts to prove that article registration rolls back. The restore check takes a logical dump of `master_data`, restores it into a fresh Compose project, and verifies that the article is readable and its SKU still cannot be registered twice. The restore API uses `127.0.0.1:8081` by default; set `ERP4US_RESTORE_PORT` to a free port if needed. The test leaves the source volume in place and removes the temporary project and dump. This is a local recovery drill, not a production backup procedure.
 
 ## Help shape the first workflow
 
