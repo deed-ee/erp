@@ -1,8 +1,10 @@
-# erp4us
+# ERP4us
 
 ![erp4us mark: connected modules forming a four](docs/community/erp4us-mark.svg)
 
-erp4us aims to make business software composable: organizations should be able to run their own ERP and combine independently maintained business services without handing over their data or depending on any particular cloud or AI provider. People and agents operate on the same business commands, under the same authorization and audit rules. An open protocol and semantic models make those commands discoverable without exposing a service's database.
+**ERP by everyone, for everyone.** ERP4us is a community-driven, open-source, modular, cloud-native and agent-native ERP and business application platform. Organizations can self-host independently maintained services without depending on any particular cloud or AI provider. People and agents use the same commands, authorization and audit rules. Open contracts make those commands discoverable without exposing a service's database.
+
+The goal is one platform for many industries, not one ERP fork per industry. A services business should not need inventory, and a process manufacturer should not have to model every transformation as an assembly. Explicit business capabilities and versioned industry packages extend shared concepts without weakening their invariants. See the [business domain model](docs/architecture/business-domain.md) and [public requirements catalog](docs/requirements/README.md) for what is committed, planned or already delivered.
 
 **Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. It does not yet have real tenant authentication, a web UI, a broker, or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
 
@@ -29,6 +31,6 @@ Feedback and focused pull requests are welcome. See [Contributing](CONTRIBUTING.
 
 ## Get oriented
 
-- [Architecture and service boundaries](docs/architecture/baseline.md) · [Threat model](docs/architecture/threat-model.md) · [Decisions](docs/adr/0001-independent-services.md)
+- [Architecture and service boundaries](docs/architecture/baseline.md) · [Threat model](docs/architecture/threat-model.md) · [Architecture review and decisions](docs/architecture/cross-industry-review.md)
 - [Open Business Service Protocol and semantic model](docs/specifications/business-service-protocol.md) · [Roadmap](ROADMAP.md)
 - [Contributing](CONTRIBUTING.md) · [Governance](GOVERNANCE.md) · [Security reporting](SECURITY.md)
