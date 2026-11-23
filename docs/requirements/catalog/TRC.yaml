@@ -1,0 +1,41 @@
+- id: TRC-001
+  title: Recall actual outputs after event expiry
+  description: Retain source facts sufficient to trace split, merged and shipped lots.
+  rationale: Transient event retention cannot define recall coverage.
+  type: business
+  domain: TRC
+  capability: TRC.01
+  industries:
+  - agriculture
+  - food
+  - recycling
+  - timber
+  actors:
+  - Recall coordinator
+  priority: P2
+  status: proposed
+  dependencies:
+  - MFG-001
+  - INV-001
+  milestone: M4
+  acceptance:
+  - Split one input into two outputs; trace to both shipments after projection rebuild; unrelated shipment and inaccessible
+    customer details are absent.
+  scenarios:
+  - SC-02
+  - SC-07
+  - SC-10
+  - SC-12
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-010
+  issues:
+  - 47
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - How are corrections shown during recall?
+  revision: 1

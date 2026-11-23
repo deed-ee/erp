@@ -1,0 +1,35 @@
+- id: PRJ-001
+  title: Reconcile partial delivery against approved scope
+  description: Associate progress measurements with a dated work package and agreement.
+  rationale: A partial invoice must not be counted again at completion.
+  type: business
+  domain: PRJ
+  capability: PRJ.01
+  industries:
+  - construction
+  - professional-services
+  actors:
+  - Project manager
+  priority: P2
+  status: proposed
+  dependencies:
+  - ORG-002
+  milestone: M3
+  acceptance:
+  - Accept 30 of 100 units then correct to 28; at completion show 72 remaining and the linked correction, not 70.
+  scenarios:
+  - SC-04
+  - SC-06
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-015
+  issues:
+  - 48
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - How are disputed measurements handled?
+  revision: 1

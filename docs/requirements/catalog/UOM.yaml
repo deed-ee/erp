@@ -1,0 +1,74 @@
+- id: UOM-001
+  title: Require exact quantities and compatible units
+  description: Record an exact value and typed unit on each quantity-bearing line.
+  rationale: Implicit units prevent reliable shortage calculation.
+  type: functional
+  domain: UOM
+  capability: UOM.01
+  industries:
+  - timber
+  - trade
+  actors:
+  - Receiving clerk
+  priority: P1
+  status: proposed
+  dependencies: []
+  milestone: M1
+  acceptance:
+  - Three quantities of 0.1 kg sum to 0.3 kg; combining kg and hours is rejected without a contextual rule; no partial
+    posting remains.
+  scenarios:
+  - SC-02
+  - SC-05
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-007
+  issues:
+  - 26
+  - 42
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What scale is permitted per unit?
+  revision: 1
+- id: UOM-002
+  title: Retain contextual conversion evidence
+  description: Bind package conversion to product, effective rule and source quantity.
+  rationale: A case is not a universal unit conversion.
+  type: functional
+  domain: UOM
+  capability: UOM.01
+  industries:
+  - timber
+  - trade
+  actors:
+  - Receiving clerk
+  priority: P1
+  status: proposed
+  dependencies:
+  - UOM-001
+  milestone: M2
+  acceptance:
+  - Two cases at 12 per case produce 24; changing the pack to 10 does not change the confirmed line; missing ratio
+    blocks conversion.
+  scenarios:
+  - SC-02
+  - SC-05
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-007
+  issues:
+  - 26
+  - 42
+  - 56
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Are observed and nominal quantities both required?
+  revision: 1

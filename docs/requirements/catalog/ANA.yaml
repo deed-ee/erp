@@ -1,0 +1,36 @@
+- id: ANA-001
+  title: Rebuild scope-filtered indicators
+  description: Calculate projections from authorized facts with freshness and source references.
+  rationale: Summary counts can disclose another organization's activity.
+  type: non-functional
+  domain: ANA
+  capability: ANA.01
+  industries:
+  - international-group
+  - trade
+  actors:
+  - Analyst
+  priority: P2
+  status: proposed
+  dependencies:
+  - INT-004
+  milestone: M3
+  acceptance:
+  - 'Rebuild a dashboard twice: totals remain stable; removing access removes hidden facts from totals, exports
+    and saved filters.'
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-013
+  issues:
+  - 52
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What lag should users see?
+  revision: 1
