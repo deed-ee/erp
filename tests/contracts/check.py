@@ -51,6 +51,16 @@ for path in manifest["health"].values():
 
 command = validator("register-article-v1.json")
 command.validate({"sku": "BRACKET-1", "name": "Steel bracket"})
+demo = load(ROOT.parent / "fixtures/demo/reference-v1.json")
+scenarios = demo["scenarios"]
+assert set(scenarios) == {f"SC-{n:02}" for n in range(1, 7)}
+assert len({scenario["tenantKey"] for scenario in scenarios.values()}) == len(scenarios)
+for scenario_id, scenario in scenarios.items():
+    articles = scenario["articles"]
+    assert articles, scenario_id
+    for article in articles:
+        command.validate(article)
+    assert len({article["sku"] for article in articles}) == len(articles), scenario_id
 for bad in ({"sku": "A\n", "name": "Name"}, {"sku": "A", "name": "\u0085"},
             {"sku": "A", "name": " ", "tenant_id": str(uuid4())}):
     assert not command.is_valid(bad)
@@ -68,4 +78,4 @@ event = {
 }
 envelope.validate(event)
 assert not envelope.is_valid({**event, "tenantId": "not-a-uuid"})
-print("OpenAPI, JSON Schemas and protocol examples validated")
+print("OpenAPI, JSON Schemas, protocol examples and demo article fixtures validated")

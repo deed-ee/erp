@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "scenarios": {
+    "SC-01": {
+      "tenantKey": "reference-machine",
+      "company": "ERP4us Demo Maschinenbau",
+      "locale": "de-DE",
+      "currency": "EUR",
+      "country": "DE",
+      "organization": "Engineering company with design office and assembly plant",
+      "articles": [{"sku": "DEMO-SC01-FRAME", "name": "Montagerahmen"}]
+    },
+    "SC-02": {
+      "tenantKey": "reference-timber",
+      "company": "ERP4us Demo Sagbruk",
+      "locale": "nb-NO",
+      "currency": "NOK",
+      "country": "NO",
+      "organization": "One company, two mills and a shared dispatch yard",
+      "articles": [{"sku": "DEMO-SC02-BOARD", "name": "Skurlast"}]
+    },
+    "SC-03": {
+      "tenantKey": "reference-process",
+      "company": "ERP4us Demo Formulation",
+      "locale": "fr-CA",
+      "currency": "CAD",
+      "country": "CA",
+      "organization": "One legal entity with a production site and a quality laboratory",
+      "articles": [{"sku": "DEMO-SC03-SAMPLE", "name": "Échantillon de démonstration"}]
+    },
+    "SC-04": {
+      "tenantKey": "reference-build",
+      "company": "ERP4us Demo Construcción",
+      "locale": "es-MX",
+      "currency": "MXN",
+      "country": "MX",
+      "organization": "Contracting company with project teams across construction sites",
+      "articles": [{"sku": "DEMO-SC04-PANEL", "name": "Panel prefabricado"}]
+    },
+    "SC-05": {
+      "tenantKey": "reference-trade",
+      "company": "ERP4us Demo Trade",
+      "locale": "en-GB",
+      "currency": "GBP",
+      "country": "GB",
+      "organization": "Wholesale company with two warehouses and a retail division",
+      "articles": [{"sku": "DEMO-SC05-CASE", "name": "Case of reusable cups"}]
+    },
+    "SC-06": {
+      "tenantKey": "reference-services",
+      "company": "ERP4us Demo Rådgivning",
+      "locale": "sv-SE",
+      "currency": "SEK",
+      "country": "SE",
+      "organization": "Consulting firm with project teams and no physical inventory",
+      "articles": [{"sku": "DEMO-SC06-WORKSHOP", "name": "Planeringsworkshop"}]
+    }
+  }
+}

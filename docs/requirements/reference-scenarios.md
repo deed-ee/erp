@@ -2,6 +2,12 @@
 
 These are manual architecture checks and future test specifications, not passing integration tests. Use anonymized or synthetic records. For an RFC, name the affected scenarios and explain which boundary owns each decision and which evidence survives changes, replay or denial. Automate only the checks supported by a delivered slice.
 
+## Demo fixtures
+
+[Reference dataset v1](../../fixtures/demo/reference-v1.json) contains six fictional tenant profiles and Article registration payloads keyed by the scenario IDs below. Tenant/company names, country, currency, locale and organizational narrative are scenario metadata, not fields supported by Article. The contract check validates that every scenario has Article data accepted by the current request schema. No seed/reset runner or deployed tenants exist yet.
+
+Use the same fixture version and stable keys in future seed jobs, integration tests, browser walkthroughs and documentation. Add data only as a corresponding capability ships; keep planned steps visibly distinct from runnable ones.
+
 ## SC-01
 
 **Mechanical engineering.** Configure an engineer-to-order machine, release a design revision, build and assemble serialized components, deliver it and record a maintenance replacement. The delivered record still references the built revision and serials after a new revision is released; the maintained view identifies the replacement and its documentation without rewriting the as-built evidence.

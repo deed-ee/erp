@@ -10,6 +10,7 @@ Protect business documents, personal data, tenant boundaries, inventory and fina
 | Agent and documents to business actions | Prompt injection, unsafe writes, forged approvals or data exfiltration | Treat all retrieved content as data, tools allowlisted and scoped per actor, separate queries from commands, preview and explicit approval bound to command arguments and revision, bounded execution, auditable decisions. |
 | Future translation providers | Confidential content leaving an approved boundary; cross-tenant memory/cache; stale jobs replacing approved text | Deny outbound transfers by default, authorize provider/purpose/data classification, scope jobs and memory, redact logs, and require revision and approval checks before applying results. See [proposed ADR 0007](../adr/0007-localization-and-provider-boundaries.md). |
 | CI to release artifacts | Secrets in builds or logs, compromised dependencies, mutable artifacts | Read-only PR tokens, pin dependencies/actions/images, vulnerability checks, restricted release privileges, SBOM and provenance before release. |
+| Future public demo to development and integrations | Shared credentials, unintended writes or outbound effects, resource exhaustion | [Isolate credentials, data and networks](deployment.md); enforce read-only service scope, deny real side effects at policy and egress layers, rate-limit public traffic, and test quotas and expiry before enabling personal sandboxes. |
 
 ## Current exposure and limits
 

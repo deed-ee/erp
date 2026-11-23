@@ -32,5 +32,5 @@ Feedback and focused pull requests are welcome. See [Contributing](CONTRIBUTING.
 ## Get oriented
 
 - [Architecture and service boundaries](docs/architecture/baseline.md) · [Threat model](docs/architecture/threat-model.md) · [Architecture review and decisions](docs/architecture/cross-industry-review.md)
-- [Open Business Service Protocol and semantic model](docs/specifications/business-service-protocol.md) · [Roadmap](ROADMAP.md)
+- [Open Business Service Protocol and semantic model](docs/specifications/business-service-protocol.md) · [Roadmap](ROADMAP.md) · [Public demo and deployment strategy](docs/architecture/deployment.md)
 - [Contributing](CONTRIBUTING.md) · [Governance](GOVERNANCE.md) · [Security reporting](SECURITY.md)
