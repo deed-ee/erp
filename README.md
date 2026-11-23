@@ -4,7 +4,7 @@
 
 erp4us aims to make business software composable: organizations should be able to run their own ERP and combine independently maintained business services without handing over their data or depending on any particular cloud or AI provider. People and agents operate on the same business commands, under the same authorization and audit rules. An open protocol and semantic models make those commands discoverable without exposing a service's database.
 
-**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. An optional JetStream demo delivers registration events to a separate receipt service. It does not yet have real tenant authentication, a web UI, or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
+**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB through the API or the Angular workspace. An optional JetStream demo delivers registration events to a separate receipt service. It does not yet have real tenant authentication or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
 
 ## Run the first slice
 
@@ -35,6 +35,22 @@ docker compose -f compose.yaml -f compose.delivery.yaml down
 ```
 
 The delivery check deliberately stops the broker and replays one synthetic event. Do not run it against a shared stack. If you have an older `.env`, keep its existing credentials and append independently generated `openssl rand -hex 32` values for `DEV_NATS_ADMIN_PASSWORD`, `DEV_NATS_RELAY_PASSWORD`, `DEV_NATS_RECEIPTS_PASSWORD` and `DEV_RECEIPTS_MONGO_PASSWORD`. Neither the broker nor MongoDB is published to the host. See [ADR 0002](docs/adr/0002-at-least-once.md) for limits.
+
+## Try the local Angular workspace
+
+With the Compose slice above running, use Node 24 (pinned in `ui/.nvmrc`):
+
+```sh
+cd ui
+npm ci
+npm start
+```
+
+Open **http://127.0.0.1:4200/** and choose **Local demo access**. Paste only the `ERP4US_DEMO_TOKEN` value from the repository's local `.env` into the password field and select **Use for this session**. It lives in memory until reload; do not share it. In **Products**, register a synthetic article, then use the returned ID to retrieve it. Products cannot yet be browsed as a list, edited or deleted. Theme, language and density settings do not store business data or credentials.
+
+The Angular development server forwards `/v1/` to the loopback API. If you changed the API port in `.env`, start the UI with `ERP4US_PORT=<port> npm start`. This is a local preview on the existing demo auth contract, not the planned registry-driven UI or an OIDC login. From `ui/`, `npm run build` creates the static bundle; `npx playwright install chromium` and `npm run test:e2e` exercise the UI against the running demo API with synthetic data.
+
+See the [UI component guide](ui/README.md), [architecture decision](docs/adr/0004-ui-foundation.md) and [UI requirements](docs/requirements/ui-foundation.md).
 
 ## Help shape the first workflow
 

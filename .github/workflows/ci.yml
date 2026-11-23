@@ -52,6 +52,15 @@ jobs:
       - run: python3 tests/integration/smoke.py --restart --outbox --restore
       - run: docker compose -f compose.yaml -f compose.delivery.yaml up --build -d
       - run: python3 tests/integration/delivery.py
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: ui/.nvmrc, cache: npm, cache-dependency-path: ui/package-lock.json }
+      - name: Build and exercise the Article workspace
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+          npm run test:e2e
       - if: failure()
         run: docker compose -f compose.yaml -f compose.delivery.yaml logs --no-color --tail=80
       - if: always()
