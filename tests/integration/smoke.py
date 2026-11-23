@@ -7,7 +7,7 @@ from tempfile import TemporaryFile
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 
 env = dict(line.split("=", 1) for line in Path(".env").read_text().splitlines()
@@ -44,32 +44,92 @@ def wait_until_ready(origin=base):
     raise RuntimeError(f"Master Data at {origin} did not become ready")
 
 
+def mongo_tool(project, tool, *args):
+    return [
+        *project, "exec", "-T", "mongo", "sh", "-ec",
+        'tool=$1; shift; exec "$tool" --username "$MONGO_INITDB_ROOT_USERNAME" '
+        '--password "$MONGO_INITDB_ROOT_PASSWORD" '
+        '--authenticationDatabase admin "$@"', "mongo-tool", tool, *args,
+    ]
+
+
+def mongo_eval(compose, code):
+    command = mongo_tool(
+        compose, "mongosh", "--quiet", "--norc",
+        "mongodb://mongo:27017/master_data?replicaSet=erp4us", "--eval", code,
+    )
+    return json.loads(subprocess.check_output(command, text=True))
+
+
+def verify_outbox(compose, article):
+    events = mongo_eval(
+        compose, f"print(JSON.stringify(db.outbox.find({{'payload.articleId': "
+        f"{json.dumps(article['id'])}}}, {{_id: 0}}).toArray()))",
+    )
+    assert len(events) == 1
+    event = events[0]
+    assert str(UUID(event["messageId"])) == event["messageId"]
+    assert event == {
+        "messageId": event["messageId"],
+        "messageType": "business.master-data.article.registered.v1",
+        "schemaVersion": 1,
+        "timestamp": article["created_at"],
+        "tenantId": article["tenant_id"],
+        "organizationId": article["organization_id"],
+        "actor": {"kind": "user", "id": article["created_by"]},
+        "correlationId": event["messageId"],
+        "sourceService": "erp4us.master-data",
+        "payload": {"articleId": article["id"], "revision": article["revision"]},
+    }
+
+    sku = f"ROLLBACK-{uuid4().hex[:16].upper()}"
+    payload = json.dumps({"sku": sku, "name": "Rollback probe"}).encode()
+    before = mongo_eval(compose, "print(db.outbox.countDocuments({}))")
+    validator = mongo_eval(
+        compose, "print(JSON.stringify(db.getCollectionInfos({name: 'outbox'})[0]"
+        ".options.validator || {}))",
+    )
+    try:
+        configure_outbox_validator(compose, {"messageId": {"$exists": False}})
+        assert request("/v1/articles:register", payload)[0] == 503
+        assert mongo_eval(
+            compose, f"print(db.articles.countDocuments({{sku: {json.dumps(sku)}}}))",
+        ) == 0
+        assert mongo_eval(compose, "print(db.outbox.countDocuments({}))") == before
+    finally:
+        configure_outbox_validator(compose, validator)
+    status, _, created = request("/v1/articles:register", payload)
+    assert status == 201
+    assert mongo_eval(
+        compose, f"print(db.outbox.countDocuments({{'payload.articleId': {json.dumps(created['id'])}}}))",
+    ) == 1
+    print("Master Data transactional outbox passed")
+
+
+def configure_outbox_validator(compose, validator):
+    if mongo_eval(compose, "print(db.runCommand({collMod: 'outbox', "
+                  f"validator: {json.dumps(validator)}}}).ok)") != 1:
+        raise RuntimeError("Could not configure the outbox validator")
+
+
 def verify_restore(compose, path, article, payload):
     target = [*compose, "-p", f"erp4us-restore-{uuid4().hex}"]
     port = os.getenv("ERP4US_RESTORE_PORT", "8081")
     target_env = {**os.environ, "ERP4US_PORT": port}
 
-    def mongo_tool(project, tool):
-        return [
-            *project, "exec", "-T", "mongo", "sh", "-ec",
-            f'exec {tool} --username "$MONGO_INITDB_ROOT_USERNAME" '
-            '--password "$MONGO_INITDB_ROOT_PASSWORD" '
-            '--authenticationDatabase admin',
-        ]
-
     with TemporaryFile() as archive:
         subprocess.run(
-            mongo_tool(compose, "mongodump --db master_data --archive"),
+            mongo_tool(compose, "mongodump", "--db", "master_data", "--archive"),
             stdout=archive, check=True,
         )
         archive.seek(0)
         try:
             subprocess.run(
-                [*target, "up", "--wait", "--wait-timeout", "90", "mongo"],
+                [*target, "up", "--wait", "--wait-timeout", "90", "mongo", "mongo-init"],
                 env=target_env, check=True,
             )
             subprocess.run(
-                mongo_tool(target, "mongorestore --archive --stopOnError "
+                mongo_tool(target, "mongorestore", "--archive", "--stopOnError",
                            "--nsInclude=master_data.*"),
                 stdin=archive, env=target_env, check=True,
             )
@@ -117,6 +177,8 @@ def main():
         subprocess.run([*compose, "restart", "master-data"], check=True)
         wait_until_ready()
         assert request(path)[2] == body
+    if "--outbox" in sys.argv:
+        verify_outbox(compose, body)
     print("Master Data HTTP smoke passed" + (" (including restart)" if "--restart" in sys.argv else ""))
     if "--restore" in sys.argv:
         verify_restore(compose, path, body, payload)
