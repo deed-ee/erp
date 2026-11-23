@@ -24,6 +24,22 @@ Compose initializes a single-member MongoDB replica set for transactions. An exi
 
 The Compose CI job also runs the smoke test with `--outbox --restore`. Use these flags only with a disposable synthetic demo database and no concurrent writers. The outbox check temporarily rejects event inserts to prove that article registration rolls back. The restore check takes a logical dump of `master_data`, restores it into a fresh Compose project, and verifies that the article is readable and its SKU still cannot be registered twice. The restore API uses `127.0.0.1:8081` by default; set `ERP4US_RESTORE_PORT` to a free port if needed. The test leaves the source volume in place and removes the temporary project and dump. This is a local recovery drill, not a production backup procedure.
 
+## Try the local Angular workspace
+
+With the Compose slice above running, use Node 24 (pinned in `ui/.nvmrc`):
+
+```sh
+cd ui
+npm ci
+npm start
+```
+
+Open **http://127.0.0.1:4200/** and choose **Local demo access**. Paste only the `ERP4US_DEMO_TOKEN` value from the repository's local `.env` into the password field and select **Use for this session**. It lives in memory until reload; do not share it. In **Products**, register a synthetic article, then use the returned ID to retrieve it. Products cannot yet be browsed as a list, edited or deleted. Theme, language and density settings do not store business data or credentials.
+
+The Angular development server forwards `/v1/` to the loopback API. If you changed the API port in `.env`, start the UI with `ERP4US_PORT=<port> npm start`. This is a local preview on the existing demo auth contract, not the planned registry-driven UI or an OIDC login. From `ui/`, `npm run build` creates the static bundle; `npx playwright install chromium` and `npm run test:e2e` exercise the UI against the running demo API with synthetic data.
+
+See the [UI component guide](ui/README.md), [architecture decision](docs/adr/0004-ui-foundation.md) and [UI requirements](docs/requirements/ui-foundation.md).
+
 ## Help shape the first workflow
 
 - **Try the quickstart above.** Could you register and retrieve an article on your machine? If a step failed, [report where you got stuck](https://github.com/deed-ee/erp4us/issues/new?template=bug.md) with your OS, Docker version and the first failing step. Leave out credentials and use synthetic data.
