@@ -1,0 +1,38 @@
+- id: SAL-001
+  title: Confirm a priced commercial snapshot
+  description: Retain agreed customer, product, quantity, price and currency on confirmation.
+  rationale: Later master-data updates must not change an agreement.
+  type: functional
+  domain: SAL
+  capability: SAL.01
+  industries:
+  - software
+  - trade
+  actors:
+  - Sales representative
+  priority: P1
+  status: proposed
+  dependencies:
+  - BP-001
+  - PRD-001
+  milestone: M3
+  acceptance:
+  - 'After confirmation change discount and customer address: historical totals and address stay unchanged; duplicate
+    confirmation emits no second commitment.'
+  scenarios:
+  - SC-05
+  - SC-09
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-019
+  issues:
+  - 16
+  - 27
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which changes require a new confirmation?
+  revision: 1

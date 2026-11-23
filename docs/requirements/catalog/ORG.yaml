@@ -1,0 +1,150 @@
+- id: ORG-001
+  title: Isolate equal identifiers across tenants
+  description: Permit the same local SKU in independent tenants without exposing existence across the boundary.
+  rationale: A shared cluster must not create a shared customer catalog.
+  type: non-functional
+  domain: ORG
+  capability: ORG.01
+  industries:
+  - international-group
+  - trade
+  actors:
+  - Company administrator
+  priority: P0
+  status: proposed
+  dependencies:
+  - IAM-002
+  milestone: M0
+  acceptance:
+  - Create X in tenants A and B; A receives its own X; lookup of B's internal ID in A is indistinguishable from
+    an absent ID.
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-003
+  issues:
+  - 2
+  - 39
+  prs:
+  - 15
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Does a customer require physical isolation?
+  revision: 1
+- id: ORG-002
+  title: Distinguish operating and legal responsibility
+  description: Associate a posting with a legal entity independently of work site and reporting line.
+  rationale: Projects can span sites without changing who invoices.
+  type: business
+  domain: ORG
+  capability: ORG.01
+  industries:
+  - construction
+  - international-group
+  actors:
+  - Company administrator
+  priority: P1
+  status: proposed
+  dependencies: []
+  milestone: M1
+  acceptance:
+  - 'Move a work package to a second site: the signed contract still names the original legal entity; a reporting-line
+    edit grants no membership.'
+  scenarios:
+  - SC-04
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-003
+  issues:
+  - 39
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which changes require effective dates?
+  revision: 1
+- id: ORG-003
+  title: Share only nominated master records
+  description: In SC-08, keep one Article identity and explicitly grant each participating company access to it.
+  rationale: A blank organization selector must never mean global read access.
+  type: functional
+  domain: ORG
+  capability: ORG.01
+  industries:
+  - international-group
+  actors:
+  - Company administrator
+  priority: P1
+  status: approved
+  reviewedOn: '2026-11-23'
+  disposition: Maintainer selected shared identity with explicit company grants for the first Demo Global case (#54), rather than separate mapped copies.
+  dependencies:
+  - ORG-001
+  - ORG-002
+  milestone: M1
+  acceptance:
+  - Grant A and B access to G1. B changes its local description; both still refer to G1, A's description is unchanged and a confirmed order retains its original wording.
+  - A's negotiated purchase price remains a local commercial fact. Sharing G1 does not expose that price to B, including in exports.
+  - Company C has no grant. G1 is absent from its lookup, search counts and export even though C is in the same tenant.
+  scenarios:
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-003
+  issues:
+  - 39
+  - 54
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What takes precedence if an override expires?
+  revision: 2
+- id: ORG-004
+  title: Allocate scoped business numbers
+  description: Allocate a business number separately from immutable internal identity.
+  rationale: Concurrent legal documents must not receive the same reference.
+  type: functional
+  domain: ORG
+  capability: ORG.01
+  industries:
+  - construction
+  - international-group
+  actors:
+  - Company administrator
+  priority: P1
+  status: proposed
+  dependencies:
+  - ORG-002
+  - INT-003
+  milestone: M1
+  acceptance:
+  - Two simultaneous confirmations in one sequence get distinct numbers; retry of the same confirmation allocates
+    no second number; cancelled numbers remain explainable.
+  scenarios:
+  - SC-04
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-010
+  issues:
+  - 39
+  - 59
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which local policies permit gaps?
+  revision: 1

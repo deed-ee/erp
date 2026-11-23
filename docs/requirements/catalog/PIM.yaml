@@ -1,0 +1,37 @@
+- id: PIM-001
+  title: Publish a market-specific product description
+  description: Select approved language and channel variants at publication.
+  rationale: Draft allergen or pricing copy must not reach a public catalog.
+  type: functional
+  domain: PIM
+  capability: PIM.01
+  industries:
+  - food
+  - trade
+  actors:
+  - Catalog editor
+  priority: P2
+  status: proposed
+  dependencies:
+  - LOC-002
+  - PRD-001
+  milestone: M2
+  acceptance:
+  - Approve the German listing, leave English in draft; only permitted text appears; recalled revision remains identifiable
+    in publication history.
+  scenarios:
+  - SC-05
+  - SC-07
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-006
+  issues:
+  - 41
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - May a channel show source-language fallback?
+  revision: 1

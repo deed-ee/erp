@@ -1,0 +1,35 @@
+- id: SVC-001
+  title: Recognize non-physical delivery
+  description: Accept a bounded time or usage delivery against an agreement without shipment.
+  rationale: Service and digital providers sell work rather than units on shelves.
+  type: business
+  domain: SVC
+  capability: SVC.01
+  industries:
+  - professional-services
+  - software
+  actors:
+  - Service coordinator
+  priority: P2
+  status: proposed
+  dependencies:
+  - PRD-001
+  milestone: M3
+  acceptance:
+  - Accept six hours against eight contracted; bill six once, keep two open and generate no stock movements.
+  scenarios:
+  - SC-06
+  - SC-09
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-001
+  issues:
+  - 48
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Is customer acknowledgement always needed?
+  revision: 1

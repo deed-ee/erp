@@ -1,0 +1,37 @@
+- id: DOC-001
+  title: Publish only complete document versions
+  description: Finalize a new version only after content and scope verification.
+  rationale: Incomplete uploads must not displace evidence.
+  type: functional
+  domain: DOC
+  capability: DOC.01
+  industries:
+  - chemicals
+  - engineering
+  actors:
+  - Document controller
+  priority: P2
+  status: proposed
+  dependencies:
+  - ORG-001
+  milestone: M2
+  acceptance:
+  - Interrupt an upload; old released content remains downloadable; an expired link cannot retrieve the new bytes;
+    checksum mismatch prevents finalization.
+  scenarios:
+  - SC-01
+  - SC-03
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-011
+  issues:
+  - 17
+  - 45
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What is the cleanup interval?
+  revision: 1

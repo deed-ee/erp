@@ -1,0 +1,35 @@
+- id: MNT-001
+  title: Block use during repair
+  description: Record repair work and an authorized release against a managed asset.
+  rationale: Physical return does not imply safe availability.
+  type: functional
+  domain: MNT
+  capability: MNT.01
+  industries:
+  - engineering
+  - rental
+  actors:
+  - Maintenance planner
+  priority: P2
+  status: proposed
+  dependencies:
+  - AST-001
+  milestone: M5
+  acceptance:
+  - Return a damaged item; the availability calendar stays blocked until release; later repair retains damage evidence.
+  scenarios:
+  - SC-01
+  - SC-11
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-011
+  issues:
+  - 50
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Who may release versus perform the repair?
+  revision: 1

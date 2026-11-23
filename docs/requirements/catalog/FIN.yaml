@@ -1,0 +1,37 @@
+- id: FIN-001
+  title: Explain currency and compensating postings
+  description: Preserve currency, rate source, effective rate and legal owner of a posting.
+  rationale: Restated reports must not mutate legal books.
+  type: business
+  domain: FIN
+  capability: FIN.01
+  industries:
+  - construction
+  - international-group
+  actors:
+  - Accountant
+  priority: P2
+  status: proposed
+  dependencies:
+  - ORG-002
+  - LOC-003
+  milestone: M6
+  acceptance:
+  - Post two balanced entries; revise exchange rate and reverse one posting; original balances remain reproducible
+    and reversal links to original period and entity.
+  scenarios:
+  - SC-04
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-003
+  issues:
+  - 49
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which local accounting and tax validation comes first?
+  revision: 1

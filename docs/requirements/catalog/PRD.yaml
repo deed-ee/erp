@@ -1,0 +1,73 @@
+- id: PRD-001
+  title: Sell a service without inventory configuration
+  description: Make stock handling an optional capability, not a prerequisite for sale.
+  rationale: A solo service business must not configure fictional warehouses.
+  type: business
+  domain: PRD
+  capability: PRD.01
+  industries:
+  - professional-services
+  - software
+  actors: &id001
+  - Product owner
+  priority: P1
+  status: proposed
+  dependencies:
+  - MDM-001
+  milestone: M1
+  acceptance:
+  - Quote eight hours without creating a stock item; confirmation requests no reservation; physical lines in a mixed
+    order retain their own obligations.
+  scenarios:
+  - SC-06
+  - SC-09
+  decisions: &id002
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-001
+  issues:
+  - 16
+  - 41
+  prs: &id003 []
+  contracts: &id004 []
+  tests: &id005 []
+  evidence: &id006 []
+  questions:
+  - What evidence proves digital delivery?
+  revision: 1
+- id: PRD-002
+  title: Apply typed attributes through reviewed classifications
+  description: Associate a versioned attribute definition, unit and cardinality with one or more applicable classifications.
+  rationale: Industry extensions can coexist only if conflicting attributes are visible before activation.
+  type: functional
+  domain: PRD
+  capability: PRD.01
+  industries:
+  - timber
+  - food
+  actors: *id001
+  priority: P2
+  status: proposed
+  dependencies:
+  - PRD-001
+  - UOM-001
+  milestone: M2
+  acceptance:
+  - Apply a timber grade and moisture reading to a classified product; reject an incompatible unit, an inheritance
+    cycle and a conflicting namespace before activation. An older record still resolves its original definition.
+  scenarios:
+  - SC-02
+  - SC-07
+  decisions: *id002
+  refines:
+  - BD-005
+  issues:
+  - 41
+  - 53
+  prs: *id003
+  contracts: *id004
+  tests: *id005
+  evidence: *id006
+  questions:
+  - Which definition wins when two applicable classifications declare conflicting cardinality?
+  revision: 1
