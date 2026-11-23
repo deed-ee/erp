@@ -68,9 +68,24 @@ def validate(records, domains, phases, scenarios, processes):
         require(set(d['dependsOn']) <= domains.keys(), f'{k}: unknown overlapping domain')
     for k, s in scenarios.items():
         require(set(s['domains']) <= domains.keys(), f'{k}: unknown scenario domain')
+        require(all(s.get(field) for field in ('company', 'actors', 'given', 'when', 'then')), f'{k}: incomplete scenario')
     require(len({p['id'] for p in processes}) == len(processes), 'duplicate process')
     for p in processes:
         require(set(p['requirements']) <= ids, f'{p["id"]}: unknown requirement')
+        require(all(p.get(field) for field in ('trigger', 'actors', 'preconditions', 'flow', 'alternative',
+                'exception', 'objects', 'approval', 'outcomeEvent', 'result')), f'{p["id"]}: incomplete process card')
+
+
+def check_link(doc, link):
+    if '://' in link:
+        return
+    path, _, anchor = link.partition('#')
+    target = local(path, doc.parent) if path else doc
+    if anchor and target.suffix == '.md':
+        text = target.read_text()
+        headings = re.findall(r'^#{1,6}\s+(.+?)\s*$', text, re.M)
+        slugs = {re.sub(r'[^\w -]', '', h.lower()).replace(' ', '-') for h in headings}
+        require(unquote(anchor) in slugs or f'id="{anchor}"' in text, f'{doc.name}: unknown fragment {link}')
 
 
 def catalog():
@@ -125,8 +140,7 @@ def main():
     for folder in ('requirements', 'scenarios', 'processes', 'capabilities', 'glossary'):
         for doc in (DOC / folder).rglob('*.md'):
             for link in re.findall(r'\]\(([^)]+)\)', doc.read_text()):
-                if '://' not in link and not link.startswith('#'):
-                    local(link.split('#')[0], doc.parent)
+                check_link(doc, link)
     if args.export:
         args.export.write_text(json.dumps({'schemaVersion': 1, **data}, ensure_ascii=False, indent=2) + '\n')
     if args.audit:

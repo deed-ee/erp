@@ -1,6 +1,6 @@
 import unittest
 from jsonschema.exceptions import ValidationError
-from check import catalog, validate
+from check import DOC, catalog, check_link, validate
 
 
 class CatalogFailures(unittest.TestCase):
@@ -22,4 +22,43 @@ class CatalogFailures(unittest.TestCase):
             validate(**data)
         r.update(status='proposed', capability='ZZ.01')
         with self.assertRaisesRegex(ValueError, 'unknown capability'):
+            validate(**data)
+
+    def test_unknown_links_and_internal_fragment(self):
+        with self.assertRaisesRegex(ValueError, 'invalid internal path'):
+            check_link(DOC / 'requirements/guide.md', '../imaginary.md')
+        with self.assertRaisesRegex(ValueError, 'unknown fragment'):
+            check_link(DOC / 'requirements/guide.md', '../../GOVERNANCE.md#imaginary')
+
+    def test_incomplete_process_card(self):
+        data = catalog()
+        process = data['processes'][0]
+        for field in ('alternative', 'exception', 'objects', 'result'):
+            with self.subTest(field=field):
+                value = process.pop(field)
+                try:
+                    with self.assertRaisesRegex(ValueError, f'{process["id"]}: incomplete process card'):
+                        validate(**data)
+                finally:
+                    process[field] = value
+
+    def test_incomplete_scenario(self):
+        data = catalog()
+        scenario_id = next(iter(data['scenarios']))
+        data['scenarios'][scenario_id]['then'] = []
+        with self.assertRaisesRegex(ValueError, f'{scenario_id}: incomplete scenario'):
+            validate(**data)
+
+    def test_duplicate_id_unknown_phase_and_empty_acceptance(self):
+        data = catalog()
+        a, b = data['records'][:2]
+        old_id = b['id']
+        b['id'] = a['id']
+        with self.assertRaisesRegex(ValueError, 'duplicate requirement'):
+            validate(**data)
+        b.update(id=old_id, milestone='M99')
+        with self.assertRaisesRegex(ValueError, 'unknown milestone'):
+            validate(**data)
+        b.update(milestone='M1', acceptance=[])
+        with self.assertRaises(ValidationError):
             validate(**data)
