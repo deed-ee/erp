@@ -1,0 +1,39 @@
+- id: CMP-001
+  title: Trace a jurisdiction-specific rule
+  description: Record the applicable reviewed rule version and jurisdiction without claiming universal compliance.
+  rationale: The same transaction may be subject to different local obligations.
+  type: business
+  domain: CMP
+  capability: CMP.01
+  industries:
+  - chemicals
+  - food
+  - international-group
+  actors:
+  - Compliance reviewer
+  priority: P3
+  status: proposed
+  dependencies:
+  - LOC-003
+  - DOC-001
+  milestone: M6
+  acceptance:
+  - 'Run the same synthetic case under two policies: retain different versions and expected dispositions; refuse
+    a missing mandatory local approval.'
+  scenarios:
+  - SC-03
+  - SC-07
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-012
+  issues:
+  - 43
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Who can attest a jurisdiction pack?
+  revision: 1

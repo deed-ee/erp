@@ -1,0 +1,76 @@
+- id: BP-001
+  title: Use one party across customer and supplier roles
+  description: Allow a partner to hold separately governed commercial roles.
+  rationale: Duplicate parties make a mixed trading relationship difficult to reconcile.
+  type: business
+  domain: BP
+  capability: BP.01
+  industries:
+  - international-group
+  - trade
+  actors:
+  - Partner steward
+  priority: P1
+  status: proposed
+  dependencies:
+  - ORG-001
+  milestone: M1
+  acceptance:
+  - Activate two roles for P1; suspend only purchasing; a new purchase is refused while a permitted sales quotation
+    still references P1.
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-002
+  issues:
+  - 26
+  - 40
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which roles require qualification?
+  revision: 1
+- id: BP-002
+  title: Retain dated contacts and addresses
+  description: Select addresses by purpose and effective date without imposing one country's format.
+  rationale: International orders require evidence of the agreed destination.
+  type: functional
+  domain: BP
+  capability: BP.01
+  industries:
+  - construction
+  - international-group
+  actors:
+  - Partner steward
+  priority: P1
+  status: proposed
+  dependencies:
+  - BP-001
+  milestone: M1
+  acceptance:
+  - Store a multi-line address without a postal code where allowed; update the delivery contact after confirmation;
+    the original order destination remains unchanged.
+  - A viewer allowed to read a shared party but not its personal contact fields cannot recover those fields through
+    search, export or a related-object preview.
+  scenarios:
+  - SC-04
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-004
+  issues:
+  - 26
+  - 40
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Who may read personal contact details?
+  revision: 2

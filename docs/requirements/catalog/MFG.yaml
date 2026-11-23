@@ -1,0 +1,43 @@
+- id: MFG-001
+  title: Reconcile measured outputs rather than assumed yield
+  description: Record actual inputs, multiple outputs and unexplained differences separately from plan.
+  rationale: A single finished-item quantity loses co-product and waste evidence.
+  type: business
+  domain: MFG
+  capability: MFG.01
+  industries:
+  - agriculture
+  - chemicals
+  - food
+  - recycling
+  - timber
+  actors:
+  - Production supervisor
+  priority: P2
+  status: proposed
+  dependencies:
+  - BOM-001
+  - UOM-001
+  milestone: M4
+  acceptance:
+  - For 100 kg input record 70 kg recovery and 25 kg residue; show 5 kg variance without silently changing either
+    output.
+  scenarios:
+  - SC-02
+  - SC-03
+  - SC-07
+  - SC-10
+  - SC-12
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-009
+  issues:
+  - 46
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What tolerances require approval?
+  revision: 1

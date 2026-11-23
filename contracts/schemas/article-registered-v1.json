@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ArticleRegistered event v1",
+  "$ref": "event-envelope-v1.json",
+  "required": ["organizationId"],
+  "properties": {
+    "messageType": { "const": "business.master-data.article.registered.v1" },
+    "schemaVersion": { "const": 1 },
+    "sourceService": { "const": "erp4us.master-data" },
+    "payload": {
+      "type": "object",
+      "required": ["articleId", "revision"],
+      "properties": {
+        "articleId": { "type": "string", "format": "uuid" },
+        "revision": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

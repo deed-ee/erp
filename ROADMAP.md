@@ -15,3 +15,5 @@ This is a priority order, not a release schedule. Run the smallest useful slice 
 | Before preview | Production and community readiness | [License and contribution terms decided](docs/community/licensing.md); validate migrations, backup/restore, sandbox and lifecycle controls; add supply-chain CI, verified builds, screenshots, demo and known limits. Obtain approval before releasing. |
 
 Defer accounting, payroll, general-purpose workflow, WASM, marketplace and multi-region infrastructure until there is a concrete use case. Country-specific tax rules are extension work, not universal core logic. No regulatory compliance is claimed.
+
+For business rationale, proposed M0–M7 phase gates and measurable acceptance cases, see the [requirements guide](docs/requirements/guide.md), [catalog index](docs/requirements/index.md) and [tracked backlog](docs/requirements/backlog.md). The order-to-procurement MVP remains the first cross-service outcome; a phase or capability entry is not a release promise.

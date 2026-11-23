@@ -1,0 +1,37 @@
+- id: IND-001
+  title: Prevent package authority escalation
+  description: Check typed attribute conflicts and compatibility before activating an industry package.
+  rationale: Extension metadata must not grant permissions or erase historical meaning.
+  type: non-functional
+  domain: IND
+  capability: IND.01
+  industries:
+  - professional-services
+  - timber
+  actors:
+  - Package author and operator
+  priority: P1
+  status: proposed
+  dependencies:
+  - IAM-002
+  - INT-002
+  milestone: M7
+  acceptance:
+  - Stage two packages defining incompatible units for the same qualified key; activation fails before writes; deactivating
+    one does not erase an old record's schema revision.
+  scenarios:
+  - SC-02
+  - SC-06
+  decisions:
+  - docs/adr/0003-semantic-contracts.md
+  refines:
+  - BD-014
+  issues:
+  - 53
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which package owns a shared classifier?
+  revision: 1

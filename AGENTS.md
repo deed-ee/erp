@@ -15,3 +15,7 @@ In the Angular UI, pair each button's visible translated action label with a rel
 ## Hand off work
 
 Before finishing or pausing a task, update the PR description with the outcome, checks run and any remaining blocker or next step. If there is no PR, use the existing task issue; for local-only work, give the handoff in the final response. Link to the diff, CI run or decision record instead of copying logs. Keep one handoff per task, not a separate diary per agent.
+
+## Requirements engineering
+
+Check the [catalog](docs/requirements/index.md), linked issues and open PRs before proposing a capability. Use stable IDs, a business example and a counterexample; separate a requirement, a policy option and a deployment decision. Follow the [review process](docs/requirements/guide.md), preserve earlier IDs and decision history, and link contracts, PRs, tests and evidence as work lands. Never infer approval from an issue or verification from an open PR. Validate changed records and regenerate the public index.

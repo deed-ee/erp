@@ -1,0 +1,36 @@
+- id: HR-001
+  title: Assign only currently qualified resources
+  description: Assess qualification for the service date using only data the planner may see.
+  rationale: Job suitability need not disclose full personnel records.
+  type: functional
+  domain: HR
+  capability: HR.01
+  industries:
+  - construction
+  - professional-services
+  actors:
+  - Workforce planner
+  priority: P3
+  status: proposed
+  dependencies:
+  - IAM-002
+  milestone: M5
+  acceptance:
+  - Expired qualification excludes worker A; worker B qualifies; planner sees eligibility but not confidential evidence
+    fields.
+  scenarios:
+  - SC-04
+  - SC-06
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-003
+  issues:
+  - 48
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which role can inspect evidence?
+  revision: 1

@@ -1,7 +1,7 @@
 use crate::domain::{Article, Scope};
 use mongodb::{
     Client, Collection, Database, IndexModel,
-    bson::doc,
+    bson::{Document, doc},
     error::{Error, ErrorKind, WriteFailure},
     options::IndexOptions,
 };
@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub(crate) struct Store {
     database: Database,
     articles: Collection<Article>,
+    outbox: Collection<Document>,
 }
 
 pub(crate) enum InsertError {
@@ -22,6 +23,15 @@ impl Store {
     pub(crate) async fn open(uri: &str) -> mongodb::error::Result<Self> {
         let database = Client::with_uri_str(uri).await?.database("master_data");
         let articles = database.collection("articles");
+        let outbox = database.collection("outbox");
+        outbox
+            .create_index(
+                IndexModel::builder()
+                    .keys(doc! { "messageId": 1 })
+                    .options(IndexOptions::builder().unique(true).build())
+                    .build(),
+            )
+            .await?;
         articles
             .create_index(
                 IndexModel::builder()
@@ -35,7 +45,11 @@ impl Store {
                     .build(),
             )
             .await?;
-        Ok(Self { database, articles })
+        Ok(Self {
+            database,
+            articles,
+            outbox,
+        })
     }
 
     pub(crate) async fn ping(&self) -> mongodb::error::Result<()> {
@@ -44,16 +58,59 @@ impl Store {
     }
 
     pub(crate) async fn insert(&self, article: &Article) -> Result<(), InsertError> {
-        self.articles
-            .insert_one(article)
+        let event = Self::article_registered(article)?;
+        let mut session = self
+            .database
+            .client()
+            .start_session()
             .await
-            .map(|_| ())
-            .map_err(|error| match error.kind.as_ref() {
+            .map_err(InsertError::Database)?;
+        session
+            .start_transaction()
+            .await
+            .map_err(InsertError::Database)?;
+        if let Err(error) = self
+            .articles
+            .insert_one(article)
+            .session(&mut session)
+            .await
+        {
+            let _ = session.abort_transaction().await;
+            return Err(match error.kind.as_ref() {
                 ErrorKind::Write(WriteFailure::WriteError(e)) if e.code == 11000 => {
                     InsertError::Conflict
                 }
                 _ => InsertError::Database(error),
-            })
+            });
+        }
+        if let Err(error) = self.outbox.insert_one(event).session(&mut session).await {
+            let _ = session.abort_transaction().await;
+            return Err(InsertError::Database(error));
+        }
+        session
+            .commit_transaction()
+            .await
+            .map_err(InsertError::Database)
+    }
+
+    fn article_registered(article: &Article) -> Result<Document, InsertError> {
+        let timestamp = article
+            .created_at
+            .format(&time::format_description::well_known::Rfc3339)
+            .map_err(|error| InsertError::Database(Error::custom(error)))?;
+        let message_id = Uuid::new_v4().to_string();
+        Ok(doc! {
+            "messageId": &message_id,
+            "messageType": "business.master-data.article.registered.v1",
+            "schemaVersion": 1,
+            "timestamp": timestamp,
+            "tenantId": article.tenant_id.to_string(),
+            "organizationId": article.organization_id.to_string(),
+            "actor": { "kind": "user", "id": article.created_by.to_string() },
+            "correlationId": message_id,
+            "sourceService": "erp4us.master-data",
+            "payload": { "articleId": article.id.to_string(), "revision": article.revision },
+        })
     }
 
     pub(crate) async fn get(

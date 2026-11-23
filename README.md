@@ -4,7 +4,7 @@
 
 erp4us aims to make business software composable: organizations should be able to run their own ERP and combine independently maintained business services without handing over their data or depending on any particular cloud or AI provider. People and agents operate on the same business commands, under the same authorization and audit rules. An open protocol and semantic models make those commands discoverable without exposing a service's database.
 
-**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. It does not yet have real tenant authentication, a web UI, a broker, or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
+**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. Registration also records a pending event in MongoDB; no events are published yet. It does not yet have real tenant authentication, a web UI, a broker, or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
 
 ## Run the first slice
 
@@ -20,7 +20,9 @@ The script waits for readiness, registers a synthetic article, verifies authoriz
 
 Use the pinned Rust toolchain for `cargo test --locked`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets --locked -- -D warnings`. For contracts, install `tests/contracts/requirements.txt` in a Python virtual environment and run `python tests/contracts/check.py`.
 
-The Compose CI job also runs the smoke test with `--restore`. Use that flag only with a synthetic demo database and no concurrent writers: it takes a logical dump of `master_data`, restores it into a fresh Compose project, and checks that the original article is readable and its SKU still cannot be registered twice. The restore API uses `127.0.0.1:8081` by default; set `ERP4US_RESTORE_PORT` to a free port if needed. The test leaves the source volume in place and removes the temporary project and dump. This is a local recovery drill, not a production backup procedure.
+Compose initializes a single-member MongoDB replica set for transactions. An existing demo volume can be reused with its original `.env`; take a logical dump before upgrading. Existing articles are not backfilled. To roll back, restore that dump into a fresh volume on the old Compose configuration rather than reusing the replica-set volume.
+
+The Compose CI job also runs the smoke test with `--outbox --restore`. Use these flags only with a disposable synthetic demo database and no concurrent writers. The outbox check temporarily rejects event inserts to prove that article registration rolls back. The restore check takes a logical dump of `master_data`, restores it into a fresh Compose project, and verifies that the article is readable and its SKU still cannot be registered twice. The restore API uses `127.0.0.1:8081` by default; set `ERP4US_RESTORE_PORT` to a free port if needed. The test leaves the source volume in place and removes the temporary project and dump. This is a local recovery drill, not a production backup procedure.
 
 ## Try the local Angular workspace
 

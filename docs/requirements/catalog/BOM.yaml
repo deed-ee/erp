@@ -1,0 +1,37 @@
+- id: BOM-001
+  title: Freeze the structure used for delivery
+  description: Distinguish engineering, manufacturing and formula revisions from execution facts.
+  rationale: A customer's installed machine cannot follow the latest catalog automatically.
+  type: business
+  domain: BOM
+  capability: BOM.01
+  industries:
+  - chemicals
+  - engineering
+  actors:
+  - Design engineer
+  priority: P2
+  status: proposed
+  dependencies:
+  - PRD-001
+  - UOM-001
+  milestone: M4
+  acceptance:
+  - Release revision B after a build with A; navigating the delivered serial still resolves A, its alternatives
+    selected and change provenance.
+  scenarios:
+  - SC-01
+  - SC-03
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-008
+  issues:
+  - 46
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which structure types permit recursion?
+  revision: 1

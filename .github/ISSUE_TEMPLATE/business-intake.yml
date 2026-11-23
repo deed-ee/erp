@@ -1,0 +1,41 @@
+name: Business knowledge and product feedback
+description: Describe a business need in your own words. No code or technical design required.
+labels: ['type:requirement', 'status:proposed']
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What would you like to contribute?
+      options:
+        - Business requirement
+        - Industry-specific requirement
+        - Real-world business scenario
+        - Missing capability
+        - Localization requirement
+        - Architecture proposal
+        - Feature request
+        - Usability feedback
+    validations: {required: true}
+  - type: textarea
+    id: context
+    attributes:
+      label: Who is affected, and in which business context?
+      description: Industry, country or language, business size, roles and the event that starts the work. Use fictional names.
+    validations: {required: true}
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today, and where is the problem?
+      description: Give a small synthetic example and an exception. Never include private records or credentials.
+    validations: {required: true}
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What should happen, and how would you know it worked?
+      description: Show an expected result and something that must not happen. Numbers and examples help.
+    validations: {required: true}
+  - type: textarea
+    id: references
+    attributes:
+      label: Related terms, standards or existing discussions (optional)
+      description: Include jurisdiction, applicable regulation, requirement or scenario IDs if you know them. Maintainers can help with mapping.
