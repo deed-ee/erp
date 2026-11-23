@@ -1,13 +1,16 @@
 openapi: 3.1.0
 info:
-  title: erp4us Master Data (local demo)
-  version: 0.1.0
+  title: erp4us Master Data
+  version: 0.2.0
 servers:
   - url: http://127.0.0.1:8080
 security:
-  - LocalDemoBearer: []
+  - AccessToken: []
 paths:
   /v1/articles:register:
+    parameters:
+      - $ref: '#/components/parameters/Tenant'
+      - $ref: '#/components/parameters/Organization'
     post:
       operationId: registerArticle
       description: Register a unique SKU in the authenticated scope. A repeated SKU returns 409. Request bodies are limited to 4096 bytes.
@@ -29,12 +32,16 @@ paths:
               schema: { $ref: ../schemas/article-v1.json }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Problem' }
         '413': { $ref: '#/components/responses/Problem' }
         '415': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
         '503': { $ref: '#/components/responses/Problem' }
   /v1/articles/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Tenant'
+      - $ref: '#/components/parameters/Organization'
     get:
       operationId: getArticle
       parameters:
@@ -50,6 +57,7 @@ paths:
               schema: { $ref: ../schemas/article-v1.json }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/Problem' }
         '503': { $ref: '#/components/responses/Problem' }
   /health/live:
@@ -67,17 +75,36 @@ paths:
         '503': { description: Database is unavailable. }
 components:
   securitySchemes:
-    LocalDemoBearer:
+    AccessToken:
       type: http
       scheme: bearer
-      description: Local development only; not an OAuth access token.
+      bearerFormat: JWT
+      description: RS256 OAuth access token issued for the configured resource audience.
+  parameters:
+    Tenant:
+      in: header
+      name: X-Erp4us-Tenant
+      description: Requested tenant; access requires a matching grant.
+      required: true
+      schema: { type: string, format: uuid }
+    Organization:
+      in: header
+      name: X-Erp4us-Organization
+      description: Requested organization within the tenant; access requires a matching grant.
+      required: true
+      schema: { type: string, format: uuid }
   responses:
     Unauthorized:
-      description: A valid demo bearer token is required.
+      description: A valid bearer access token is required.
       headers:
         WWW-Authenticate:
           required: true
           schema: { const: Bearer }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: The authenticated subject has no grant for this operation in the selected scope.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }

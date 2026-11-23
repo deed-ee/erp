@@ -2,7 +2,7 @@
 
 erp4us aims to make business software composable: organizations should be able to run their own ERP and combine independently maintained business services without handing over their data or depending on any particular cloud or AI provider. People and agents operate on the same business commands, under the same authorization and audit rules. An open protocol and semantic models make those commands discoverable without exposing a service's database.
 
-**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. It does not yet have real tenant authentication, a web UI, a broker, or cross-service business workflows. Do not deploy it publicly or enter real business data. [Licensing is pending](docs/community/licensing.md).
+**Status: foundation, not an ERP release.** Master Data registers and retrieves scoped articles from MongoDB. It verifies OAuth access tokens and enforces operator-managed tenant and organization grants. It does not yet have a tenant administration service, web UI, broker, or cross-service business workflows. Do not deploy the Compose fixture publicly or enter real business data. [Licensing is pending](docs/community/licensing.md).
 
 ## Run the first slice
 
@@ -10,11 +10,12 @@ Prerequisites: Docker Engine 28+ or Docker Desktop with Compose v2, `openssl`, a
 
 ```sh
 sh scripts/init-dev.sh
+python3 tests/integration/identity_fixture.py
 docker compose up --build -d
 python3 tests/integration/smoke.py --restart
 ```
 
-The script waits for readiness, registers a synthetic article, verifies authorization and validation failures, restarts the service, and retrieves the same article. The command and response are documented in [OpenAPI](contracts/openapi/master-data-v1.yaml). The API listens on `127.0.0.1:8080`; set `ERP4US_PORT` in `.env` if needed. Stop with `docker compose down`; it preserves the local database. `docker compose down -v` **deletes** the demo data. Keep `.env` with the volume: regenerating it does not rotate existing MongoDB credentials.
+The fixture generates a machine-local test signing key and synthetic grants, not an identity provider. The smoke test exercises token verification, scope isolation and service restart. The request contract is in [OpenAPI](contracts/openapi/master-data-v1.yaml); see [Identity integration](docs/development/identity.md) for a self-hosted provider configuration. The API listens on `127.0.0.1:8080`; export `ERP4US_PORT` before starting Compose and running the smoke test to use a different port. `docker compose down` preserves the database; `docker compose down -v` **deletes** it. Keep `.env` with the volume: regenerating it does not rotate existing MongoDB credentials.
 
 Use the pinned Rust toolchain for `cargo test --locked`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets --locked -- -D warnings`. For contracts, install `tests/contracts/requirements.txt` in a Python virtual environment and run `python tests/contracts/check.py`.
 

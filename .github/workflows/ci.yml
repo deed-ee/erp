@@ -41,6 +41,7 @@ jobs:
         with: { persist-credentials: false }
       - run: |
           sh scripts/init-dev.sh
+          python3 tests/integration/identity_fixture.py
           while IFS='=' read -r name value; do
             printf '::add-mask::%s\n' "$value"
           done < .env

@@ -1,7 +1,7 @@
 {
   "protocolVersion": "1.0-draft",
   "service": "erp4us.master-data",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "erp4us maintainers",
   "license": "NOASSERTION",
   "platformCompatibility": ["1.0-draft"],
