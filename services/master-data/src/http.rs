@@ -10,9 +10,9 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use subtle::ConstantTimeEq;
+use time::OffsetDateTime;
 use uuid::{Uuid, uuid};
 
 const DEMO_SCOPE: Scope = Scope {
@@ -74,7 +74,8 @@ struct ArticleView {
     created_by: Uuid,
     schema_version: u32,
     revision: u32,
-    created_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    created_at: OffsetDateTime,
     sku: String,
     name: String,
 }
