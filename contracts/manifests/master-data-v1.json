@@ -3,7 +3,7 @@
   "service": "erp4us.master-data",
   "version": "0.1.0",
   "publisher": "erp4us maintainers",
-  "license": "NOASSERTION",
+  "license": "Apache-2.0",
   "platformCompatibility": ["1.0-draft"],
   "dependencies": {},
   "capabilities": ["master-data.article"],

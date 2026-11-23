@@ -1,0 +1,104 @@
+<a class="skip" href="#content" (click)="skipToContent($event)">{{ t()('skip') }}</a>
+<header class="topbar">
+  <a class="brand" routerLink="/" aria-label="erp4us">
+    <img src="/brand/symbol.svg" alt="" width="34" height="34">
+    <span>erp<b>4</b>us</span>
+  </a>
+  <span class="organization"><svg lucideBuilding2 aria-hidden="true"></svg>{{ t()('scope') }}</span>
+  <div class="top-actions">
+    <label class="sr-only" for="language">{{ t()('language') }}</label>
+    <select id="language" #language [value]="prefs.locale()"
+      (change)="prefs.locale.set(language.value === 'de' ? 'de' : 'en')">
+      <option value="en" lang="en">English</option><option value="de" lang="de">Deutsch</option>
+    </select>
+    <label class="sr-only" for="theme">{{ t()('theme') }}</label>
+    <select id="theme" #theme [value]="prefs.theme()"
+      (change)="prefs.theme.set(theme.value === 'light' ? 'light' : theme.value === 'dark' ? 'dark' : 'system')">
+      <option value="system">{{ t()('systemTheme') }}</option><option value="light">{{ t()('lightTheme') }}</option>
+      <option value="dark">{{ t()('darkTheme') }}</option>
+    </select>
+    <label class="sr-only" for="density">{{ t()('density') }}</label>
+    <select id="density" #density [value]="prefs.density()"
+      (change)="prefs.density.set(density.value === 'compact' ? 'compact' : 'comfortable')">
+      <option value="comfortable">{{ t()('comfortable') }}</option><option value="compact">{{ t()('compact') }}</option>
+    </select>
+    @if (loopback) { <a class="button" routerLink="/local-access">{{ t()('access') }}</a> }
+  </div>
+</header>
+
+<div class="shell-body" [class.secondary-closed]="prefs.secondary() === 'closed'" [class.mobile-open]="mobileNav()">
+  <nav class="rail" [attr.aria-label]="t()('modules')">
+    @for (module of visible; track module.id) {
+      <a class="module-link" [routerLink]="module.route" [class.selected]="current()?.id === module.id"
+         [attr.aria-current]="current()?.id === module.id ? 'true' : null">
+        <span aria-hidden="true"><ng-container *ngComponentOutlet="module.icon" /></span>
+        {{ t()(module.label) }}
+      </a>
+    }
+  </nav>
+  @if (current(); as module) {
+    @if (module.groups.length) {
+      <nav #secondaryNav class="secondary" id="secondary" [attr.aria-label]="t()(module.label)" (keydown.escape)="closeMobileNavigation($event)">
+        <p class="nav-title">{{ t()(module.label) }}</p>
+        @for (group of module.groups; track group.id) {
+          <button type="button" class="group-button" [attr.aria-controls]="'group-' + group.id"
+            [attr.aria-expanded]="!groups().has(group.id)" (click)="toggleGroup(group.id)">
+            {{ t()(group.label) }} <span aria-hidden="true">{{ groups().has(group.id) ? '+' : '−' }}</span>
+          </button>
+          <div [id]="'group-' + group.id" [hidden]="groups().has(group.id)">
+            <ng-template #tree let-entries>
+              <ul class="nav-tree">
+                @for (entry of entries; track entry.id) {
+                  <li><a [routerLink]="entry.route" routerLinkActive="selected" ariaCurrentWhenActive="page">{{ t()(entry.label) }}</a>
+                    @if (entry.children?.length) {
+                      <ng-container *ngTemplateOutlet="tree; context: { $implicit: entry.children }" />
+                    }
+                  </li>
+                }
+              </ul>
+            </ng-template>
+            <ng-container *ngTemplateOutlet="tree; context: { $implicit: group.entries }" />
+          </div>
+        }
+      </nav>
+    }
+  }
+  <div class="content" [class.with-panel]="panelOpen()">
+    <main #main id="content" tabindex="-1">
+      @if (current()?.groups?.length || contextPanel()) {
+        <div class="page-controls">
+          @if (current()?.groups?.length) {
+            <button type="button" class="desktop-toggle" aria-controls="secondary"
+              [attr.aria-expanded]="prefs.secondary() === 'open'" (click)="toggleNavigation()">
+              <svg lucidePanelLeft aria-hidden="true"></svg>{{ t()('navigation') }}
+            </button>
+            <button #mobileToggle type="button" class="mobile-toggle" aria-controls="secondary"
+              [attr.aria-expanded]="mobileNav()" (click)="toggleNavigation()">
+              <svg lucidePanelLeft aria-hidden="true"></svg>{{ t()('navigation') }}
+            </button>
+          }
+          @if (contextPanel()) {
+            <button #panelButton type="button" aria-controls="context-panel" [attr.aria-expanded]="panelOpen()"
+              (click)="togglePanel()">
+              <svg lucideCircleHelp aria-hidden="true"></svg>{{ t()('help') }}
+            </button>
+          }
+        </div>
+      }
+      <router-outlet />
+    </main>
+    @if (contextPanel(); as panel) {
+      <aside class="context" id="context-panel" [hidden]="!panelOpen()" aria-labelledby="context-title" (keydown.escape)="closePanel()">
+        <div class="panel-heading">
+          <h2 #panelTitle id="context-title" tabindex="-1">{{ t()(panel.title) }}</h2>
+          <button type="button" [attr.aria-label]="t()('close')" (click)="closePanel()"><svg lucideX aria-hidden="true"></svg></button>
+        </div>
+        <ng-container *ngComponentOutlet="panel.component" />
+      </aside>
+    }
+  </div>
+</div>
+<footer class="statusbar">
+  <span class="status-environment">{{ t()('local') }}</span><span>{{ t()('scope') }}</span>
+  <span>{{ t()('notMonitored') }}</span>
+</footer>

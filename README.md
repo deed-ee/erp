@@ -4,7 +4,7 @@
 
 erp4us aims to make business software composable: organizations should be able to run their own ERP and combine independently maintained business services without handing over their data or depending on any particular cloud or AI provider. People and agents operate on the same business commands, under the same authorization and audit rules. An open protocol and semantic models make those commands discoverable without exposing a service's database.
 
-**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. It does not yet have real tenant authentication, a web UI, a broker, or cross-service business workflows. Do not deploy it publicly or enter real business data. [Licensing is pending](docs/community/licensing.md).
+**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB. Registration also records a pending event in MongoDB; no events are published yet. It does not yet have real tenant authentication, a web UI, a broker, or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
 
 ## Run the first slice
 
@@ -20,12 +20,32 @@ The script waits for readiness, registers a synthetic article, verifies authoriz
 
 Use the pinned Rust toolchain for `cargo test --locked`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets --locked -- -D warnings`. For contracts, install `tests/contracts/requirements.txt` in a Python virtual environment and run `python tests/contracts/check.py`.
 
+Compose initializes a single-member MongoDB replica set for transactions. An existing demo volume can be reused with its original `.env`; take a logical dump before upgrading. Existing articles are not backfilled. To roll back, restore that dump into a fresh volume on the old Compose configuration rather than reusing the replica-set volume.
+
+The Compose CI job also runs the smoke test with `--outbox --restore`. Use these flags only with a disposable synthetic demo database and no concurrent writers. The outbox check temporarily rejects event inserts to prove that article registration rolls back. The restore check takes a logical dump of `master_data`, restores it into a fresh Compose project, and verifies that the article is readable and its SKU still cannot be registered twice. The restore API uses `127.0.0.1:8081` by default; set `ERP4US_RESTORE_PORT` to a free port if needed. The test leaves the source volume in place and removes the temporary project and dump. This is a local recovery drill, not a production backup procedure.
+
+## Try the local Angular workspace
+
+With the Compose slice above running, use Node 24 (pinned in `ui/.nvmrc`):
+
+```sh
+cd ui
+npm ci
+npm start
+```
+
+Open **http://127.0.0.1:4200/** and choose **Local demo access**. Paste only the `ERP4US_DEMO_TOKEN` value from the repository's local `.env` into the password field and select **Use for this session**. It lives in memory until reload; do not share it. In **Products**, register a synthetic article, then use the returned ID to retrieve it. Products cannot yet be browsed as a list, edited or deleted. Theme, language and density settings do not store business data or credentials.
+
+The Angular development server forwards `/v1/` to the loopback API. If you changed the API port in `.env`, start the UI with `ERP4US_PORT=<port> npm start`. This is a local preview on the existing demo auth contract, not the planned registry-driven UI or an OIDC login. From `ui/`, `npm run build` creates the static bundle; `npx playwright install chromium` and `npm run test:e2e` exercise the UI against the running demo API with synthetic data.
+
+See the [UI component guide](ui/README.md), [architecture decision](docs/adr/0004-ui-foundation.md) and [UI requirements](docs/requirements/ui-foundation.md).
+
 ## Help shape the first workflow
 
 - **Try the quickstart above.** Could you register and retrieve an article on your machine? If a step failed, [report where you got stuck](https://github.com/deed-ee/erp4us/issues/new?template=bug.md) with your OS, Docker version and the first failing step. Leave out credentials and use synthetic data.
 - **Bring an ERP example.** Suppose a customer orders ten units but only six are available. What should the salesperson see, and who decides what happens to the remaining four? Add an anonymized example and the outcome you would expect to the [order-to-procurement discussion in issue #16](https://github.com/deed-ee/erp4us/issues/16).
 
-Feedback is welcome now. Please hold code contributions until the [license and contribution terms](https://github.com/deed-ee/erp4us/issues/1) are settled.
+Feedback and focused pull requests are welcome. See [Contributing](CONTRIBUTING.md) for the checks and commit sign-off.
 
 ## Get oriented
 

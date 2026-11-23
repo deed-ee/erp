@@ -1,0 +1,152 @@
+- id: MDM-001
+  title: Register and retrieve an article in the local slice
+  description: Retain a scoped article across service restart in the synthetic demo.
+  rationale: An executable slice grounds later contract discussions.
+  type: functional
+  domain: MDM
+  capability: MDM.01
+  industries:
+  - trade
+  actors:
+  - Data steward
+  priority: P0
+  status: implemented
+  dependencies: []
+  milestone: M0
+  acceptance:
+  - Register SKU A; repeat in the same fixed scope and receive conflict; restart the service and retrieve the unchanged
+    ID, name and revision. A malformed SKU is rejected.
+  - An unauthenticated read or register returns 401 in the fixed-scope demo; this test makes no claim about real
+    tenant isolation.
+  scenarios:
+  - SC-05
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-018
+  issues:
+  - 36
+  - 40
+  prs: []
+  contracts:
+  - contracts/openapi/master-data-v1.yaml
+  - contracts/entities/article-v1.json
+  tests:
+  - tests/integration/smoke.py
+  - tests/contracts/check.py
+  evidence:
+  - https://github.com/erp4us-org/erp4us/actions/runs/45234126484
+  questions:
+  - When should article updates enter the API?
+  revision: 1
+- id: MDM-002
+  title: Preserve external identifier namespaces
+  description: Bind each external identifier to its issuer, scheme and authorized scope.
+  rationale: Two suppliers can use the same catalog number.
+  type: functional
+  domain: MDM
+  capability: MDM.01
+  industries:
+  - international-group
+  - trade
+  actors:
+  - Data steward
+  priority: P1
+  status: proposed
+  dependencies:
+  - ORG-001
+  milestone: M1
+  acceptance:
+  - Import supplier A/77 and B/77 without collision; repeated A/77 resolves the same binding; ambiguous mappings
+    stop before writing.
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-004
+  issues:
+  - 40
+  - 62
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Who resolves conflicting mappings?
+  revision: 1
+- id: MDM-003
+  title: Detect a stale edit
+  description: Apply a change only against the expected record revision.
+  rationale: A second steward must not overwrite a correction unknowingly.
+  type: functional
+  domain: MDM
+  capability: MDM.01
+  industries:
+  - engineering
+  - international-group
+  actors:
+  - Data steward
+  priority: P1
+  status: proposed
+  dependencies:
+  - MDM-001
+  milestone: M1
+  acceptance:
+  - Two authorized editors read revision 4. After one commits revision 5, the stale write fails without changing
+    revision 5; the editor can reload.
+  scenarios:
+  - SC-01
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-004
+  issues:
+  - 40
+  - 63
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which fields permit deliberate merges?
+  revision: 1
+- id: MDM-004
+  title: Separate valid time from recorded time
+  description: Retain both times for effective-dated commercial facts requiring retrospective correction.
+  rationale: A late correction must not falsify what staff knew at confirmation.
+  type: functional
+  domain: MDM
+  capability: MDM.01
+  industries:
+  - engineering
+  - international-group
+  actors:
+  - Data steward
+  priority: P1
+  status: proposed
+  dependencies:
+  - MDM-003
+  milestone: M1
+  acceptance:
+  - On day 10 record an address valid since day 5. An as-known-on-day-7 view shows the old address; a corrected
+    day-7 view shows the new address; issued documents keep their snapshot.
+  scenarios:
+  - SC-01
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-004
+  issues:
+  - 40
+  - 55
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which facts warrant both clocks rather than plain revisions?
+  revision: 1

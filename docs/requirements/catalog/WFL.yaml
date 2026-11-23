@@ -1,0 +1,73 @@
+- id: WFL-001
+  title: Explain and resume a blocked order
+  description: Correlate transitions and compensations across owners without distributed writes.
+  rationale: Staff must know whether to wait, retry or correct.
+  type: functional
+  domain: WFL
+  capability: WFL.01
+  industries:
+  - trade
+  actors: &id001
+  - Operations coordinator
+  priority: P1
+  status: proposed
+  dependencies:
+  - INT-001
+  - INV-001
+  - PUR-001
+  - SAL-001
+  milestone: M3
+  acceptance:
+  - Interrupt after receipt; history names the completed step and unmet reservation; authorized replay cannot issue
+    a second purchase; foreign-scope history is absent.
+  scenarios:
+  - SC-05
+  decisions: &id002
+  - docs/adr/0002-at-least-once.md
+  refines: &id003
+  - BD-019
+  issues:
+  - 16
+  - 22
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which waiting steps require notification?
+  revision: 1
+- id: WFL-002
+  title: Keep collaborative work attached to its authorized object
+  description: Relate comments, attachments, relationship timelines, personal tasks and notifications to an owned
+    business object.
+  rationale: A notification is not a second route to restricted information.
+  type: functional
+  domain: WFL
+  capability: WFL.01
+  industries:
+  - construction
+  - professional-services
+  actors: *id001
+  priority: P2
+  status: proposed
+  dependencies:
+  - IAM-002
+  - DOC-001
+  milestone: M3
+  acceptance:
+  - 'Assign a task, attach a document and mention a user. Revoke access before delivery: the notification discloses
+    no object title or attachment and the old timeline is inaccessible.'
+  scenarios:
+  - SC-04
+  - SC-06
+  decisions: *id002
+  refines: *id003
+  issues:
+  - 16
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What can be retained after access changes?
+  revision: 1

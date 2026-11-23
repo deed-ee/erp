@@ -68,4 +68,13 @@ event = {
 }
 envelope.validate(event)
 assert not envelope.is_valid({**event, "tenantId": "not-a-uuid"})
+registered = validator("article-registered-v1.json")
+article_event = {
+    **event, "messageType": "business.master-data.article.registered.v1",
+    "sourceService": "erp4us.master-data", "organizationId": str(uuid4()),
+    "payload": {"articleId": str(uuid4()), "revision": 1},
+}
+registered.validate(article_event)
+assert not registered.is_valid({**article_event, "payload": {"articleId": str(uuid4())}})
+assert not registered.is_valid({**article_event, "messageType": event["messageType"]})
 print("OpenAPI, JSON Schemas and protocol examples validated")

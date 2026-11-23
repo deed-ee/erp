@@ -1,0 +1,36 @@
+- id: ESG-001
+  title: Separate measured and estimated recovery
+  description: Classify material streams with unit, origin, method and confidence.
+  rationale: A sustainability estimate must not masquerade as a measured result.
+  type: business
+  domain: ESG
+  capability: ESG.01
+  industries:
+  - agriculture
+  - recycling
+  actors:
+  - Sustainability analyst
+  priority: P3
+  status: proposed
+  dependencies:
+  - TRC-001
+  milestone: M7
+  acceptance:
+  - Report 70 kg recovered of 100 kg input; segregate residue and unknown mass; changing method creates a new result
+    revision.
+  scenarios:
+  - SC-10
+  - SC-12
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-010
+  issues:
+  - 52
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which factors need independent review?
+  revision: 1

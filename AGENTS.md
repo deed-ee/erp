@@ -9,3 +9,13 @@
 - Prefer existing standards, contracts and conventions; use additive version evolution and document breaking changes/migration in an ADR or RFC. Metadata cannot grant permissions or bypass invariants. No speculative framework, unneeded infrastructure, or mandatory SaaS.
 - Definition of done: focused working change, meaningful domain and integration tests (including negative authorization/scope and messaging replay tests when applicable), contract checks, updated docs, and a reviewable diff. Run relevant checks and state exactly what ran or was blocked. Never weaken tests or bypass checks to get CI to pass.
 - Do not choose a license, make a release, change visibility or make consequential trust, branding or architecture decisions without approval. Follow [CONTRIBUTING.md](CONTRIBUTING.md) and the [RFC process](GOVERNANCE.md#rfc-process).
+
+In the Angular UI, pair each button's visible translated action label with a relevant icon. Hide decorative icons from assistive technology; retain native button and keyboard behavior.
+
+## Hand off work
+
+Before finishing or pausing a task, update the PR description with the outcome, checks run and any remaining blocker or next step. If there is no PR, use the existing task issue; for local-only work, give the handoff in the final response. Link to the diff, CI run or decision record instead of copying logs. Keep one handoff per task, not a separate diary per agent.
+
+## Requirements engineering
+
+Check the [catalog](docs/requirements/index.md), linked issues and open PRs before proposing a capability. Use stable IDs, a business example and a counterexample; separate a requirement, a policy option and a deployment decision. Follow the [review process](docs/requirements/guide.md), preserve earlier IDs and decision history, and link contracts, PRs, tests and evidence as work lands. Never infer approval from an issue or verification from an open PR. Validate changed records and regenerate the public index.
