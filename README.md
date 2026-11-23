@@ -22,4 +22,4 @@ Use the pinned Rust toolchain for `cargo test --locked`, `cargo fmt --all -- --c
 
 - [Architecture and service boundaries](docs/architecture/baseline.md) · [Threat model](docs/architecture/threat-model.md) · [Decisions](docs/adr/0001-independent-services.md)
 - [Open Business Service Protocol and semantic model](docs/specifications/business-service-protocol.md) · [Roadmap](ROADMAP.md)
-- [Contributing](CONTRIBUTING.md) · [Governance](GOVERNANCE.md) · [Security reporting](SECURITY.md)
+- [Contributing](CONTRIBUTING.md) · [Working rules for coding agents](AGENTS.md) · [Governance](GOVERNANCE.md) · [Security reporting](SECURITY.md)
