@@ -1,0 +1,77 @@
+- id: AI-001
+  title: Discover typed permitted actions
+  description: Expose semantic action inputs, outputs, preconditions and permission requirements without granting
+    rights.
+  rationale: Human, external-system and agent clients need the same business meaning.
+  type: functional
+  domain: AI
+  capability: AI.01
+  industries:
+  - professional-services
+  - trade
+  actors:
+  - Agent operator and human approver
+  priority: P1
+  status: proposed
+  dependencies:
+  - IAM-002
+  - INT-002
+  milestone: M0
+  acceptance:
+  - Discover read but not register for a reader; direct invocation of register is denied; validate structured errors
+    and correlation against the same business contract without an LLM.
+  scenarios:
+  - SC-05
+  - SC-06
+  decisions:
+  - docs/adr/0003-semantic-contracts.md
+  refines:
+  - BD-013
+  issues:
+  - 19
+  - 44
+  prs: []
+  contracts:
+  - contracts/openapi/master-data-v1.yaml
+  - contracts/entities/article-v1.json
+  tests: []
+  evidence: []
+  questions:
+  - How should a client refresh stale discovery?
+  revision: 1
+- id: AI-002
+  title: Bind preview and approval to execution
+  description: Bind an approved agent write to actor, arguments, revision and expiry.
+  rationale: Human consent for one purchase is not permission for a different purchase.
+  type: functional
+  domain: AI
+  capability: AI.01
+  industries:
+  - trade
+  actors:
+  - Agent operator and human approver
+  priority: P1
+  status: proposed
+  dependencies:
+  - AI-001
+  - INT-003
+  milestone: M0
+  acceptance:
+  - Dry run leaves no posting; changed amount, expired approval or stale revision rejects execution; retry the approved
+    request produces one auditable result and explanation.
+  scenarios:
+  - SC-05
+  decisions:
+  - docs/adr/0003-semantic-contracts.md
+  refines:
+  - BD-015
+  issues:
+  - 19
+  - 44
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which actions are never auto-approved?
+  revision: 1

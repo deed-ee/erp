@@ -1,0 +1,110 @@
+- id: IAM-001
+  title: Verify the calling principal
+  description: Bind a request to a verified subject and audience before reading business data.
+  rationale: A forwarded tenant name is not proof of membership.
+  type: functional
+  domain: IAM
+  capability: IAM.01
+  industries:
+  - international-group
+  actors:
+  - Access administrator
+  priority: P0
+  status: proposed
+  dependencies: []
+  milestone: M0
+  acceptance:
+  - A valid grant for A returns A's record; a token for another audience or issuer returns no business fields.
+  scenarios:
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-003
+  issues:
+  - 2
+  - 39
+  prs:
+  - 15
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What is the revocation window?
+  revision: 1
+- id: IAM-002
+  title: Separate read and write grants
+  description: Evaluate the requested operation in the selected organization at the owner.
+  rationale: Read access must not authorize creating commercial records.
+  type: functional
+  domain: IAM
+  capability: IAM.01
+  industries:
+  - international-group
+  - trade
+  actors:
+  - Access administrator
+  priority: P0
+  status: proposed
+  dependencies:
+  - IAM-001
+  milestone: M0
+  acceptance:
+  - A read-only subject retrieves its article but registration is denied and the SKU is still unused.
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-003
+  issues:
+  - 2
+  - 39
+  prs:
+  - 15
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - How are temporary grants audited?
+  revision: 1
+- id: IAM-003
+  title: Protect service and agent identity lifecycle
+  description: Separate delegated and service grants and avoid retaining raw credentials in diagnostics.
+  rationale: Background jobs are not privileged tenant administrators.
+  type: non-functional
+  domain: IAM
+  capability: IAM.01
+  industries:
+  - international-group
+  - trade
+  actors:
+  - Access administrator
+  priority: P0
+  status: proposed
+  dependencies:
+  - IAM-001
+  milestone: M0
+  acceptance:
+  - Rotate the service credential and revoke old grants; writes by the retired identity fail, unrelated tenant remains
+    available and collected logs contain no credential.
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-003
+  issues:
+  - 2
+  - 19
+  - 39
+  prs:
+  - 15
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What rotation overlap is required?
+  revision: 1

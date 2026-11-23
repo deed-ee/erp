@@ -1,0 +1,7 @@
+# Reference companies and repeatable business cases
+
+[The scenario catalog](companies.yaml) uses stable `SC-01`–`SC-12` keys. The company names are shorthand personas, not users, public tenants or claims of adoption. Each case has fixed synthetic inputs, role, action and observable result. Repeat it on paper before implementing it; once the owning capability ships, a test may map generated IDs back to logical keys and replay the same sequence. Do not seed any environment from these analysis records.
+
+SC-01–SC-06 extend the **same** cases as [PR #31's fixture proposal](https://github.com/erp4us-org/erp4us/blob/611ee6a11ee9cf0bc54d7c79fae1894acfbe9cd4/fixtures/demo/reference-v1.json): join by scenario ID, not by translated company name. No second tenant dataset or seed tool is introduced. SC-07–SC-12 add requirements cases, not runtime fixtures. Additional cases should challenge an assumption rather than merely rename an existing industry.
+
+**Minimum review set:** run SC-05 for a physical order, SC-06 with a single consultant and no inventory, SC-08 for an international group and SC-10 for multiple outputs. Use SC-11 to distinguish time-slot availability from a stock quantity. A mixed business can combine SC-01 and SC-06 using the same partner and distinct fulfillment decisions per line. Compare a small firm with one approver against a larger firm's delegated roles; the simple installation must not require unused capabilities.

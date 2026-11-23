@@ -1,0 +1,37 @@
+- id: INV-001
+  title: Conserve available stock under competing reservations
+  description: Reserve only eligible stock within the warehouse and scope.
+  rationale: Two sales confirmations must not promise the same six units.
+  type: functional
+  domain: INV
+  capability: INV.01
+  industries:
+  - trade
+  actors:
+  - Warehouse operator
+  priority: P1
+  status: proposed
+  dependencies:
+  - UOM-001
+  - INT-001
+  milestone: M3
+  acceptance:
+  - Two concurrent requests for six against six result in at most six reserved; replay creates no extra movement
+    and reversal restores the eligible quantity.
+  scenarios:
+  - SC-05
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-019
+  issues:
+  - 16
+  - 24
+  - 58
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Do we reserve a partial amount or wait?
+  revision: 1

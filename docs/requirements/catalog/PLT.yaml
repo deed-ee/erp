@@ -1,0 +1,216 @@
+- id: PLT-001
+  title: Restore a synthetic installation
+  description: Demonstrate recoverability on an isolated target, not just creation of a backup.
+  rationale: A backup file is not evidence that usable records survive.
+  type: non-functional
+  domain: PLT
+  capability: PLT.01
+  industries:
+  - trade
+  actors:
+  - Operator
+  priority: P0
+  status: proposed
+  dependencies: []
+  milestone: M0
+  acceptance:
+  - Restore to an empty target and match known article IDs, revisions and counts; a damaged backup fails readiness
+    without modifying the source; record elapsed time and data gap.
+  scenarios:
+  - SC-05
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-024
+  issues:
+  - 18
+  prs:
+  - 37
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which measured RPO/RTO is affordable?
+  revision: 1
+- id: PLT-002
+  title: Make deployment and migrations reproducible
+  description: Rebuild the supported local environment from reviewed versions and a known checkpoint.
+  rationale: Operators need a predictable failure path during upgrades.
+  type: non-functional
+  domain: PLT
+  capability: PLT.01
+  industries:
+  - trade
+  actors:
+  - Operator
+  priority: P1
+  status: proposed
+  dependencies:
+  - PLT-001
+  milestone: M0
+  acceptance:
+  - Install twice from the same revisions; contracts match. Interrupt a migration on disposable data; recover without
+    duplicate effects and record compatibility limits.
+  - 'Interrupt during readiness transition: an unready instance receives no new work; old and new supported readers
+    consume the additive shape. If rolling upgrade is unsupported, the runbook names the required maintenance window.'
+  scenarios:
+  - SC-05
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-020
+  issues:
+  - 18
+  prs:
+  - 37
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which changes need downtime?
+  revision: 1
+- id: PLT-003
+  title: Measure resource and latency baselines
+  description: Record the workload and measurement envelope before making performance promises.
+  rationale: An unqualified latency number cannot guide a small installation.
+  type: non-functional
+  domain: PLT
+  capability: PLT.01
+  industries:
+  - trade
+  actors:
+  - Operator
+  priority: P2
+  status: proposed
+  dependencies: []
+  milestone: M0
+  acceptance:
+  - Run 100 synthetic reads and 100 registrations at concurrency 1 and 8; report p50/p95, failures, CPU, peak memory,
+    dataset and hardware; emit no bearer or payload in telemetry.
+  - Include timeouts in the error count and report latency of successful requests separately; verify that one correlation
+    ID connects a failed synthetic request to redacted diagnostics.
+  scenarios:
+  - SC-05
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-024
+  issues:
+  - 18
+  - 60
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What SLO follows from the first measurements?
+  revision: 1
+- id: PLT-004
+  title: Port business data to a fresh installation
+  description: Export authorized versioned data and document references in open formats with enough metadata for
+    re-import.
+  rationale: Self-hosting must include a practical exit path.
+  type: functional
+  domain: PLT
+  capability: PLT.01
+  industries:
+  - international-group
+  - trade
+  actors:
+  - Operator
+  priority: P1
+  status: proposed
+  dependencies:
+  - ORG-001
+  milestone: M1
+  acceptance:
+  - Export an allowed organization, validate counts and checksums on import; omitted restricted records leak neither
+    IDs nor counts; a second import reports duplicates without extra records.
+  - For an archived document with a retention hold, an authorized export includes version, bytes and checksum; a
+    deletion request cannot remove the held version. Releasing a hold must be an independently authorized action.
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-004
+  issues:
+  - 18
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - What retention rules survive migration?
+  revision: 1
+- id: PLT-005
+  title: Operate a keyboard-accessible workspace
+  description: Complete the first form and detail path without pointing devices or color cues.
+  rationale: A keyboard user must be able to correct a failed input.
+  type: non-functional
+  domain: PLT
+  capability: PLT.01
+  industries:
+  - professional-services
+  - trade
+  actors: &id001
+  - Operator
+  priority: P1
+  status: proposed
+  dependencies: []
+  milestone: M0
+  acceptance:
+  - Tab to all actions, submit duplicate SKU, hear a labeled error, edit without losing the name and read the result.
+    Every button has a visible label and decorative icon.
+  scenarios:
+  - SC-05
+  - SC-06
+  decisions: &id002
+  - docs/adr/0001-independent-services.md
+  refines: &id003
+  - BD-018
+  issues:
+  - 3
+  - 34
+  prs:
+  - 38
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which screen reader and viewport form the first evidence pair?
+  revision: 1
+- id: PLT-006
+  title: Preserve scope across personalized workspaces
+  description: Resolve global search, saved filters, configurable views and dashboards under current grants.
+  rationale: A saved view must not preserve obsolete access.
+  type: non-functional
+  domain: PLT
+  capability: PLT.01
+  industries:
+  - international-group
+  - trade
+  actors: *id001
+  priority: P2
+  status: proposed
+  dependencies:
+  - IAM-002
+  milestone: M1
+  acceptance:
+  - 'Save a two-company filter, revoke one grant, reopen on a phone and desktop: rows, facets and counts contain
+    only allowed records; keyboard focus reaches contextual help.'
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions: *id002
+  refines: *id003
+  issues:
+  - 3
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - May users share layouts without sharing their data?
+  revision: 1

@@ -1,0 +1,149 @@
+SC-01:
+  company: Demo Engineering
+  industry: engineering
+  actors: Engineer and service technician
+  given: Customer machine E1, design D1, frame F1, serial S1, project J1
+  when: Release engineering D1; derive manufacturing plan M1; deliver S1; later replace F1 under service.
+  then: As-designed, planned, built, delivered and maintained views identify different source revisions; service
+    does not change original build.
+  domains:
+  - PLM
+  - BOM
+  - MFG
+  - MNT
+SC-02:
+  company: Demo Timber
+  industry: timber
+  actors: Mill operator and grader
+  given: Source lot T1, species A, volume 10 m3, moisture reading 18%, output lots T2/T3
+  when: Receive and classify; record dimensions, mass and volume; split graded timber from chips; revise nominal
+    yield.
+  then: Trace both outputs back to T1. Original measurements survive; no global mass-to-volume ratio is assumed.
+  domains:
+  - UOM
+  - MFG
+  - TRC
+SC-03:
+  company: Demo Chemicals
+  industry: chemicals
+  actors: Quality reviewer and production recorder
+  given: Synthetic batch C1, formula definition v1, input lots A/B, quality hold Q1, safety document SD1
+  when: Record opaque process observations, concentration units and expiry against C1; release definition v2 while
+    C1 is held.
+  then: Recall identifies source lots; reservation remains denied until authorized quality release; prior safety
+    document remains retrievable.
+  domains:
+  - QMS
+  - DOC
+  - TRC
+SC-04:
+  company: Demo Construction
+  industry: construction
+  actors: Project manager and subcontractor
+  given: Contract K1, site S1, work package W1, bill of quantities 100 units
+  when: Assign labor, equipment and material; accept 30 units of progress, then correct to 28 before final invoice.
+  then: Progress billing references accepted revision; remaining scope and project cost reconcile without treating
+    site as legal entity.
+  domains:
+  - PRJ
+  - CST
+  - FIN
+SC-05:
+  company: Demo Trading
+  industry: trade
+  actors: Sales clerk, buyer and warehouse operator
+  given: Order O1 for 10 units, six available at warehouse W1, supplier P1; second warehouse W2
+  when: Confirm quoted price and discount; record shortage; approve four more; receive, reserve and ship; later
+    return one.
+  then: No duplicate reservation on replay; original package ratio and line amounts survive a catalog change.
+  domains:
+  - SAL
+  - PUR
+  - INV
+  - LOG
+SC-06:
+  company: Demo Services
+  industry: professional-services
+  actors: Independent consultant
+  given: One person, project J1, eight hours agreed, two expenses, no warehouses
+  when: Assign qualified time; accept six hours against budget; invoice under the engagement agreement.
+  then: The entire scenario can be described without an inventory identity, BOM or production order.
+  domains:
+  - SVC
+  - HR
+  - PRJ
+  - PRD
+SC-07:
+  company: Demo Food
+  industry: food
+  actors: Receiving clerk and recall lead
+  given: Product F1, input lot L1, label revision A, output packs B1/B2, expiry on B2
+  when: Record recipe revision, declared allergens, inspection and expiry; after dispatch mark L1 for recall.
+  then: Both affected output lots and only their shipments appear; preserve label revision even after relabeling.
+  domains:
+  - TRC
+  - QMS
+  - PIM
+SC-08:
+  company: Demo Global
+  industry: international-group
+  actors: Controller and local stewards
+  given: One tenant, entities DE/EUR and GB/GBP, shared item G1, separate local descriptions
+  when: Sell between entities, ship internationally, invoice in local currency; change exchange rate and local tax
+    policy next period.
+  then: Each entity retains its own document, tax basis and applied rate; consolidation eliminates the matched pair
+    without cross-tenant access.
+  domains:
+  - ORG
+  - LOC
+  - FIN
+  - ANA
+SC-09:
+  company: Demo Software
+  industry: software
+  actors: Subscription manager
+  given: Customer P1, license entitlement D1 version 2, billing month M1, usage event U1 twice
+  when: Provision digital access under an SLA; bill recurring fee and one usage event; upgrade to v3 next month.
+  then: One usage charge; retained period references v2; no delivery note or inventory reservation required.
+  domains:
+  - SVC
+  - PRD
+  - SAL
+  - INT
+SC-10:
+  company: Demo Recycling
+  industry: recycling
+  actors: Scale operator and environmental reviewer
+  given: 'Inbound lot R1: 100 kg; recovered 70 kg, residue 25 kg, unexplained 5 kg'
+  when: Classify origin and waste stream; grade measured outputs and record discrepancy rather than allocating it
+    silently.
+  then: Mass report separates recovered, residue and unexplained mass with original evidence and classification
+    revision.
+  domains:
+  - ESG
+  - TRC
+  - UOM
+SC-11:
+  company: Demo Rental
+  industry: rental
+  actors: Rental agent and technician
+  given: Serialized asset A1, booking days 1–3, competing booking day 2, damage report D1
+  when: Reserve asset, hand over, return damaged and block availability for maintenance; assess recurring charge.
+  then: Overlapping booking rejected; asset is unavailable until release; return evidence retained independent of
+    charge decision.
+  domains:
+  - AST
+  - MNT
+  - SVC
+SC-12:
+  company: Demo Agriculture
+  industry: agriculture
+  actors: Farm operator
+  given: Field F1, season S1, equipment E1, input lot L1, two harvest lots H1/H2
+  when: Record consumption and measured harvest by field and season; compare actual with expected yield.
+  then: Both lots retain field and input origins; a yield variance does not rewrite consumption or season history.
+  domains:
+  - MFG
+  - TRC
+  - AST
+  - ESG

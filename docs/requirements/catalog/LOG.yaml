@@ -1,0 +1,37 @@
+- id: LOG-001
+  title: Relate shipments to accepted delivery
+  description: Identify partial consignments and retain proof separate from billing.
+  rationale: Shipping and commercial acceptance can occur on different dates.
+  type: functional
+  domain: LOG
+  capability: LOG.01
+  industries:
+  - international-group
+  - trade
+  actors:
+  - Dispatcher
+  priority: P2
+  status: proposed
+  dependencies:
+  - INV-001
+  - SAL-001
+  milestone: M3
+  acceptance:
+  - Send six units then four; the delivery history sums to ten and keeps each acknowledgement; repeated carrier
+    notification changes no quantity.
+  scenarios:
+  - SC-05
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-013
+  issues:
+  - 51
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - When is proof mandatory?
+  revision: 1

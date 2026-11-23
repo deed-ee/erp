@@ -1,0 +1,37 @@
+- id: PLM-001
+  title: Compare delivered and maintained configuration
+  description: Compose lifecycle evidence with provenance and visible missing facts.
+  rationale: An installed replacement is not part of the original delivery.
+  type: business
+  domain: PLM
+  capability: PLM.01
+  industries:
+  - engineering
+  - rental
+  actors:
+  - Lifecycle engineer
+  priority: P2
+  status: proposed
+  dependencies:
+  - BOM-001
+  - TRC-001
+  milestone: M5
+  acceptance:
+  - Replace serial S1 after delivery; as-delivered and as-maintained disagree intentionally and identify the source
+    work entry; unavailable source is marked incomplete.
+  scenarios:
+  - SC-01
+  - SC-11
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-011
+  issues:
+  - 45
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which views may the customer export?
+  revision: 1

@@ -1,0 +1,36 @@
+- id: QMS-001
+  title: Hold unapproved stock
+  description: Separate inspection disposition from execution of the stock reservation.
+  rationale: A commercial promise must not release quarantined material.
+  type: functional
+  domain: QMS
+  capability: QMS.01
+  industries:
+  - chemicals
+  - food
+  actors:
+  - Quality inspector
+  priority: P2
+  status: proposed
+  dependencies:
+  - INV-001
+  milestone: M4
+  acceptance:
+  - 'Two equal lots, one held: reserve from released lot only; repeated inspection release transitions the held
+    lot once.'
+  scenarios:
+  - SC-03
+  - SC-07
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-012
+  issues:
+  - 47
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which sampling plans permit partial release?
+  revision: 1

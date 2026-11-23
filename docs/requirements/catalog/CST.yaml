@@ -1,0 +1,36 @@
+- id: CST-001
+  title: Explain allocation residuals
+  description: Relate each allocation to its driver, currency, policy revision and source.
+  rationale: Rounding must not create unexplained costs.
+  type: functional
+  domain: CST
+  capability: CST.01
+  industries:
+  - construction
+  - international-group
+  actors:
+  - Controller
+  priority: P3
+  status: proposed
+  dependencies:
+  - FIN-001
+  milestone: M6
+  acceptance:
+  - 'Allocate 100.00 across three equal shares: amounts plus explicit residual reconcile to 100.00; repeating the
+    allocation cannot double project actuals.'
+  scenarios:
+  - SC-04
+  - SC-08
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-007
+  issues:
+  - 49
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Where is the residual posted?
+  revision: 1

@@ -1,0 +1,36 @@
+- id: AST-001
+  title: Prevent overlapping exclusive bookings
+  description: Keep asset identity independent from availability and custody periods.
+  rationale: A serialized rental cannot be handed to two customers simultaneously.
+  type: functional
+  domain: AST
+  capability: AST.01
+  industries:
+  - agriculture
+  - rental
+  actors:
+  - Asset custodian
+  priority: P2
+  status: proposed
+  dependencies:
+  - ORG-001
+  milestone: M5
+  acceptance:
+  - Request two exclusive bookings for A1 on day 2; only one is accepted; cancellation frees only the cancelled
+    interval.
+  scenarios:
+  - SC-11
+  - SC-12
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-010
+  issues:
+  - 50
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which timezone determines handover?
+  revision: 1
