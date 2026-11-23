@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 axum = "=0.8.9"
 mongodb = "=3.10.2"
-serde = { version = "=1.0.228", features = ["derive"] }
+serde = { version = "=1.0.229", features = ["derive"] }
 subtle = "=2.6.1"
 time = { version = "=0.3.55", features = ["serde-well-known"] }
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "signal"] }
