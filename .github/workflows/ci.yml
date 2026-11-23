@@ -13,6 +13,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  workflow-lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with: { persist-credentials: false }
+      - name: Validate GitHub Actions workflows
+        run: |
+          sh scripts/install-quality-tool.sh actionlint "$RUNNER_TEMP/quality-tools"
+          "$RUNNER_TEMP/quality-tools/actionlint"
   rust:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -22,7 +32,30 @@ jobs:
       - run: rustup show
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Check direct Rust service dependencies
+        shell: bash
+        run: cargo metadata --format-version 1 --no-deps --locked | jq -e -f scripts/check-service-boundaries.jq
       - run: cargo test --workspace --locked
+  coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with: { persist-credentials: false }
+      - run: rustup component add llvm-tools-preview
+      - name: Measure Rust workspace test coverage
+        shell: bash
+        run: |
+          sh scripts/install-quality-tool.sh cargo-llvm-cov "$RUNNER_TEMP/quality-tools"
+          export PATH="$RUNNER_TEMP/quality-tools:$PATH"
+          cargo llvm-cov --workspace --locked --lcov --output-path target/workspace.lcov
+          cargo llvm-cov report --workspace --summary-only | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-workspace-coverage
+          path: target/workspace.lcov
+          if-no-files-found: error
+          retention-days: 14
   contracts:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
