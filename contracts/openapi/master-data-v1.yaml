@@ -21,6 +21,11 @@ paths:
         '201':
           description: Article registered.
           headers:
+            traceparent:
+              description: Server-generated W3C trace context also recorded on the registration event.
+              schema:
+                type: string
+                pattern: '^00-[0-9a-f]{32}-[0-9a-f]{16}-00$'
             Location:
               required: true
               schema: { type: string, format: uri-reference }

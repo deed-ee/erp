@@ -33,6 +33,7 @@ struct Event {
     source_service: String,
     actor: Actor,
     correlation_id: Uuid,
+    traceparent: Option<String>,
     payload: Payload,
 }
 
@@ -58,26 +59,65 @@ impl Event {
             && OffsetDateTime::parse(&self.timestamp, &Rfc3339).is_ok()
             && !self.actor.id.is_empty()
             && matches!(self.actor.kind.as_str(), "user" | "service" | "agent")
+            && self.traceparent.as_deref().is_none_or(valid_traceparent)
     }
 
     fn receipt(&self) -> Document {
-        doc! {
+        let mut receipt = doc! {
             "articleId": self.payload.article_id.to_string(),
             "tenantId": self.tenant_id.to_string(),
             "organizationId": self.organization_id.to_string(),
             "revision": self.payload.revision,
             "correlationId": self.correlation_id.to_string(),
+        };
+        if let Some(traceparent) = &self.traceparent {
+            receipt.insert("traceparent", traceparent);
         }
+        receipt
     }
+}
+
+fn valid_traceparent(value: &str) -> bool {
+    let mut fields = value.split('-');
+    let hex = |field: Option<&str>, len, nonzero: bool| {
+        field.is_some_and(|field| {
+            field.len() == len
+                && field
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                && (!nonzero || field.bytes().any(|b| b != b'0'))
+        })
+    };
+    fields.next() == Some("00")
+        && hex(fields.next(), 32, true)
+        && hex(fields.next(), 16, true)
+        && hex(fields.next(), 2, false)
+        && fields.next().is_none()
 }
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let role = env::args().nth(1).unwrap_or_default();
-    if !matches!(role.as_str(), "init" | "relay" | "consumer") {
-        return Err(io::Error::other("Expected init, relay, or consumer"));
-    }
-    run(&role).await.map_err(|_| {
+    let args: Vec<_> = env::args().skip(1).collect();
+    let (role, sequence) = match args.as_slice() {
+        [role] if matches!(role.as_str(), "init" | "relay" | "consumer") => (role, None),
+        [role, sequence] if role == "replay" => {
+            let sequence = sequence
+                .parse::<u64>()
+                .ok()
+                .filter(|&n| n > 0)
+                .ok_or_else(|| io::Error::other("Expected a positive stream sequence"))?;
+            (role, Some(sequence))
+        }
+        _ => {
+            return Err(io::Error::other(
+                "Expected init, relay, consumer, or replay <sequence>",
+            ));
+        }
+    };
+    run(role, sequence).await.map_err(|error| {
+        if let Some(error) = error.downcast_ref::<ReplayDenied>() {
+            return io::Error::other(error.0);
+        }
         // Driver diagnostics may contain credentials, subjects, or document data.
         io::Error::other(format!(
             "{role} stopped: messaging or persistence unavailable"
@@ -85,13 +125,17 @@ async fn main() -> io::Result<()> {
     })
 }
 
-async fn run(role: &str) -> Result<()> {
+async fn run(role: &str, sequence: Option<u64>) -> Result<()> {
     let options = async_nats::ConnectOptions::with_user_and_password(
         env::var("NATS_USER")?,
         env::var("NATS_PASSWORD")?,
     )
-    .connection_timeout(Duration::from_secs(3))
-    .retry_on_initial_connect();
+    .connection_timeout(Duration::from_secs(3));
+    let options = if sequence.is_none() {
+        options.retry_on_initial_connect()
+    } else {
+        options
+    };
     let nats = options.connect("nats://nats:4222").await?;
     let mut js = jetstream::new(nats);
     js.set_timeout(Duration::from_secs(5));
@@ -99,12 +143,89 @@ async fn run(role: &str) -> Result<()> {
         return provision(&js).await;
     }
     let mongo = Client::with_uri_str(env::var("MONGODB_URI")?).await?;
+    if let Some(sequence) = sequence {
+        return replay(&js, &mongo.database("article_receipts"), sequence).await;
+    }
     match role {
         "relay" => relay(&js, mongo.database("master_data").collection("outbox")).await,
         _ => consume(&js, mongo.database("article_receipts")).await,
     }
 }
 
+#[derive(Debug)]
+struct ReplayDenied(&'static str);
+
+impl std::fmt::Display for ReplayDenied {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl std::error::Error for ReplayDenied {}
+
+async fn replay(js: &Context, db: &mongodb::Database, sequence: u64) -> Result<()> {
+    let key = sequence.to_string();
+    let entries = db.collection::<Document>("quarantine");
+    let entry = entries
+        .find_one(doc! {"_id": &key, "reason": "receipt delivery limit reached"})
+        .await?
+        .ok_or(ReplayDenied(
+            "No retry-exhausted quarantine entry for that sequence",
+        ))?;
+    if entry.contains_key("replayedAt") {
+        return Err(ReplayDenied("This quarantine entry has already been replayed").into());
+    }
+    let original = js
+        .get_stream_no_info(STREAM)
+        .await?
+        .get_raw_message(sequence)
+        .await?;
+    let event: Event = serde_json::from_slice(&original.payload)?;
+    if original.subject.as_str() != SUBJECT
+        || !event.valid()
+        || entry.get_str("messageId")? != event.message_id.to_string()
+        || entry.get_str("tenantId")? != event.tenant_id.to_string()
+        || entry.get_str("organizationId")? != event.organization_id.to_string()
+        || entry.get_str("correlationId")? != event.correlation_id.to_string()
+    {
+        return Err(ReplayDenied("Stored message does not match the quarantine entry").into());
+    }
+    let requested = entries
+        .update_one(
+            doc! {"_id": &key, "replayedAt": {"$exists": false}},
+            doc! {"$currentDate": {"replayRequestedAt": true}},
+        )
+        .await?;
+    if requested.matched_count != 1 {
+        return Err(ReplayDenied("Quarantine entry changed; replay not sent").into());
+    }
+    let mut headers = async_nats::HeaderMap::new();
+    headers.insert(
+        "Nats-Msg-Id",
+        format!("replay-{sequence}-{}", event.message_id),
+    );
+    if let Some(traceparent) = event.traceparent.as_deref() {
+        headers.insert("traceparent", traceparent);
+    }
+    let ack = js
+        .publish_with_headers(SUBJECT, headers, original.payload)
+        .await?
+        .await?;
+    if ack.stream != STREAM {
+        return Err(io::Error::other("Unexpected replay stream").into());
+    }
+    entries
+        .update_one(
+            doc! {"_id": &key},
+            doc! {
+                "$currentDate": {"replayedAt": true},
+                "$set": {"replaySequence": ack.sequence.to_string()},
+            },
+        )
+        .await?;
+    println!("Replay accepted for stream sequence {sequence}");
+    Ok(())
+}
 async fn provision(js: &Context) -> Result<()> {
     let stream = js
         .get_or_create_stream(stream::Config {
@@ -156,6 +277,13 @@ async fn publish_next(js: &Context, outbox: &Collection<Document>) -> Result<boo
         .ok_or_else(|| io::Error::other("Missing outbox key"))?;
     let mut headers = async_nats::HeaderMap::new();
     headers.insert("Nats-Msg-Id", envelope.get_str("messageId")?);
+    if let Some(traceparent) = envelope
+        .get_str("traceparent")
+        .ok()
+        .filter(|value| valid_traceparent(value))
+    {
+        headers.insert("traceparent", traceparent);
+    }
     js.publish_with_headers(SUBJECT, headers, serde_json::to_vec(&envelope)?.into())
         .await?
         .await?;
@@ -196,14 +324,18 @@ async fn consume(js: &Context, db: mongodb::Database) -> Result<()> {
                     message.ack_with(AckKind::Nak(Some(delay))).await?;
                     continue;
                 }
-                doc! {
+                let mut entry = doc! {
                     "reason": "receipt delivery limit reached",
                     "messageId": event.message_id.to_string(),
                     "correlationId": event.correlation_id.to_string(),
                     "tenantId": event.tenant_id.to_string(),
                     "organizationId": event.organization_id.to_string(),
                     "deliveryCount": info.delivered,
+                };
+                if let Some(traceparent) = &event.traceparent {
+                    entry.insert("traceparent", traceparent);
                 }
+                entry
             }
             _ => doc! {"reason": "invalid ArticleRegistered envelope"},
         };
@@ -234,4 +366,24 @@ async fn persist(collection: &Collection<Document>, key: String, data: Document)
         .upsert(true)
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_traceparent;
+
+    #[test]
+    fn accepts_only_nonzero_lowercase_v00_trace_context() {
+        assert!(valid_traceparent(
+            "00-123456789abcdef0123456789abcdef0-123456789abcdef0-00"
+        ));
+        for invalid in [
+            "00-00000000000000000000000000000000-123456789abcdef0-00",
+            "00-123456789abcdef0123456789abcdef0-0000000000000000-00",
+            "00-123456789abcdef0123456789abcdef0-123456789ABCDEF0-00",
+            "00-123456789abcdef0123456789abcdef0-123456789abcdef0-00-extra",
+        ] {
+            assert!(!valid_traceparent(invalid), "{invalid}");
+        }
+    }
 }
