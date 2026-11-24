@@ -61,13 +61,14 @@ def mongo_eval(compose, code):
     return json.loads(subprocess.check_output(command, text=True))
 
 
-def verify_outbox(compose, article):
+def verify_outbox(compose, article, traceparent):
     events = mongo_eval(
         compose, f"print(JSON.stringify(db.outbox.find({{'payload.articleId': "
         f"{json.dumps(article['id'])}}}, {{_id: 0}}).toArray()))",
     )
     assert len(events) == 1
     event = events[0]
+    event.pop("publishedAt", None)
     assert str(UUID(event["messageId"])) == event["messageId"]
     assert event == {
         "messageId": event["messageId"],
@@ -78,6 +79,7 @@ def verify_outbox(compose, article):
         "organizationId": article["organization_id"],
         "actor": {"kind": "user", "id": article["created_by"]},
         "correlationId": event["messageId"],
+        "traceparent": traceparent,
         "sourceService": "erp4us.master-data",
         "payload": {"articleId": article["id"], "revision": article["revision"]},
     }
@@ -167,6 +169,7 @@ def main():
     assert "_id" not in body
     path = f"/v1/articles/{body['id']}"
     assert headers["Location"] == path and headers["Cache-Control"] == "no-store"
+    traceparent = headers["traceparent"]
     assert request(path, bearer=None)[0] == 401
     assert request(path)[2] == body
     assert request(f"/v1/articles/{uuid4()}")[0] == 404
@@ -178,7 +181,7 @@ def main():
         wait_until_ready()
         assert request(path)[2] == body
     if "--outbox" in sys.argv:
-        verify_outbox(compose, body)
+        verify_outbox(compose, body, traceparent)
     print("Master Data HTTP smoke passed" + (" (including restart)" if "--restart" in sys.argv else ""))
     if "--restore" in sys.argv:
         verify_restore(compose, path, body, payload)
