@@ -86,6 +86,45 @@ def main():
     assert receipts(article) == first
     print("JetStream outage, restart, duplicate delivery and quarantine checks passed")
 
+    # Reject only the probe's receipt so the rest of the pipeline can still drain.
+    run("stop", "article-receipts")
+    probe = register()
+    failed = event(probe)
+    db = "db.getSiblingDB('article_receipts')"
+
+    def set_validator(validator):
+        result = mongo_eval(compose, f"print({db}.runCommand({{collMod: 'receipts', "
+                            f"validator: {json.dumps(validator)}}}).ok)")
+        assert result == 1
+
+    original = mongo_eval(compose, f"print(JSON.stringify({db}.getCollectionInfos("
+                          "{name: 'receipts'})[0].options.validator || {}))")
+    try:
+        set_validator({"articleId": {"$ne": probe["id"]}})
+        run("start", "article-receipts")
+        rejected = eventually(
+            lambda: mongo_eval(compose, f"const entry = {db}.quarantine.findOne("
+                               f"{{messageId: {json.dumps(failed['messageId'])}}}); "
+                               "print(JSON.stringify(entry && {...entry, "
+                               "deliveryCount: Number(entry.deliveryCount)}))"),
+            "quarantine after receipt retries",
+        )
+        assert {key: value for key, value in rejected.items() if key != "_id"} == {
+            "reason": "receipt delivery limit reached",
+            "messageId": failed["messageId"],
+            "correlationId": failed["correlationId"],
+            "tenantId": probe["tenant_id"],
+            "organizationId": probe["organization_id"],
+            "deliveryCount": 4,
+        }, rejected
+        assert receipts(probe) == []
+        healthy = register()
+        eventually(lambda: receipts(healthy), "receipt after retry exhaustion")
+    finally:
+        set_validator(original)
+        run("start", "article-receipts")
+    print("JetStream receipt retry exhaustion check passed")
+
 
 if __name__ == "__main__":
     main()

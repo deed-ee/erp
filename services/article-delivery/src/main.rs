@@ -13,6 +13,12 @@ const SUBJECT: &str = "business.master-data.article.registered.v1";
 const STREAM: &str = "ARTICLES";
 const CONSUMER: &str = "article-receipts";
 const PAUSE: Duration = Duration::from_secs(1);
+const RECEIPT_RETRY_DELAYS: [Duration; 3] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+];
+const MAX_RECEIPT_DELIVERIES: i64 = 4;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 #[derive(Deserialize)]
@@ -175,30 +181,51 @@ async fn consume(js: &Context, db: mongodb::Database) -> Result<()> {
     while let Some(message) = messages.next().await {
         let message = message?;
         let info = message.info()?;
-        match serde_json::from_slice::<Event>(&message.payload) {
+        let entry = match serde_json::from_slice::<Event>(&message.payload) {
             Ok(event) if event.valid() => {
-                if persist(&receipts, event.message_id.to_string(), event.receipt())
-                    .await
-                    .is_err()
+                if info.delivered <= MAX_RECEIPT_DELIVERIES
+                    && persist(&receipts, event.message_id.to_string(), event.receipt())
+                        .await
+                        .is_ok()
                 {
-                    eprintln!("Article receipt persistence failed; requesting redelivery");
-                    message.ack_with(AckKind::Nak(Some(PAUSE))).await?;
-                } else {
                     message.double_ack().await?;
+                    continue;
+                }
+                if let Some(delay) = receipt_retry_delay(info.delivered) {
+                    eprintln!("Article receipt persistence failed; requesting redelivery");
+                    message.ack_with(AckKind::Nak(Some(delay))).await?;
+                    continue;
+                }
+                doc! {
+                    "reason": "receipt delivery limit reached",
+                    "messageId": event.message_id.to_string(),
+                    "correlationId": event.correlation_id.to_string(),
+                    "tenantId": event.tenant_id.to_string(),
+                    "organizationId": event.organization_id.to_string(),
+                    "deliveryCount": info.delivered,
                 }
             }
-            _ => {
-                persist(
-                    &quarantine,
-                    info.stream_sequence.to_string(),
-                    doc! {"reason": "invalid ArticleRegistered envelope"},
-                )
+            _ => doc! {"reason": "invalid ArticleRegistered envelope"},
+        };
+        if persist(&quarantine, info.stream_sequence.to_string(), entry)
+            .await
+            .is_ok()
+        {
+            message.ack_with(AckKind::Term).await?;
+        } else {
+            // Do not let a broker-side delivery cap discard an unrecorded message.
+            eprintln!("Article quarantine persistence failed; requesting redelivery");
+            message
+                .ack_with(AckKind::Nak(Some(Duration::from_secs(10))))
                 .await?;
-                message.ack_with(AckKind::Term).await?;
-            }
         }
     }
     Err(io::Error::other("Consumer message stream ended").into())
+}
+
+fn receipt_retry_delay(delivered: i64) -> Option<Duration> {
+    let index = usize::try_from(delivered.checked_sub(1)?).ok()?;
+    RECEIPT_RETRY_DELAYS.get(index).copied()
 }
 
 async fn persist(collection: &Collection<Document>, key: String, data: Document) -> Result<()> {
