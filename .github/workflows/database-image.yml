@@ -1,0 +1,40 @@
+name: Infrastructure image advisories
+on:
+  pull_request:
+    paths: [compose.yaml, compose.delivery.yaml]
+  schedule:
+    - cron: '37 7 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scan-image:
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [mongo, nats, receipts-db-init]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with: { persist-credentials: false, fetch-depth: 2 }
+      - name: Scan published service digest on changes and during monitoring
+        env:
+          SERVICE: ${{ matrix.service }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          ref() { docker compose -f "$1/compose.yaml" -f "$1/compose.delivery.yaml" config --no-interpolate --format json | jq -er --arg svc "$SERVICE" '.services[$svc].image'; }
+          image=$(ref .)
+          if [ -n "$BASE" ]; then
+            for f in compose.yaml compose.delivery.yaml; do git show "$BASE:$f" > "$RUNNER_TEMP/$f"; done
+            previous=$(ref "$RUNNER_TEMP")
+            if [ "$previous" = "$image" ]; then
+              echo "Service image unchanged; weekly monitoring covers the existing pin."
+              exit 0
+            fi
+          fi
+          sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/trivy" image --image-src remote --scanners vuln --severity HIGH,CRITICAL \
+            --format json --output "$RUNNER_TEMP/image.json" "$image"
+          "$RUNNER_TEMP/tools/trivy" convert --format table "$RUNNER_TEMP/image.json"
+          jq -e '[.Results[].Vulnerabilities[]? | select((.FixedVersion // "") != "")] | length == 0' "$RUNNER_TEMP/image.json"

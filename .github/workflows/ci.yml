@@ -52,12 +52,24 @@ jobs:
       - run: python3 tests/integration/smoke.py --restart --outbox --restore
       - run: docker compose -f compose.yaml -f compose.delivery.yaml up --build -d
       - run: python3 tests/integration/delivery.py
+      - name: Scan built service images
+        run: |
+          sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
+          for service in master-data article-relay; do
+            container=$(docker compose -f compose.yaml -f compose.delivery.yaml ps -q "$service")
+            image=$(docker inspect --format '{{.Config.Image}}' "$container")
+            "$RUNNER_TEMP/tools/trivy" image --image-src docker --scanners vuln --severity HIGH,CRITICAL \
+              --format json --output "$RUNNER_TEMP/trivy.json" "$image"
+            "$RUNNER_TEMP/tools/trivy" convert --format table "$RUNNER_TEMP/trivy.json"
+            jq -e '[.Results[].Vulnerabilities[]? | select((.FixedVersion // "") != "")] | length == 0' "$RUNNER_TEMP/trivy.json"
+          done
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: ui/.nvmrc, cache: npm, cache-dependency-path: ui/package-lock.json }
       - name: Build and exercise the Article workspace
         working-directory: ui
         run: |
           npm ci
+          npm audit --audit-level=high
           npm run build
           npx playwright install --with-deps chromium
           npm run test:e2e
@@ -73,3 +85,7 @@ jobs:
         with: { persist-credentials: false }
       - run: cargo install cargo-audit --version 0.23.0 --locked --no-default-features
       - run: cargo audit
+      - name: Check resolved crate licenses, sources and bans
+        run: |
+          sh scripts/install-dependency-scanner.sh cargo-deny "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/cargo-deny" --locked --workspace --all-features check licenses sources bans
