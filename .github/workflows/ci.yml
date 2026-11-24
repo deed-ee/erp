@@ -50,14 +50,19 @@ jobs:
           done < .env
       - run: docker compose config --quiet && docker compose up --build -d
       - run: python3 tests/integration/smoke.py --restart --outbox --restore
-      - name: Scan the built service image
+      - run: docker compose -f compose.yaml -f compose.delivery.yaml up --build -d
+      - run: python3 tests/integration/delivery.py
+      - name: Scan built service images
         run: |
           sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
-          image=$(docker inspect --format '{{.Config.Image}}' "$(docker compose ps -q master-data)")
-          "$RUNNER_TEMP/tools/trivy" image --image-src docker --scanners vuln --severity HIGH,CRITICAL \
-            --format json --output "$RUNNER_TEMP/trivy.json" "$image"
-          "$RUNNER_TEMP/tools/trivy" convert --format table "$RUNNER_TEMP/trivy.json"
-          jq -e '[.Results[].Vulnerabilities[]? | select((.FixedVersion // "") != "")] | length == 0' "$RUNNER_TEMP/trivy.json"
+          for service in master-data article-relay; do
+            container=$(docker compose -f compose.yaml -f compose.delivery.yaml ps -q "$service")
+            image=$(docker inspect --format '{{.Config.Image}}' "$container")
+            "$RUNNER_TEMP/tools/trivy" image --image-src docker --scanners vuln --severity HIGH,CRITICAL \
+              --format json --output "$RUNNER_TEMP/trivy.json" "$image"
+            "$RUNNER_TEMP/tools/trivy" convert --format table "$RUNNER_TEMP/trivy.json"
+            jq -e '[.Results[].Vulnerabilities[]? | select((.FixedVersion // "") != "")] | length == 0' "$RUNNER_TEMP/trivy.json"
+          done
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: ui/.nvmrc, cache: npm, cache-dependency-path: ui/package-lock.json }
       - name: Build and exercise the Article workspace
@@ -69,9 +74,9 @@ jobs:
           npx playwright install --with-deps chromium
           npm run test:e2e
       - if: failure()
-        run: docker compose logs --no-color --tail=80
+        run: docker compose -f compose.yaml -f compose.delivery.yaml logs --no-color --tail=80
       - if: always()
-        run: if [ -f .env ]; then docker compose down -v; fi
+        run: if [ -f .env ]; then docker compose -f compose.yaml -f compose.delivery.yaml down -v; fi
   audit:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

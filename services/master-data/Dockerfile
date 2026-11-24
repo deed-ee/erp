@@ -2,6 +2,7 @@ FROM rust:1.100.0-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY services/master-data/ services/master-data/
+COPY services/article-delivery/ services/article-delivery/
 RUN cargo build --locked --release -p master-data
 
 FROM debian:bookworm-20260421-slim@sha256:f9c6a2fd2ddbc23e336b6257a5245e31f996953ef06cd13a59fa0a1df2d5c252
