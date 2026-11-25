@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Unit of measure v1",
+  "type": "object",
+  "required": ["id", "tenant_id", "organization_id", "created_by", "schema_version", "revision", "code"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "organization_id": { "type": "string", "format": "uuid" },
+    "created_by": { "type": "string", "format": "uuid" },
+    "schema_version": { "const": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "code": { "$ref": "register-unit-v1.json#/properties/code" }
+  }
+}
