@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import subprocess
@@ -37,6 +38,43 @@ def check_broker_permissions(compose, tenant):
     assert "Erp4us-Protocol-Version: 1.0.0" in output
     assert '"nats":"connected"' in output
     print("NATS tenant, layer, inbox and administration permissions; Core heartbeat checks passed")
+
+
+def check_legacy_cutover_guard(compose):
+    legacy = "business.master-data.article.registered.v1"
+    inbox = "_INBOX.cutover"
+
+    def request(subject, value, *, require_success=True):
+        body = json.dumps(value, separators=(",", ":"), ensure_ascii=True)
+        output = broker_probe(compose, "provisioner", env["DEV_NATS_ADMIN_PASSWORD"], [
+            f"SUB {inbox} 1", f"PUB {subject} {inbox} {len(body)}", body,
+        ])
+        lines = output.splitlines()
+        frame = next(i for i, line in enumerate(lines) if line.startswith(f"MSG {inbox} "))
+        response = json.loads(lines[frame + 1])
+        if require_success:
+            assert "error" not in response, response
+        return response
+
+    existing = request("$JS.API.STREAM.INFO.ARTICLES", {}, require_success=False)
+    assert existing.get("error", {}).get("err_code") == 10059, "Use a fresh smoke stack for the legacy fixture"
+    request("$JS.API.STREAM.CREATE.ARTICLES", {"name": "ARTICLES", "subjects": [legacy]})
+    try:
+        request("$JS.API.CONSUMER.DURABLE.CREATE.ARTICLES.article-receipts", {
+            "stream_name": "ARTICLES",
+            "config": {"durable_name": "article-receipts", "ack_policy": "explicit", "filter_subject": legacy},
+        })
+        payload = {"messageType": legacy, "schemaVersion": 1}
+        sequence = request(legacy, payload)["seq"]
+        blocked = subprocess.run(
+            [*compose, "run", "--rm", "--no-deps", "delivery-init"], capture_output=True, text=True,
+        )
+        assert blocked.returncode != 0 and "Legacy ARTICLES durable is not drained" in blocked.stderr, blocked.stderr
+        original = request("$JS.API.STREAM.MSG.GET.ARTICLES", {"seq": sequence})["message"]
+        assert original["subject"] == legacy and json.loads(base64.b64decode(original["data"])) == payload
+    finally:
+        request("$JS.API.STREAM.DELETE.ARTICLES", {})
+    print("Cutover blocks undrained legacy messages and leaves the old stream intact")
 
 
 def eventually(query, description):
@@ -196,6 +234,7 @@ def main():
     assert repeated.returncode != 0 and "already been replayed" in repeated.stderr
     assert receipts(probe) == recovered
     print("JetStream operator replay and HTTP trace correlation checks passed")
+    check_legacy_cutover_guard(compose)
 
 
 if __name__ == "__main__":
