@@ -1,4 +1,5 @@
 use crate::domain::{Article, Scope};
+use crate::units::Unit;
 use mongodb::{
     Client, Collection, Database, IndexModel,
     bson::{Document, doc},
@@ -20,10 +21,24 @@ pub(crate) enum InsertError {
 }
 
 impl Store {
+    pub(crate) fn database(&self) -> &Database {
+        &self.database
+    }
+
     pub(crate) async fn open(uri: &str) -> mongodb::error::Result<Self> {
         let database = Client::with_uri_str(uri).await?.database("master_data");
+        crate::partners::ensure_index(&database).await?;
         let articles = database.collection("articles");
         let outbox = database.collection("outbox");
+        database
+            .collection::<Unit>("units")
+            .create_index(
+                IndexModel::builder()
+                    .keys(doc! { "tenant_id": 1, "organization_id": 1, "code": 1 })
+                    .options(IndexOptions::builder().unique(true).build())
+                    .build(),
+            )
+            .await?;
         outbox
             .create_index(
                 IndexModel::builder()
@@ -80,12 +95,7 @@ impl Store {
             .await
         {
             let _ = session.abort_transaction().await;
-            return Err(match error.kind.as_ref() {
-                ErrorKind::Write(WriteFailure::WriteError(e)) if e.code == 11000 => {
-                    InsertError::Conflict
-                }
-                _ => InsertError::Database(error),
-            });
+            return Err(Self::classify_insert(error));
         }
         if let Err(error) = self.outbox.insert_one(event).session(&mut session).await {
             let _ = session.abort_transaction().await;
@@ -118,17 +128,48 @@ impl Store {
         })
     }
 
+    pub(crate) async fn insert_unit(&self, unit: &Unit) -> Result<(), InsertError> {
+        self.database
+            .collection::<Unit>("units")
+            .insert_one(unit)
+            .await
+            .map(|_| ())
+            .map_err(Self::classify_insert)
+    }
+
+    pub(crate) async fn get_unit(
+        &self,
+        scope: Scope,
+        id: Uuid,
+    ) -> mongodb::error::Result<Option<Unit>> {
+        self.database
+            .collection::<Unit>("units")
+            .find_one(Self::scoped_id(scope, id))
+            .await
+    }
+
     pub(crate) async fn get(
         &self,
         scope: Scope,
         id: Uuid,
     ) -> mongodb::error::Result<Option<Article>> {
-        self.articles
-            .find_one(doc! {
-                "_id": id.to_string(),
-                "tenant_id": scope.tenant.to_string(),
-                "organization_id": scope.organization.to_string(),
-            })
-            .await
+        self.articles.find_one(Self::scoped_id(scope, id)).await
+    }
+
+    fn scoped_id(scope: Scope, id: Uuid) -> Document {
+        doc! {
+            "_id": id.to_string(),
+            "tenant_id": scope.tenant.to_string(),
+            "organization_id": scope.organization.to_string(),
+        }
+    }
+
+    fn classify_insert(error: Error) -> InsertError {
+        match error.kind.as_ref() {
+            ErrorKind::Write(WriteFailure::WriteError(e)) if e.code == 11000 => {
+                InsertError::Conflict
+            }
+            _ => InsertError::Database(error),
+        }
     }
 }

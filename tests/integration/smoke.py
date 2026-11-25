@@ -114,6 +114,33 @@ def configure_outbox_validator(compose, validator):
         raise RuntimeError("Could not configure the outbox validator")
 
 
+def verify_units(compose):
+    path = "/v1/units:register"
+    payload = json.dumps({"code": f"EA-{uuid4().hex[:12].upper()}"}).encode()
+    assert request(path, payload, bearer=None)[0] == 401
+    assert request(path, b'{"code":"kg"}')[0] == 422
+    assert request(path, b'{"code":"KG","tenant_id":"other"}')[0] == 422
+    status, headers, unit = request(path, payload)
+    assert status == 201 and unit["code"] == json.loads(payload)["code"]
+    assert unit["schema_version"] == unit["revision"] == 1
+    location = f"/v1/units/{unit['id']}"
+    assert headers["Location"] == location
+    assert request(location, bearer=None)[0] == 401
+    assert request(location)[2] == unit
+    assert request(path, payload)[0] == 409
+    # The demo token cannot switch scope; fixture rows exercise both scope filters.
+    for scope_field in ("tenant_id", "organization_id"):
+        other_id = str(uuid4())
+        fixture = {**unit, "_id": other_id, scope_field: str(uuid4())}
+        del fixture["id"]
+        try:
+            assert mongo_eval(compose, f"print(db.units.insertOne({json.dumps(fixture)}).acknowledged)")
+            assert request(f"/v1/units/{other_id}")[0] == 404
+        finally:
+            mongo_eval(compose, f"print(db.units.deleteOne({{_id: {json.dumps(other_id)}}}).deletedCount)")
+    print("Master Data unit registration and scope checks passed")
+
+
 def verify_restore(compose, path, article, payload):
     target = [*compose, "-p", f"erp4us-restore-{uuid4().hex}"]
     port = os.getenv("ERP4US_RESTORE_PORT", "8081")
@@ -182,6 +209,8 @@ def main():
         assert request(path)[2] == body
     if "--outbox" in sys.argv:
         verify_outbox(compose, body, traceparent)
+    if "--units" in sys.argv:
+        verify_units(compose)
     print("Master Data HTTP smoke passed" + (" (including restart)" if "--restart" in sys.argv else ""))
     if "--restore" in sys.argv:
         verify_restore(compose, path, body, payload)

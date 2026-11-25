@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Business partner v1",
+  "type": "object",
+  "required": ["id", "tenant_id", "organization_id", "created_by", "schema_version", "revision", "code", "name", "roles"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "organization_id": { "type": "string", "format": "uuid" },
+    "created_by": { "type": "string", "format": "uuid" },
+    "schema_version": { "const": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "code": { "$ref": "register-partner-v1.json#/properties/code" },
+    "name": { "$ref": "register-partner-v1.json#/properties/name" },
+    "roles": { "$ref": "register-partner-v1.json#/properties/roles" }
+  }
+}
