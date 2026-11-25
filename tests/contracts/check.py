@@ -61,6 +61,22 @@ validate_url(OPENAPI.as_uri())
 manifest_path = ROOT / "manifests/master-data-v1.json"
 manifest = load(manifest_path)
 validator("service-manifest-v1.json").validate(manifest)
+message = load(ROOT / "examples/nats/article-registered-v1.json")
+route, = manifest["messaging"]
+wire_schema = (manifest_path.parent / route["contract"]).resolve()
+assert wire_schema in schemas
+wire = validator(wire_schema.name)
+body = message["envelope"]
+wire.validate(body)
+assert message["subject"] == body["messageType"] == route["subject"].format(tenantId=body["tenantId"])
+for field, header in (("protocolVersion", "Protocol-Version"), ("schemaVersion", "Schema-Version"),
+                      ("tenantId", "Tenant-Id"), ("organizationId", "Organization-Id"),
+                      ("serviceVersion", "Service-Version"), ("messageId", "Message-Id")):
+    assert message["headers"][f"Erp4us-{header}"] == body[field]
+assert wire.is_valid({**body, "payload": {**body["payload"], "optionalExtra": True}})
+assert not wire.is_valid({**body, "schemaVersion": "2.0.0"})
+assert not wire.is_valid({**body, "protocolVersion": "2.0.0"})
+assert not wire.is_valid({**body, "payload": {"revision": 1}})
 assert (manifest_path.parent / manifest["openapi"]).resolve() == OPENAPI
 api = yaml.safe_load(OPENAPI.read_text())
 operations = {op["operationId"]: method for path in api["paths"].values()

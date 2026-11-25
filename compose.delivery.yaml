@@ -17,6 +17,11 @@ services:
     volumes:
       - ./infrastructure/compose/article-nats.conf:/etc/nats/article-nats.conf:ro
       - jetstream-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
   delivery-init:
     <<: *delivery
     build:
@@ -28,7 +33,7 @@ services:
       NATS_PASSWORD: ${DEV_NATS_ADMIN_PASSWORD:?Run sh scripts/init-dev.sh first}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
   receipts-db-init:
     image: mongo:8.0.38@sha256:479e85ced54ffb8a40dade1dcde2da2a9ae858515b9415e9cc54bfb8f0575d01
     entrypoint: ["/bin/sh", "/opt/erp4us/init-receipts-db.sh"]
@@ -48,6 +53,7 @@ services:
     environment:
       NATS_USER: article_relay
       NATS_PASSWORD: ${DEV_NATS_RELAY_PASSWORD:?Run sh scripts/init-dev.sh first}
+      HEARTBEAT_SECONDS: ${ERP4US_HEARTBEAT_SECONDS:-15}
       MONGODB_URI: mongodb://master_data_app:${DEV_MASTER_DATA_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/master_data?replicaSet=erp4us&serverSelectionTimeoutMS=3000&w=majority
     depends_on:
       master-data:

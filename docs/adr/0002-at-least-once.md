@@ -2,6 +2,8 @@
 
 **Status:** accepted; Article registration is exercised across two local services.
 
+This ADR documents the original Article slice. [ADR 0005](0005-versioned-nats-transport.md) changes the wire route, moves new publications to a bounded-age stream, and scopes new quarantine keys by stream. The outbox, acknowledgements and inbox invariants below are unchanged. See its cutover runbook for historical replay.
+
 Use JetStream with a MongoDB transactional outbox and idempotent subscribers. Persist an inbox marker and the resulting state change in the consumer's transaction; do not mark a message consumed on broker receipt. An outbox relay crash after publish but before local completion may republish; stable IDs and consumer-side deduplication are required. Later subscribers define a replay policy and distinguish event time from processing order. Alternatives rejected: direct publish after business writes (loss window) and distributed transactions (coupled failures).
 
 Master Data commits the article and the [`ArticleRegistered` envelope](../../contracts/schemas/article-registered-v1.json) in a single transaction on the Compose replica set. The stored UUID is the stable message ID and also starts the correlation chain. The payload identifies the article and revision without including the SKU or name. Existing articles are not backfilled.

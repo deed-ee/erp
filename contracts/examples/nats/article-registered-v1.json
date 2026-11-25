@@ -1,0 +1,31 @@
+{
+  "subject": "v1.business.ddcae139-c1e8-47d2-8b48-349cb6f30ce5.master-data.event.article.registered.v1",
+  "headers": {
+    "Erp4us-Protocol-Version": "1.0.0",
+    "Erp4us-Schema-Version": "1.0.0",
+    "Erp4us-Service-Version": "0.1.0",
+    "Erp4us-Message-Id": "0fdcdca2-08d9-46e4-9978-d4d0bd381c01",
+    "Erp4us-Correlation-Id": "0fdcdca2-08d9-46e4-9978-d4d0bd381c01",
+    "Erp4us-Source": "erp4us.master-data",
+    "Erp4us-Tenant-Id": "ddcae139-c1e8-47d2-8b48-349cb6f30ce5",
+    "Erp4us-Organization-Id": "dd3fe796-c817-4208-a894-00e162be15cd",
+    "Content-Type": "application/json",
+    "Nats-Msg-Id": "0fdcdca2-08d9-46e4-9978-d4d0bd381c01",
+    "traceparent": "00-123456789abcdef0123456789abcdef0-123456789abcdef0-00"
+  },
+  "envelope": {
+    "messageId": "0fdcdca2-08d9-46e4-9978-d4d0bd381c01",
+    "messageType": "v1.business.ddcae139-c1e8-47d2-8b48-349cb6f30ce5.master-data.event.article.registered.v1",
+    "protocolVersion": "1.0.0",
+    "schemaVersion": "1.0.0",
+    "serviceVersion": "0.1.0",
+    "timestamp": "2026-11-25T19:00:00Z",
+    "sourceService": "erp4us.master-data",
+    "tenantId": "ddcae139-c1e8-47d2-8b48-349cb6f30ce5",
+    "organizationId": "dd3fe796-c817-4208-a894-00e162be15cd",
+    "actor": {"id": "demo-user", "kind": "user"},
+    "correlationId": "0fdcdca2-08d9-46e4-9978-d4d0bd381c01",
+    "traceparent": "00-123456789abcdef0123456789abcdef0-123456789abcdef0-00",
+    "payload": {"articleId": "2d7c9149-7fbc-4b58-9d4f-e05c23ab42dd", "revision": 1}
+  }
+}
