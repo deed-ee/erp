@@ -1,5 +1,6 @@
 mod domain;
 mod http;
+mod partners;
 mod store;
 mod units;
 
