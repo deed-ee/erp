@@ -36,9 +36,9 @@ python3 tests/integration/delivery.py
 docker compose -f compose.yaml -f compose.delivery.yaml down
 ```
 
-The delivery check deliberately stops the broker, forces receipt writes to fail, and replays a synthetic event. Do not run it against a shared stack. If you have an older `.env`, keep its existing credentials and append independently generated `openssl rand -hex 32` values for any missing keys: `DEV_NATS_ADMIN_PASSWORD`, `DEV_NATS_RELAY_PASSWORD`, `DEV_NATS_RECEIPTS_PASSWORD`, `DEV_NATS_REPLAY_PASSWORD` and `DEV_RECEIPTS_MONGO_PASSWORD`. Neither the broker nor MongoDB is published to the host.
+The delivery check deliberately stops the broker, forces receipt writes to fail, and replays a synthetic event. Do not run it against a shared stack. If you have an older `.env`, keep its existing credentials and append independently generated `openssl rand -hex 32` values for any missing keys: `DEV_NATS_ADMIN_PASSWORD`, `DEV_NATS_RELAY_PASSWORD`, `DEV_NATS_RECEIPTS_PASSWORD`, `DEV_NATS_REPLAY_PASSWORD`, `DEV_NATS_CONFIG_READER_PASSWORD` and `DEV_RECEIPTS_MONGO_PASSWORD`. Neither the broker nor MongoDB is published to the host.
 
-Read the [NATS wire specification](docs/specifications/nats-messaging.md) and the [cutover runbook](infrastructure/nats/README.md) before upgrading a stack with an `ARTICLES` stream. On the demo stack, after fixing a receipt persistence failure, take the numeric suffix from the retry-exhausted quarantine `_id` (`ERP4US_BUSINESS_EVENTS_V1:<sequence>`) and run:
+See the [heartbeat operations guide](infrastructure/nats/README.md#revisioned-relay-heartbeat-local-reference) to query or change the relay heartbeat without rebuilding the service. Read the [NATS wire specification](docs/specifications/nats-messaging.md) and the [cutover runbook](infrastructure/nats/README.md#cutover-from-articles) before upgrading a stack with an `ARTICLES` stream. On the demo stack, after fixing a receipt persistence failure, take the numeric suffix from the retry-exhausted quarantine `_id` (`ERP4US_BUSINESS_EVENTS_V1:<sequence>`) and run:
 
 ```sh
 docker compose -f compose.yaml -f compose.delivery.yaml run --rm --no-deps article-replay replay SEQUENCE

@@ -4,6 +4,23 @@ The optional Compose overlay runs one pinned broker with local password identiti
 
 For production, use a TLS `NATS_URL` with the broker's verified server name and mount `NATS_CREDENTIALS_FILE` (NATS JWT/NKey credentials) from a secret store. That setting requires TLS; set `NATS_CA_FILE` to add a private root CA. Provision data and grants with a separate operator identity, scoped accounts or dedicated tenant allowlists, isolated deployment environments, protected volumes, capacity alerts, backups and rehearsed restore. Treat `article_replay` as a privileged operator: stream raw retrieval includes the entire stream, not just an application subject. Isolate tenant data/accounts or mediate raw replay before enabling multi-tenant production. The demo receipt durable filters the single demo tenant; widen neither the credentials nor the filter as a substitute for authorization. Broker image advisory review is tracked separately.
 
+## Revisioned relay heartbeat (local reference)
+
+With the delivery overlay running, query the current system setting and change it with an explicit expected revision:
+
+```sh
+docker compose -f compose.yaml -f compose.delivery.yaml run --rm --no-deps article-config-reader
+docker compose -f compose.yaml -f compose.delivery.yaml run --rm --no-deps article-relay set-heartbeat 0 30
+```
+
+Use the returned `revision` instead of `0` if the journal already contains a change. A stale update fails; reread the setting before deciding whether to retry. Revision zero uses `ERP4US_HEARTBEAT_SECONDS` (default 15). The first successful update writes revision one, and subsequent revisions take precedence over the environment. Use `0` seconds to disable heartbeats, or an integer from `1` to `3600` to enable them. This does not stop Article delivery.
+
+The operator write needs MongoDB, not NATS. The journal commits the setting and its notification together; after reconnection, the relay publishes pending notifications and records the JetStream ACK. If the ACK was not recorded and the broker's duplicate window has expired, the same event can be delivered again. Change events carry only the revision. Readers should query on startup and reconcile via the authoritative snapshot on reconnect, on a newer notification, or periodically if notifications may be missed. Never replace a newer snapshot with an older revision.
+
+The reader principal can query only this system setting and observe its live change subject; it cannot write or administer JetStream. The local operator uses Compose access and the demo relay's MongoDB credential. Neither mechanism authorizes tenant configuration or provides a production operator interface. Keep the journal with the existing MongoDB backups; older relays ignore it and use their environment when rolled back.
+
+To exercise this behavior, use an isolated Compose project and fresh synthetic volumes. Start the overlay with `ERP4US_HEARTBEAT_SECONDS=2` and run `python3 tests/integration/config.py` with the same project selected. The test temporarily stops its broker and simulates an unrecorded ACK; never run it against a shared or production stack.
+
 ## Cutover from `ARTICLES`
 
 1. Save the prior release images/Compose configuration and back up MongoDB plus JetStream consistently. Stop the old relay and quiesce registrations/operators; leave the old receipt consumer running until its `ARTICLES/article-receipts` durable has no unacknowledged or pending deliveries. Verify any quarantined entries and finish time-sensitive historical replays with the old tools. Stop the old receipt consumer and prevent legacy writers from restarting. Do not run old and new relay roles at the same time.
