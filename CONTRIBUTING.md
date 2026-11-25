@@ -7,3 +7,7 @@ Keep changes focused, add tests for behavior, run the checks in the README and d
 ## Sign off your contributions
 
 Read the [Developer Certificate of Origin 1.1](https://developercertificate.org/). By signing off, you certify that you have the right to submit the contribution under the project's [Apache-2.0 license](LICENSE). Use `git commit -s` on each new contribution commit to add `Signed-off-by: Your Name <your-email>` to its message. Only sign for yourself. For a missing sign-off on your own latest commit, use `git commit --amend --no-edit -s`.
+
+## CI workflow
+
+See the [CI guide](docs/development/ci.md) for required checks, change detection, cache policy and full-system benchmark instructions.
