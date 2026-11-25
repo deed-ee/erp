@@ -1,5 +1,6 @@
 use crate::{
     domain::{Article, RegisterArticle, Scope},
+    partners,
     store::{InsertError, Store},
 };
 use axum::{
@@ -23,6 +24,7 @@ pub(crate) const DEMO_SCOPE: Scope = Scope {
 
 pub(crate) fn router(store: Store, token: String) -> Router {
     Router::new()
+        .merge(partners::routes())
         .route("/v1/articles:register", post(register))
         .route("/v1/articles/{id}", get(find))
         .route("/v1/units:register", post(crate::units::register))

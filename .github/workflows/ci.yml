@@ -52,6 +52,7 @@ jobs:
           done < .env
       - run: docker compose config --quiet && docker compose up --build -d
       - run: python3 tests/integration/smoke.py --restart --outbox --units --restore
+      - run: python3 tests/integration/partners.py
       - run: docker compose -f compose.yaml -f compose.delivery.yaml up --build -d
       - run: python3 tests/integration/delivery.py
       - name: Scan built service images
