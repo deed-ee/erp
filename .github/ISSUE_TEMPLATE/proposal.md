@@ -7,6 +7,8 @@ about: Describe a business need, options and acceptance criteria
 
 **Proposed approach and alternatives:**
 
+**Roadmap milestone, owning service, and dependencies:**
+
 **Compatibility, security and migration considerations:**
 
-**Acceptance criteria:**
+**Acceptance criteria and how to verify them:**
