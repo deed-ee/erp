@@ -57,6 +57,50 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/Problem' }
         '503': { $ref: '#/components/responses/Problem' }
+  /v1/units:register:
+    post:
+      operationId: registerUnit
+      description: Register a local unit code unique within the authenticated tenant and organization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: ../schemas/register-unit-v1.json }
+      responses:
+        '201':
+          description: Unit registered.
+          headers:
+            Location:
+              required: true
+              schema: { type: string, format: uri-reference }
+          content:
+            application/json:
+              schema: { $ref: ../schemas/unit-v1.json }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/units/{id}:
+    get:
+      operationId: getUnit
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Unit in the authenticated scope.
+          content:
+            application/json:
+              schema: { $ref: ../schemas/unit-v1.json }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /v1/partners:register:
     post:
       operationId: registerPartner

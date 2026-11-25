@@ -27,6 +27,8 @@ pub(crate) fn router(store: Store, token: String) -> Router {
         .merge(partners::routes())
         .route("/v1/articles:register", post(register))
         .route("/v1/articles/{id}", get(find))
+        .route("/v1/units:register", post(crate::units::register))
+        .route("/v1/units/{id}", get(crate::units::find))
         .route_layer(middleware::from_fn_with_state(token, authenticate))
         .layer(DefaultBodyLimit::max(4096))
         .route("/health/live", get(|| async { StatusCode::NO_CONTENT }))
