@@ -82,4 +82,13 @@ confirmed = validator("confirmed-stock-line-v1.json")
 confirmed.validate(line)
 for invalid in ({"unit": "kg"}, {"quantity": 0}, {"quantity": 1.5}, {"tenantId": str(uuid4())}):
     assert not confirmed.is_valid({**line, **invalid})
+register_unit = validator("register-unit-v1.json")
+register_unit.validate({"code": "EA"})
+for invalid in ({"code": ""}, {"code": "kg"}, {"code": "EA\n"}, {"code": "1EA"},
+                {"code": "A" * 17}, {"code": "EA", "tenant_id": str(uuid4())}):
+    assert not register_unit.is_valid(invalid)
+validator("unit-v1.json").validate({
+    "id": str(uuid4()), "tenant_id": str(uuid4()), "organization_id": str(uuid4()),
+    "created_by": str(uuid4()), "schema_version": 1, "revision": 1, "code": "EA",
+})
 print("OpenAPI, JSON Schemas and protocol examples validated")
