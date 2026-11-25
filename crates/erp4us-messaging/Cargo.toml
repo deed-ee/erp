@@ -1,0 +1,20 @@
+[package]
+name = "erp4us-messaging"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+async-nats = { version = "=0.53.0", default-features = false, features = ["jetstream", "ring", "server_2_10"] }
+semver = { version = "=1.0.28", features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror = "=2.0.21"
+time = { version = "=0.3.55", features = ["formatting", "parsing"] }
+uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+futures-util = "=0.3.32"
+tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "time"] }

@@ -4,7 +4,39 @@ import subprocess
 import time
 from uuid import uuid4
 
-from smoke import mongo_eval, request, wait_until_ready
+from smoke import env, mongo_eval, request, wait_until_ready
+
+
+def broker_probe(compose, user, password, commands, seconds=1):
+    identity = json.dumps({"user": user, "pass": password, "headers": True})
+    packet = f"CONNECT {identity}\r\n" + "\r\n".join([*commands, "PING", ""])
+    output = subprocess.run(
+        [*compose, "exec", "-T", "nats", "sh", "-c",
+         '(cat; sleep "$1") | timeout "$1" nc 127.0.0.1 4222', "probe", str(seconds)],
+        input=packet, capture_output=True, text=True, timeout=seconds + 10,
+    )
+    assert "PONG" in output.stdout, "NATS probe did not complete its handshake"
+    return output.stdout
+
+
+def check_broker_permissions(compose, tenant):
+    other = f"v1.business.{uuid4()}.master-data.event.article.registered.v1"
+    config = f"v1.config.{tenant}.master-data.query.settings.get.v1"
+    heartbeat = "v1.diagnostics.system.article-delivery.event.service.heartbeat.v1"
+
+    output = broker_probe(compose, "article_relay", env["DEV_NATS_RELAY_PASSWORD"], [
+        f"PUB {other} 2", "{}", f"PUB {config} 2", "{}",
+        "SUB _INBOX.article-consumer.> 1", "PUB $JS.API.STREAM.LIST 2", "{}",
+    ])
+    for denied in [other, config, "_INBOX.article-consumer.>", "$JS.API.STREAM.LIST"]:
+        assert any("Permissions Violation" in line and denied in line for line in output.splitlines()), denied
+
+    output = broker_probe(compose, "provisioner", env["DEV_NATS_ADMIN_PASSWORD"],
+                          [f"SUB {heartbeat} 1"], seconds=18)
+    assert any(line.startswith(f"HMSG {heartbeat} ") for line in output.splitlines())
+    assert "Erp4us-Protocol-Version: 1.0.0" in output
+    assert '"nats":"connected"' in output
+    print("NATS tenant, layer, inbox and administration permissions; Core heartbeat checks passed")
 
 
 def eventually(query, description):
@@ -59,6 +91,7 @@ def main():
         "traceparent": article["traceparent"],
     }]
     eventually(lambda: event(article).get("publishedAt"), "broker acknowledgement")
+    check_broker_permissions(compose, article["tenant_id"])
 
     # Recreate the state left by a relay crash between broker ack and Mongo update.
     # Wait beyond the stream's duplicate window so the consumer must deduplicate.
@@ -80,6 +113,18 @@ def main():
     malformed["messageId"] = str(uuid4())
     malformed["payload"] = {"articleId": article["id"], "revision": 2}
     mongo_eval(compose, f"print(db.outbox.insertOne({json.dumps(malformed)}).acknowledged)")
+    eventually(
+        lambda: mongo_eval(compose, "print(db.outbox.countDocuments("
+                           f"{{messageId: {json.dumps(malformed['messageId'])}, "
+                           "deliveryRejectedAt: {$exists: true}, publishedAt: {$exists: false}}))"),
+        "invalid outbox entry rejected without publication",
+    )
+    subject = f"v1.business.{article['tenant_id']}.master-data.event.article.registered.v1"
+    response = broker_probe(compose, "article_relay", env["DEV_NATS_RELAY_PASSWORD"], [
+        "SUB _INBOX.article-relay.smoke 1",
+        f"PUB {subject} _INBOX.article-relay.smoke 2", "{}",
+    ])
+    assert '"stream":"ERP4US_BUSINESS_EVENTS_V1"' in response
     eventually(lambda: quarantined() == previous_quarantined + 1, "quarantine receipt")
 
     followup = register()
@@ -136,7 +181,9 @@ def main():
     denied = replay("999999999999")
     assert denied.returncode != 0
     assert "No retry-exhausted quarantine entry" in denied.stderr
-    accepted = replay(rejected["_id"])
+    stream, sequence = rejected["_id"].split(":")
+    assert stream == "ERP4US_BUSINESS_EVENTS_V1"
+    accepted = replay(sequence)
     assert accepted.returncode == 0, accepted.stderr
     recovered = eventually(lambda: receipts(probe), "receipt after operator replay")
     assert len(recovered) == 1 and recovered[0]["_id"] == failed["messageId"]
@@ -144,8 +191,8 @@ def main():
     audit = mongo_eval(compose, f"print(JSON.stringify({db}.quarantine.findOne("
                        f"{{_id: {json.dumps(rejected['_id'])}}})))")
     assert audit["replayRequestedAt"] and audit["replayedAt"]
-    assert int(audit["replaySequence"]) > int(rejected["_id"])
-    repeated = replay(rejected["_id"])
+    assert int(audit["replaySequence"]) > int(sequence)
+    repeated = replay(sequence)
     assert repeated.returncode != 0 and "already been replayed" in repeated.stderr
     assert receipts(probe) == recovered
     print("JetStream operator replay and HTTP trace correlation checks passed")

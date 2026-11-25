@@ -53,6 +53,7 @@ jobs:
       - run: python3 tests/integration/partners.py
       - run: docker compose -f compose.yaml -f compose.delivery.yaml up --build -d
       - run: python3 tests/integration/delivery.py
+      - run: sh tests/integration/messaging.sh
       - name: Scan built service images
         run: |
           sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
