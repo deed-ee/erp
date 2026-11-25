@@ -11,3 +11,7 @@
 !services/article-delivery/Cargo.toml
 !services/article-delivery/src/
 !services/article-delivery/src/**
+!services/inventory/
+!services/inventory/Cargo.toml
+!services/inventory/src/
+!services/inventory/src/**
