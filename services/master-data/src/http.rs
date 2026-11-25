@@ -15,7 +15,7 @@ use subtle::ConstantTimeEq;
 use time::OffsetDateTime;
 use uuid::{Uuid, uuid};
 
-const DEMO_SCOPE: Scope = Scope {
+pub(crate) const DEMO_SCOPE: Scope = Scope {
     tenant: uuid!("ddcae139-c1e8-47d2-8b48-349cb6f30ce5"),
     organization: uuid!("3e793fb5-75a7-45f6-8f66-45a58fcec674"),
     actor: uuid!("242a290f-4bbc-438e-aefe-e3697a8bcd16"),
@@ -25,6 +25,8 @@ pub(crate) fn router(store: Store, token: String) -> Router {
     Router::new()
         .route("/v1/articles:register", post(register))
         .route("/v1/articles/{id}", get(find))
+        .route("/v1/units:register", post(crate::units::register))
+        .route("/v1/units/{id}", get(crate::units::find))
         .route_layer(middleware::from_fn_with_state(token, authenticate))
         .layer(DefaultBodyLimit::max(4096))
         .route("/health/live", get(|| async { StatusCode::NO_CONTENT }))
@@ -137,7 +139,7 @@ async fn find(State(store): State<Store>, Path(id): Path<String>) -> Response {
     }
 }
 
-fn unavailable(operation: &str, _error: mongodb::error::Error) -> Response {
+pub(crate) fn unavailable(operation: &str, _error: mongodb::error::Error) -> Response {
     tracing::error!(operation, "MongoDB operation failed");
     problem(StatusCode::SERVICE_UNAVAILABLE, "Persistence unavailable")
 }
@@ -148,7 +150,7 @@ struct Problem {
     detail: &'static str,
 }
 
-fn problem(status: StatusCode, detail: &'static str) -> Response {
+pub(crate) fn problem(status: StatusCode, detail: &'static str) -> Response {
     (
         status,
         [(header::CONTENT_TYPE, "application/problem+json")],
