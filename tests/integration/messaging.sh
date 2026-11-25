@@ -11,4 +11,4 @@ image=$("$@" -f compose.yaml -f compose.delivery.yaml config --images nats)
 container=$(docker run -d --rm -p 127.0.0.1::4222 "$image" -js)
 trap 'docker stop "$container" >/dev/null' EXIT
 address=$(docker port "$container" 4222/tcp)
-NATS_TEST_URL="nats://$address" cargo test --locked -p erp4us-messaging --test broker -- --ignored
+NATS_TEST_URL="nats://$address" cargo test --locked --workspace --test broker -- --ignored
