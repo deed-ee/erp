@@ -82,6 +82,11 @@ confirmed = validator("confirmed-stock-line-v1.json")
 confirmed.validate(line)
 for invalid in ({"unit": "kg"}, {"quantity": 0}, {"quantity": 1.5}, {"tenantId": str(uuid4())}):
     assert not confirmed.is_valid({**line, **invalid})
+cancel = load(ROOT / "fixtures" / "cancel-stock-line-v1.json")
+cancellation = validator("cancel-stock-line-v1.json")
+cancellation.validate(cancel)
+for invalid in ({"quantity": 6}, {"organizationId": str(uuid4())}, {"contract": line["contract"]}):
+    assert not cancellation.is_valid({**cancel, **invalid})
 register_unit = validator("register-unit-v1.json")
 register_unit.validate({"code": "EA"})
 for invalid in ({"code": ""}, {"code": "kg"}, {"code": "EA\n"}, {"code": "1EA"},
