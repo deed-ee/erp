@@ -18,12 +18,15 @@ Times below exclude the wait before Actions starts. These are complete successfu
 
 | Run | Total | `compose` | `rust` | `audit` | `contracts` |
 | --- | ---: | ---: | ---: | ---: | ---: |
+| [Heartbeat on main](https://github.com/erp4us-org/erp4us/actions/runs/45699579033) | 9:02 | 8:58 | 1:25 | 2:18 | 0:22 |
 | [Heartbeat PR](https://github.com/erp4us-org/erp4us/actions/runs/45696793782) | 9:09 | 9:02 | 1:33 | 2:27 | 0:21 |
 | [Previous main](https://github.com/erp4us-org/erp4us/actions/runs/45694722381) | 8:00 | 7:58 | 1:36 | 3:05 | 0:12 |
 | [Messaging PR](https://github.com/erp4us-org/erp4us/actions/runs/45689113509) | 10:01 | 9:54 | 1:51 | 2:36 | 0:12 |
 | [Inventory PR](https://github.com/erp4us-org/erp4us/actions/runs/45559024276) | 7:07 | 7:03 | 2:10 | 2:32 | 0:20 |
 
 The heartbeat run spent 249 seconds across the two Compose build/start steps, 165 seconds on delivery/config/broker checks, and 77 seconds on UI build and Playwright. `cargo install cargo-audit` alone took 134 seconds; CI now uses the same pinned auditor version's checksummed Linux binary and still fetches the advisory database. Historical logs show npm cache hits in all four sampled runs (about 76 MiB each). There was no persistent Rust or BuildKit cache; six npm entries used 470,480,052 bytes at inventory time. An older baseline with fewer tests is useful for locating cost, not for claiming savings.
+
+Local BuildKit validation, repeating each build with identical inputs on the same builder: Master Data's cold dependency and final build vertices took 165.3 s and 12.5 s; Article Delivery's took 135.4 s and 19.7 s. Both vertices hit the warm cache for each image (4/4), and each complete warm rebuild took about 0.3 s. This measures local layer reuse, not remote cache transfer or end-to-end hosted speedup.
 
 **Hosted cold/warm results are pending rollout.** Use the full heartbeat run as the coverage-matched baseline and record its runner image from the job setup. After this workflow is on `main`, manually dispatch `CI` with `benchmark-v1` once, then rerun that successful run at the same SHA. Check the first run actually misses all three cache types; if the namespace has been used already, follow the measurement issue to rotate it rather than delete shared caches. Run sequentially and avoid a runner image or dependency change between the pair.
 
