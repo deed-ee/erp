@@ -72,8 +72,10 @@ def verify_outbox(compose, article, traceparent):
     assert str(UUID(event["messageId"])) == event["messageId"]
     assert event == {
         "messageId": event["messageId"],
-        "messageType": "business.master-data.article.registered.v1",
-        "schemaVersion": 1,
+        "messageType": f"v1.business.{article['tenant_id']}.master-data.event.article.registered.v1",
+        "protocolVersion": "1.0.0",
+        "schemaVersion": "1.0.0",
+        "serviceVersion": "0.1.0",
         "timestamp": article["created_at"],
         "tenantId": article["tenant_id"],
         "organizationId": article["organization_id"],

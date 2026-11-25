@@ -98,19 +98,23 @@ impl Event {
 }
 
 fn from_outbox(mut document: Document) -> Result<Event> {
-    // The database format is intentionally stable; only the unpublished wire projection changes.
-    if document.get_str("messageType")? != LEGACY_SUBJECT || document.get_i32("schemaVersion")? != 1
-    {
-        return Err(Error::InvalidEnvelope("unrecognized Article outbox format").into());
+    if document.get_str("messageType")? == LEGACY_SUBJECT {
+        if document.get_i32("schemaVersion")? != 1
+            || document.contains_key("protocolVersion")
+            || document.contains_key("serviceVersion")
+        {
+            return Err(Error::InvalidEnvelope("unrecognized legacy Article outbox format").into());
+        }
+        let tenant = Uuid::parse_str(document.get_str("tenantId")?)?;
+        document.insert(
+            "messageType",
+            Payload::ROUTE.subject(1, Scope::Tenant(tenant), 1)?,
+        );
+        document.insert("protocolVersion", "1.0.0");
+        document.insert("schemaVersion", Payload::SCHEMA_VERSION);
+        // The historical writer did not persist a version; 0.1.0 is the legacy release.
+        document.insert("serviceVersion", "0.1.0");
     }
-    let tenant = Uuid::parse_str(document.get_str("tenantId")?)?;
-    document.insert(
-        "messageType",
-        Payload::ROUTE.subject(1, Scope::Tenant(tenant), 1)?,
-    );
-    document.insert("protocolVersion", "1.0.0");
-    document.insert("schemaVersion", Payload::SCHEMA_VERSION);
-    document.insert("serviceVersion", env!("CARGO_PKG_VERSION"));
     let event = serde_json::from_value::<Envelope<Payload>>(serde_json::to_value(document)?)?;
     event.validate()?;
     Ok(Event::new(event)?)
@@ -147,10 +151,23 @@ async fn main() -> io::Result<()> {
 }
 
 async fn run(role: &str, sequence: Option<u64>) -> Result<()> {
-    let options =
-        ConnectOptions::with_user_and_password(env::var("NATS_USER")?, env::var("NATS_PASSWORD")?)
-            .custom_inbox_prefix(format!("_INBOX.article-{role}"))
-            .connection_timeout(Duration::from_secs(3));
+    let mut options = match env::var("NATS_CREDENTIALS_FILE") {
+        Ok(path) => ConnectOptions::new()
+            .credentials_file(path)
+            .await?
+            .require_tls(true),
+        Err(env::VarError::NotPresent) => ConnectOptions::with_user_and_password(
+            env::var("NATS_USER")?,
+            env::var("NATS_PASSWORD")?,
+        ),
+        Err(error) => return Err(error.into()),
+    };
+    if let Some(path) = env::var_os("NATS_CA_FILE") {
+        options = options.add_root_certificates(path.into()).require_tls(true);
+    }
+    let options = options
+        .custom_inbox_prefix(format!("_INBOX.article-{role}"))
+        .connection_timeout(Duration::from_secs(3));
     let options = if sequence.is_none() {
         options.retry_on_initial_connect()
     } else {
@@ -527,7 +544,40 @@ async fn persist(collection: &Collection<Document>, key: String, data: Document)
 
 #[cfg(test)]
 mod tests {
+    use super::{LEGACY_SUBJECT, from_outbox};
     use erp4us_messaging::valid_traceparent;
+    use mongodb::bson::doc;
+
+    #[test]
+    fn projects_legacy_pending_rows_without_changing_their_identity() {
+        let id = "0fdcdca2-08d9-46e4-9978-d4d0bd381c01";
+        let tenant = "ddcae139-c1e8-47d2-8b48-349cb6f30ce5";
+        let legacy = doc! {
+            "messageType": LEGACY_SUBJECT,
+            "messageId": id,
+            "correlationId": id,
+            "schemaVersion": 1,
+            "timestamp": "2026-11-25T19:00:00Z",
+            "sourceService": "erp4us.master-data",
+            "tenantId": tenant,
+            "organizationId": "dd3fe796-c817-4208-a894-00e162be15cd",
+            "actor": {"id": "demo-user", "kind": "user"},
+            "payload": {"articleId": "2d7c9149-7fbc-4b58-9d4f-e05c23ab42dd", "revision": 1},
+        };
+        let event = from_outbox(legacy.clone()).unwrap();
+        assert_eq!(event.envelope.message_id.to_string(), id);
+        assert_eq!(event.envelope.correlation_id.to_string(), id);
+        assert_eq!(
+            event.envelope.message_type,
+            format!("v1.business.{tenant}.master-data.event.article.registered.v1")
+        );
+        let mut current: mongodb::bson::Document =
+            serde_json::from_value(serde_json::to_value(&event.envelope).unwrap()).unwrap();
+        assert!(from_outbox(current.clone()).is_ok());
+        current.insert("protocolVersion", "2.0.0");
+        assert!(from_outbox(current).is_err());
+        assert_eq!(legacy.get_str("messageType").unwrap(), LEGACY_SUBJECT);
+    }
 
     #[test]
     fn accepts_only_nonzero_lowercase_v00_trace_context() {

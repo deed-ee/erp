@@ -18,4 +18,4 @@ For INT-002, the [Article v1 reader fixture](../../tests/contracts/fixtures/arti
 
 ## Messaging transport
 
-Use the [NATS wire specification](nats-messaging.md) for versioned application messaging. This transport protocol version is independent of the manifest format's `1.0-draft`. The original [local event schema](../../contracts/schemas/event-envelope-v1.json) remains for stored outbox entries and pre-cutover fixtures; the old unscoped subject is not an application publish route for new integrations.
+Use the [NATS wire specification](nats-messaging.md) for versioned application messaging. This transport protocol version is independent of the manifest format's `1.0-draft`. The original [local event schema](../../contracts/schemas/event-envelope-v1.json) remains for historical outbox entries and pre-cutover fixtures; the old unscoped subject is not an application publish route for new integrations.
