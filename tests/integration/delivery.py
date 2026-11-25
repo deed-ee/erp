@@ -19,9 +19,9 @@ def eventually(query, description):
 def register():
     payload = json.dumps({"sku": f"DELIVERY-{uuid4().hex[:16].upper()}",
                           "name": "Delivery test article"}).encode()
-    status, _, article = request("/v1/articles:register", payload)
+    status, headers, article = request("/v1/articles:register", payload)
     assert status == 201
-    return article
+    return {**article, "traceparent": headers["traceparent"]}
 
 
 def main():
@@ -56,6 +56,7 @@ def main():
         "_id": message_id, "articleId": article["id"], "revision": article["revision"],
         "tenantId": article["tenant_id"], "organizationId": article["organization_id"],
         "correlationId": stored["correlationId"],
+        "traceparent": article["traceparent"],
     }]
     eventually(lambda: event(article).get("publishedAt"), "broker acknowledgement")
 
@@ -85,6 +86,69 @@ def main():
     eventually(lambda: receipts(followup), "receipt after replay")
     assert receipts(article) == first
     print("JetStream outage, restart, duplicate delivery and quarantine checks passed")
+
+    # Reject only the probe's receipt so the rest of the pipeline can still drain.
+    run("stop", "article-receipts")
+    probe = register()
+    failed = event(probe)
+    db = "db.getSiblingDB('article_receipts')"
+
+    def set_validator(validator):
+        result = mongo_eval(compose, f"print({db}.runCommand({{collMod: 'receipts', "
+                            f"validator: {json.dumps(validator)}}}).ok)")
+        assert result == 1
+
+    original = mongo_eval(compose, f"print(JSON.stringify({db}.getCollectionInfos("
+                          "{name: 'receipts'})[0].options.validator || {}))")
+    try:
+        set_validator({"articleId": {"$ne": probe["id"]}})
+        run("start", "article-receipts")
+        rejected = eventually(
+            lambda: mongo_eval(compose, f"const entry = {db}.quarantine.findOne("
+                               f"{{messageId: {json.dumps(failed['messageId'])}}}); "
+                               "print(JSON.stringify(entry && {...entry, "
+                               "deliveryCount: Number(entry.deliveryCount)}))"),
+            "quarantine after receipt retries",
+        )
+        assert {key: value for key, value in rejected.items() if key != "_id"} == {
+            "reason": "receipt delivery limit reached",
+            "messageId": failed["messageId"],
+            "correlationId": failed["correlationId"],
+            "tenantId": probe["tenant_id"],
+            "organizationId": probe["organization_id"],
+            "deliveryCount": 4,
+            "traceparent": probe["traceparent"],
+        }, rejected
+        assert receipts(probe) == []
+        healthy = register()
+        eventually(lambda: receipts(healthy), "receipt after retry exhaustion")
+    finally:
+        set_validator(original)
+        run("start", "article-receipts")
+    print("JetStream receipt retry exhaustion check passed")
+
+    def replay(sequence):
+        return subprocess.run(
+            [*compose, "run", "--rm", "--no-deps", "article-replay", "replay", sequence],
+            capture_output=True, text=True,
+        )
+
+    denied = replay("999999999999")
+    assert denied.returncode != 0
+    assert "No retry-exhausted quarantine entry" in denied.stderr
+    accepted = replay(rejected["_id"])
+    assert accepted.returncode == 0, accepted.stderr
+    recovered = eventually(lambda: receipts(probe), "receipt after operator replay")
+    assert len(recovered) == 1 and recovered[0]["_id"] == failed["messageId"]
+    assert recovered[0]["traceparent"] == probe["traceparent"]
+    audit = mongo_eval(compose, f"print(JSON.stringify({db}.quarantine.findOne("
+                       f"{{_id: {json.dumps(rejected['_id'])}}})))")
+    assert audit["replayRequestedAt"] and audit["replayedAt"]
+    assert int(audit["replaySequence"]) > int(rejected["_id"])
+    repeated = replay(rejected["_id"])
+    assert repeated.returncode != 0 and "already been replayed" in repeated.stderr
+    assert receipts(probe) == recovered
+    print("JetStream operator replay and HTTP trace correlation checks passed")
 
 
 if __name__ == "__main__":

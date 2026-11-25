@@ -13,6 +13,7 @@ demo_token=$(openssl rand -hex 32)
     printf 'DEV_NATS_ADMIN_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_NATS_RELAY_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_NATS_RECEIPTS_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+    printf 'DEV_NATS_REPLAY_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_RECEIPTS_MONGO_PASSWORD=%s\n' "$(openssl rand -hex 32)"
 } > .env
 printf 'Created .env with local development credentials.\n'

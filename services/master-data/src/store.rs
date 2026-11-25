@@ -57,8 +57,12 @@ impl Store {
         Ok(())
     }
 
-    pub(crate) async fn insert(&self, article: &Article) -> Result<(), InsertError> {
-        let event = Self::article_registered(article)?;
+    pub(crate) async fn insert(
+        &self,
+        article: &Article,
+        traceparent: &str,
+    ) -> Result<(), InsertError> {
+        let event = Self::article_registered(article, traceparent)?;
         let mut session = self
             .database
             .client()
@@ -93,7 +97,7 @@ impl Store {
             .map_err(InsertError::Database)
     }
 
-    fn article_registered(article: &Article) -> Result<Document, InsertError> {
+    fn article_registered(article: &Article, traceparent: &str) -> Result<Document, InsertError> {
         let timestamp = article
             .created_at
             .format(&time::format_description::well_known::Rfc3339)
@@ -108,6 +112,7 @@ impl Store {
             "organizationId": article.organization_id.to_string(),
             "actor": { "kind": "user", "id": article.created_by.to_string() },
             "correlationId": message_id,
+            "traceparent": traceparent,
             "sourceService": "erp4us.master-data",
             "payload": { "articleId": article.id.to_string(), "revision": article.revision },
         })

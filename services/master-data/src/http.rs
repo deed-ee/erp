@@ -108,13 +108,19 @@ async fn register(
         Ok(article) => article,
         Err(detail) => return problem(StatusCode::UNPROCESSABLE_ENTITY, detail),
     };
-    match store.insert(&article).await {
-        Ok(()) => (
-            StatusCode::CREATED,
-            [(header::LOCATION, format!("/v1/articles/{}", article.id))],
-            Json(ArticleView::from(article)),
-        )
-            .into_response(),
+    let span_id = Uuid::new_v4().simple().to_string();
+    let traceparent = format!("00-{}-{}-00", Uuid::new_v4().simple(), &span_id[..16]);
+    match store.insert(&article, &traceparent).await {
+        Ok(()) => {
+            tracing::info!(%traceparent, "Article registration committed");
+            (
+                StatusCode::CREATED,
+                [(header::LOCATION, format!("/v1/articles/{}", article.id))],
+                [("traceparent", traceparent)],
+                Json(ArticleView::from(article)),
+            )
+                .into_response()
+        }
         Err(InsertError::Conflict) => problem(StatusCode::CONFLICT, "SKU already registered"),
         Err(InsertError::Database(error)) => unavailable("register_article", error),
     }
