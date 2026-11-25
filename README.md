@@ -62,6 +62,8 @@ See the [UI component guide](ui/README.md), [architecture decision](docs/adr/000
 
 ## Help shape the first workflow
 
+The local demo API can register a business partner with `POST /v1/partners:register` and retrieve it from the response's `Location`. For example, send `{"code":"BP-100","name":"Example Trading","roles":["customer","supplier"]}` with the demo bearer token. Both roles refer to the same partner ID. Partner codes are unique within the tenant and organization. This slice does not yet support role changes, addresses, or real tenant authentication.
+
 - **Try the quickstart above.** Could you register and retrieve an article on your machine? If a step failed, [report where you got stuck](https://github.com/deed-ee/erp4us/issues/new?template=bug.md) with your OS, Docker version and the first failing step. Leave out credentials and use synthetic data.
 - **Bring an ERP example.** Suppose a customer orders ten units but only six are available. What should the salesperson see, and who decides what happens to the remaining four? Add an anonymized example and the outcome you would expect to the [order-to-procurement discussion in issue #16](https://github.com/deed-ee/erp4us/issues/16).
 

@@ -57,6 +57,50 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/Problem' }
         '503': { $ref: '#/components/responses/Problem' }
+  /v1/partners:register:
+    post:
+      operationId: registerPartner
+      description: Register a partner with one or both commercial roles. Codes are unique in the authenticated tenant and organization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: ../schemas/register-partner-v1.json }
+      responses:
+        '201':
+          description: Partner registered.
+          headers:
+            Location:
+              required: true
+              schema: { type: string, format: uri-reference }
+          content:
+            application/json:
+              schema: { $ref: ../schemas/partner-v1.json }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/partners/{id}:
+    get:
+      operationId: getPartner
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Partner in the authenticated scope.
+          content:
+            application/json:
+              schema: { $ref: ../schemas/partner-v1.json }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /health/live:
     get:
       operationId: live
