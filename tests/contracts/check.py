@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
 
@@ -31,6 +32,31 @@ def validator(name):
                                 format_checker=FormatChecker())
 
 
+def check_article_reader(api, response_schema, previous):
+    for expected in previous["operations"]:
+        path, method = expected["path"], expected["method"]
+        operation = api["paths"].get(path, {}).get(method, {})
+        if operation.get("operationId") != expected["operationId"]:
+            raise AssertionError(f"Article v1 reader lost {method.upper()} {path}")
+        if method == "post":
+            body = operation.get("requestBody", {}).get("content", {}).get("application/json", {})
+            if body.get("schema", {}).get("$ref") != "../schemas/register-article-v1.json":
+                raise AssertionError(f"Article v1 client lost its JSON request for POST {path}")
+        response = operation.get("responses", {}).get(expected["status"], {})
+        schema = response.get("content", {}).get("application/json", {}).get("schema", {})
+        if schema.get("$ref") != "../schemas/article-v1.json":
+            raise AssertionError(f"Article v1 reader lost its JSON response for {method.upper()} {path}")
+
+    guaranteed = set(response_schema.get("required", [])) & response_schema.get("properties", {}).keys()
+    missing = previous["response"].keys() - guaranteed
+    if missing:
+        raise AssertionError(f"Article v1 reader lost guaranteed fields: {', '.join(sorted(missing))}")
+    path = ROOT / "schemas/article-v1.json"
+    current = registry.with_resource(path.as_uri(), Resource.from_contents(response_schema))
+    Draft202012Validator({"$ref": path.as_uri()}, registry=current,
+                        format_checker=FormatChecker()).validate(previous["response"])
+
+
 validate_url(OPENAPI.as_uri())
 manifest_path = ROOT / "manifests/master-data-v1.json"
 manifest = load(manifest_path)
@@ -50,15 +76,32 @@ for path in manifest["health"].values():
     assert api["paths"][path]["get"]["security"] == []
 
 command = validator("register-article-v1.json")
-command.validate({"sku": "BRACKET-1", "name": "Steel bracket"})
+previous_article = load(Path(__file__).with_name("fixtures") / "article-reader-v1.json")
+command.validate(previous_article["request"])
 for bad in ({"sku": "A\n", "name": "Name"}, {"sku": "A", "name": "\u0085"},
             {"sku": "A", "name": " ", "tenant_id": str(uuid4())}):
     assert not command.is_valid(bad)
-validator("article-v1.json").validate({
-    "id": str(uuid4()), "tenant_id": str(uuid4()), "organization_id": str(uuid4()),
-    "created_by": str(uuid4()), "schema_version": 1, "revision": 1,
-    "created_at": "2026-11-23T12:00:00Z", "sku": "BRACKET-1", "name": "Steel bracket",
-})
+article_schema = schemas[ROOT / "schemas/article-v1.json"]
+check_article_reader(api, article_schema, previous_article)
+
+additive = deepcopy(article_schema)
+additive["properties"]["description"] = {"type": "string"}
+check_article_reader(api, additive, previous_article)
+
+breaking_api = deepcopy(api)
+del breaking_api["paths"]["/v1/articles/{id}"]["get"]
+breaking_schema = deepcopy(article_schema)
+breaking_schema["required"].remove("name")
+for candidate_api, candidate_schema, expected_error in (
+    (breaking_api, article_schema, "lost GET /v1/articles/{id}"),
+    (api, breaking_schema, "lost guaranteed fields: name"),
+):
+    try:
+        check_article_reader(candidate_api, candidate_schema, previous_article)
+    except AssertionError as error:
+        assert expected_error in str(error)
+    else:
+        raise AssertionError(f"Compatibility check missed regression: {expected_error}")
 envelope = validator("event-envelope-v1.json")
 event = {
     "messageId": str(uuid4()), "messageType": "business.sales.order.confirmed.v1",
