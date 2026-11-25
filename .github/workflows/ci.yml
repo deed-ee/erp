@@ -40,6 +40,8 @@ jobs:
   compose:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      ERP4US_HEARTBEAT_SECONDS: "2"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with: { persist-credentials: false }
@@ -53,6 +55,7 @@ jobs:
       - run: python3 tests/integration/partners.py
       - run: docker compose -f compose.yaml -f compose.delivery.yaml up --build -d
       - run: python3 tests/integration/delivery.py
+      - run: python3 tests/integration/config.py
       - run: sh tests/integration/messaging.sh
       - name: Scan built service images
         run: |

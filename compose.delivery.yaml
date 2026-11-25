@@ -14,6 +14,7 @@ services:
       DEV_NATS_RELAY_PASSWORD: "\"${DEV_NATS_RELAY_PASSWORD:?Run sh scripts/init-dev.sh first}\""
       DEV_NATS_RECEIPTS_PASSWORD: "\"${DEV_NATS_RECEIPTS_PASSWORD:?Run sh scripts/init-dev.sh first}\""
       DEV_NATS_REPLAY_PASSWORD: "\"${DEV_NATS_REPLAY_PASSWORD:?Generate a local replay password}\""
+      DEV_NATS_CONFIG_READER_PASSWORD: "\"${DEV_NATS_CONFIG_READER_PASSWORD:?Generate a local config-reader password}\""
     volumes:
       - ./infrastructure/compose/article-nats.conf:/etc/nats/article-nats.conf:ro
       - jetstream-data:/data
@@ -80,6 +81,13 @@ services:
       NATS_USER: article_replay
       NATS_PASSWORD: ${DEV_NATS_REPLAY_PASSWORD:?Generate a local replay password}
       MONGODB_URI: mongodb://article_receipts_app:${DEV_RECEIPTS_MONGO_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/article_receipts?replicaSet=erp4us&serverSelectionTimeoutMS=3000&w=majority
+  article-config-reader:
+    <<: *delivery
+    profiles: ["operator"]
+    command: ["get-heartbeat"]
+    environment:
+      NATS_USER: article_config_reader
+      NATS_PASSWORD: ${DEV_NATS_CONFIG_READER_PASSWORD:?Generate a local config-reader password}
 
 volumes:
   jetstream-data:

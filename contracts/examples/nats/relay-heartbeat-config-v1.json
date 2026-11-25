@@ -1,0 +1,27 @@
+{
+  "query": {
+    "messageId": "a728bc3e-e9b4-447b-aaff-72715b515c64",
+    "correlationId": "a728bc3e-e9b4-447b-aaff-72715b515c64",
+    "messageType": "v1.config.system.article-delivery.query.heartbeat.get.v1",
+    "protocolVersion": "1.0.0",
+    "schemaVersion": "1.0.0",
+    "serviceVersion": "0.1.0",
+    "timestamp": "2026-11-23T12:00:00Z",
+    "sourceService": "erp4us.article-config-reader",
+    "payload": {}
+  },
+  "changed": {
+    "messageId": "c21daa80-66d9-4ef5-961d-09a91dfff076",
+    "correlationId": "c21daa80-66d9-4ef5-961d-09a91dfff076",
+    "messageType": "v1.config.system.article-delivery.event.heartbeat.changed.v1",
+    "protocolVersion": "1.0.0",
+    "schemaVersion": "1.0.0",
+    "serviceVersion": "0.1.0",
+    "timestamp": "2026-11-23T12:00:00Z",
+    "sourceService": "erp4us.article-delivery",
+    "payload": {"revision": 1}
+  },
+  "reply": {
+    "result": {"revision": 1, "heartbeatSeconds": 30}
+  }
+}

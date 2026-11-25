@@ -77,6 +77,23 @@ assert wire.is_valid({**body, "payload": {**body["payload"], "optionalExtra": Tr
 assert not wire.is_valid({**body, "schemaVersion": "2.0.0"})
 assert not wire.is_valid({**body, "protocolVersion": "2.0.0"})
 assert not wire.is_valid({**body, "payload": {"revision": 1}})
+
+config_path = ROOT / "schemas/nats-relay-heartbeat-config-v1.json"
+config = load(ROOT / "examples/nats/relay-heartbeat-config-v1.json")
+for kind, example in config.items():
+    contract = Draft202012Validator({"$ref": f"{config_path.as_uri()}#/$defs/{kind}"},
+                                    registry=registry, format_checker=FormatChecker())
+    contract.validate(example)
+    if kind in ("query", "changed"):
+        assert not contract.is_valid({**example, "tenantId": body["tenantId"], "actor": body["actor"]})
+        assert not contract.is_valid({**example, "schemaVersion": "2.0.0"})
+        assert not contract.is_valid({**example, "protocolVersion": "2.0.0"})
+    if kind == "changed":
+        assert not contract.is_valid({**example, "payload": {"revision": 0}})
+    if kind == "reply":
+        for period in (-1, 3601, "30"):
+            assert not contract.is_valid({"result": {"revision": 1, "heartbeatSeconds": period}})
+
 assert (manifest_path.parent / manifest["openapi"]).resolve() == OPENAPI
 api = yaml.safe_load(OPENAPI.read_text())
 operations = {op["operationId"]: method for path in api["paths"].values()

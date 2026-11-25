@@ -14,6 +14,8 @@ use std::{
 };
 use uuid::{Uuid, uuid};
 
+mod settings;
+
 const LEGACY_SUBJECT: &str = "business.master-data.article.registered.v1";
 const STREAM: &str = "ERP4US_BUSINESS_EVENTS_V1";
 const LOCAL_TENANT: Uuid = uuid!("ddcae139-c1e8-47d2-8b48-349cb6f30ce5");
@@ -123,8 +125,40 @@ fn from_outbox(mut document: Document) -> Result<Event> {
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let args: Vec<_> = env::args().skip(1).collect();
+    if let [role, expected, seconds] = args.as_slice()
+        && role == "set-heartbeat"
+    {
+        let expected = expected
+            .parse::<i64>()
+            .ok()
+            .filter(|value| *value >= 0)
+            .ok_or_else(|| io::Error::other("Expected a non-negative revision"))?;
+        let seconds = settings::period(seconds)?;
+        let uri =
+            env::var("MONGODB_URI").map_err(|_| io::Error::other("MONGODB_URI is required"))?;
+        let error = |_| io::Error::other("Heartbeat settings store unavailable");
+        let db = Client::with_uri_str(uri)
+            .await
+            .map_err(error)?
+            .database("master_data");
+        return match settings::Settings::new(&db, 0).set(expected, seconds).await {
+            Ok(true) => {
+                println!("Heartbeat settings updated");
+                Ok(())
+            }
+            Ok(false) => Err(io::Error::other("Stale heartbeat settings revision")),
+            Err(_) => Err(io::Error::other("Heartbeat settings update failed")),
+        };
+    }
     let (role, sequence) = match args.as_slice() {
-        [role] if matches!(role.as_str(), "init" | "relay" | "consumer") => (role, None),
+        [role]
+            if matches!(
+                role.as_str(),
+                "init" | "relay" | "consumer" | "get-heartbeat"
+            ) =>
+        {
+            (role, None)
+        }
         [role, sequence] if role == "replay" => {
             let sequence = sequence
                 .parse::<u64>()
@@ -135,7 +169,7 @@ async fn main() -> io::Result<()> {
         }
         _ => {
             return Err(io::Error::other(
-                "Expected init, relay, consumer, or replay <sequence>",
+                "Expected init, relay, consumer, replay <sequence>, get-heartbeat, or set-heartbeat <expected-revision> <seconds>",
             ));
         }
     };
@@ -165,16 +199,24 @@ async fn run(role: &str, sequence: Option<u64>) -> Result<()> {
     if let Some(path) = env::var_os("NATS_CA_FILE") {
         options = options.add_root_certificates(path.into()).require_tls(true);
     }
+    let inbox_role = if role == "get-heartbeat" {
+        "config-reader"
+    } else {
+        role
+    };
     let options = options
-        .custom_inbox_prefix(format!("_INBOX.article-{role}"))
+        .custom_inbox_prefix(format!("_INBOX.article-{inbox_role}"))
         .connection_timeout(Duration::from_secs(3));
-    let options = if sequence.is_none() {
+    let options = if sequence.is_none() && role != "get-heartbeat" {
         options.retry_on_initial_connect()
     } else {
         options
     };
     let url = env::var("NATS_URL").unwrap_or_else(|_| "nats://nats:4222".to_owned());
     let nats = Connection::connect(&url, options).await?;
+    if role == "get-heartbeat" {
+        return settings::read(&nats).await;
+    }
     let js = nats.jetstream(Duration::from_secs(5));
     if role == "init" {
         return provision(&js).await;
@@ -184,15 +226,17 @@ async fn run(role: &str, sequence: Option<u64>) -> Result<()> {
         return replay(&js, &mongo.database("article_receipts"), sequence).await;
     }
     if role == "relay" {
-        let seconds =
-            env::var("HEARTBEAT_SECONDS").map_or(Ok(15), |seconds| seconds.parse::<u64>())?;
-        let heartbeat =
-            (seconds > 0).then(|| tokio::spawn(heartbeat(nats, Duration::from_secs(seconds))));
-        let result = relay(&js, mongo.database("master_data").collection("outbox")).await;
-        if let Some(heartbeat) = heartbeat {
-            heartbeat.abort();
+        let fallback =
+            env::var("HEARTBEAT_SECONDS").map_or(Ok(15), |value| settings::period(&value))?;
+        let db = mongo.database("master_data");
+        let settings = settings::Settings::new(&db, fallback);
+        let (period, updates) = tokio::sync::watch::channel(None);
+        tokio::select! {
+            result = relay(&js, db.collection("outbox")) => result,
+            result = settings.serve(&nats) => result,
+            _ = settings.refresh(&js, period) => Ok(()),
+            _ = heartbeat(&nats, updates) => Ok(()),
         }
-        result
     } else {
         consume(&js, mongo.database("article_receipts")).await
     }
@@ -220,30 +264,42 @@ impl Contract for Heartbeat {
     const DELIVERY: Delivery = Delivery::Core;
 }
 
-async fn heartbeat(nats: Connection, period: Duration) {
+async fn heartbeat(nats: &Connection, mut periods: tokio::sync::watch::Receiver<Option<u64>>) {
     let started = Instant::now();
     let instance_id = Uuid::new_v4();
-    let mut tick = tokio::time::interval(period);
-    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        tick.tick().await;
-        if nats.state() != erp4us_messaging::State::Connected {
+        let Some(seconds) = *periods.borrow_and_update() else {
+            if periods.changed().await.is_err() {
+                return;
+            }
+            continue;
+        };
+        if seconds == 0 {
+            if periods.changed().await.is_err() {
+                return;
+            }
             continue;
         }
-        let payload = Heartbeat {
-            instance_id,
-            uptime_seconds: started.elapsed().as_secs(),
-            nats: "connected".into(),
-        };
-        let result = Envelope::system(
-            payload,
-            erp4us_messaging::Version::new(1, 0, 0),
-            "erp4us.article-delivery",
-            erp4us_messaging::Version::new(0, 1, 0),
-        );
-        match result {
-            Ok(envelope) if nats.publish(&envelope).await.is_ok() => {}
-            _ => eprintln!("event=heartbeat_publish_failed service=article-delivery"),
+        if nats.state() == erp4us_messaging::State::Connected {
+            let payload = Heartbeat {
+                instance_id,
+                uptime_seconds: started.elapsed().as_secs(),
+                nats: "connected".into(),
+            };
+            let result = Envelope::system(
+                payload,
+                erp4us_messaging::Version::new(1, 0, 0),
+                "erp4us.article-delivery",
+                erp4us_messaging::Version::new(0, 1, 0),
+            );
+            match result {
+                Ok(envelope) if nats.publish(&envelope).await.is_ok() => {}
+                _ => eprintln!("event=heartbeat_publish_failed service=article-delivery"),
+            }
+        }
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(seconds)) => {}
+            update = periods.changed() => if update.is_err() { return; },
         }
     }
 }
@@ -339,12 +395,7 @@ async fn provision(js: &JetStream) -> Result<()> {
             8,
             7,
         ),
-        (
-            "ERP4US_CONFIG_EVENTS_V1",
-            "v1.config.*.*.event.*.*.*",
-            8,
-            14,
-        ),
+        (settings::STREAM, "v1.config.*.*.event.*.*.*", 8, 14),
         (
             "ERP4US_DIAGNOSTICS_CRITICAL_V1",
             "v1.diagnostics.*.*.event.*.critical.*",
