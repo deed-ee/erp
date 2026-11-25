@@ -9,10 +9,11 @@ services:
     image: nats:2.12.15-alpine@sha256:b270f5e2428354c0335612694d7dd2fb588148e567a5757fdff325ef9c9332e6
     command: ["-c", "/etc/nats/article-nats.conf"]
     environment:
-      DEV_NATS_ADMIN_PASSWORD: ${DEV_NATS_ADMIN_PASSWORD:?Run sh scripts/init-dev.sh first}
-      DEV_NATS_RELAY_PASSWORD: ${DEV_NATS_RELAY_PASSWORD:?Run sh scripts/init-dev.sh first}
-      DEV_NATS_RECEIPTS_PASSWORD: ${DEV_NATS_RECEIPTS_PASSWORD:?Run sh scripts/init-dev.sh first}
-      DEV_NATS_REPLAY_PASSWORD: ${DEV_NATS_REPLAY_PASSWORD:?Generate a local replay password}
+      # NATS parses environment substitutions as config values; force string literals.
+      DEV_NATS_ADMIN_PASSWORD: "\"${DEV_NATS_ADMIN_PASSWORD:?Run sh scripts/init-dev.sh first}\""
+      DEV_NATS_RELAY_PASSWORD: "\"${DEV_NATS_RELAY_PASSWORD:?Run sh scripts/init-dev.sh first}\""
+      DEV_NATS_RECEIPTS_PASSWORD: "\"${DEV_NATS_RECEIPTS_PASSWORD:?Run sh scripts/init-dev.sh first}\""
+      DEV_NATS_REPLAY_PASSWORD: "\"${DEV_NATS_REPLAY_PASSWORD:?Generate a local replay password}\""
     volumes:
       - ./infrastructure/compose/article-nats.conf:/etc/nats/article-nats.conf:ro
       - jetstream-data:/data

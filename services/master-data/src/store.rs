@@ -21,8 +21,13 @@ pub(crate) enum InsertError {
 }
 
 impl Store {
+    pub(crate) fn database(&self) -> &Database {
+        &self.database
+    }
+
     pub(crate) async fn open(uri: &str) -> mongodb::error::Result<Self> {
         let database = Client::with_uri_str(uri).await?.database("master_data");
+        crate::partners::ensure_index(&database).await?;
         let articles = database.collection("articles");
         let outbox = database.collection("outbox");
         database
