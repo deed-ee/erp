@@ -26,8 +26,9 @@ def main():
 
     def journal(revision):
         return mongo_eval(compose, (
-            "print(JSON.stringify(db.article_relay_heartbeat_settings."
-            f"findOne({{_id: NumberLong('{revision}')}})))"
+            "const row = db.article_relay_heartbeat_settings."
+            f"findOne({{_id: NumberLong('{revision}')}});"
+            "print(JSON.stringify(row && {...row, heartbeatSeconds: Number(row.heartbeatSeconds)}))"
         ))
 
     def probe(*commands, seconds=1):
