@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "nats-envelope-v1.json",
+  "not": {"required": ["tenantId"]},
+  "properties": {
+    "messageType": {"const": "v1.diagnostics.system.article-delivery.event.service.heartbeat.v1"},
+    "protocolVersion": {"const": "1.0.0"},
+    "schemaVersion": {"const": "1.0.0"},
+    "sourceService": {"const": "erp4us.article-delivery"},
+    "payload": {
+      "type": "object", "required": ["instanceId", "uptimeSeconds", "nats"],
+      "properties": {
+        "instanceId": {"$ref": "nats-envelope-v1.json#/$defs/id"},
+        "uptimeSeconds": {"type": "integer", "minimum": 0},
+        "nats": {"const": "connected"}
+      }
+    }
+  }
+}

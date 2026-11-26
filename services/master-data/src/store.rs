@@ -113,10 +113,22 @@ impl Store {
             .format(&time::format_description::well_known::Rfc3339)
             .map_err(|error| InsertError::Database(Error::custom(error)))?;
         let message_id = Uuid::new_v4().to_string();
+        use erp4us_messaging::{Kind, Layer, Route, Scope};
+        let subject = Route {
+            layer: Layer::Business,
+            domain: "master-data",
+            kind: Kind::Event,
+            resource: "article",
+            action: "registered",
+        }
+        .subject(1, Scope::Tenant(article.tenant_id), 1)
+        .map_err(|error| InsertError::Database(Error::custom(error)))?;
         Ok(doc! {
             "messageId": &message_id,
-            "messageType": "business.master-data.article.registered.v1",
-            "schemaVersion": 1,
+            "messageType": subject,
+            "protocolVersion": "1.0.0",
+            "schemaVersion": "1.0.0",
+            "serviceVersion": env!("CARGO_PKG_VERSION"),
             "timestamp": timestamp,
             "tenantId": article.tenant_id.to_string(),
             "organizationId": article.organization_id.to_string(),

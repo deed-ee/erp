@@ -72,8 +72,10 @@ def verify_outbox(compose, article, traceparent):
     assert str(UUID(event["messageId"])) == event["messageId"]
     assert event == {
         "messageId": event["messageId"],
-        "messageType": "business.master-data.article.registered.v1",
-        "schemaVersion": 1,
+        "messageType": f"v1.business.{article['tenant_id']}.master-data.event.article.registered.v1",
+        "protocolVersion": "1.0.0",
+        "schemaVersion": "1.0.0",
+        "serviceVersion": "0.1.0",
         "timestamp": article["created_at"],
         "tenantId": article["tenant_id"],
         "organizationId": article["organization_id"],
@@ -144,7 +146,9 @@ def verify_units(compose):
 def verify_restore(compose, path, article, payload):
     target = [*compose, "-p", f"erp4us-restore-{uuid4().hex}"]
     port = os.getenv("ERP4US_RESTORE_PORT", "8081")
-    target_env = {**os.environ, "ERP4US_PORT": port}
+    config = json.loads(subprocess.check_output([*compose, "config", "--format", "json"], text=True))
+    image = config["services"]["master-data"]["image"]
+    target_env = {**os.environ, "ERP4US_PORT": port, "ERP4US_MASTER_DATA_IMAGE": image}
 
     with TemporaryFile() as archive:
         subprocess.run(
@@ -163,7 +167,7 @@ def verify_restore(compose, path, article, payload):
                 stdin=archive, env=target_env, check=True,
             )
             subprocess.run(
-                [*target, "up", "--build", "-d", "master-data"],
+                [*target, "up", "--no-build", "--pull", "never", "-d", "master-data"],
                 env=target_env, check=True,
             )
             origin = f"http://127.0.0.1:{port}"
@@ -173,7 +177,7 @@ def verify_restore(compose, path, article, payload):
             assert request("/v1/articles:register", payload, origin=origin)[0] == 409
             print("Master Data backup and restore passed")
         finally:
-            subprocess.run([*target, "down", "-v", "--rmi", "local"], env=target_env, check=True)
+            subprocess.run([*target, "down", "-v"], env=target_env, check=True)
 
 
 def main():

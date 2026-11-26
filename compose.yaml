@@ -27,6 +27,7 @@ services:
       mongo:
         condition: service_started
   master-data:
+    image: ${ERP4US_MASTER_DATA_IMAGE:-${COMPOSE_PROJECT_NAME:-erp4us}-master-data}
     build:
       context: .
       dockerfile: services/master-data/Dockerfile
