@@ -1,0 +1,9 @@
+{
+  "contract": "confirmed-stock-line.v1",
+  "orderId": "d583609d-da73-49a2-981d-42b4dbcf7182",
+  "lineId": "95a1dd05-deb0-4167-b7dd-475772e17eb5",
+  "warehouseId": "79d62876-315f-4711-887c-52b55c4ad90b",
+  "articleId": "61a57b1e-5ad5-4257-8003-c235908b779d",
+  "unit": "EA",
+  "quantity": 10
+}

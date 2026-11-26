@@ -153,6 +153,11 @@ article_event = {
 registered.validate(article_event)
 assert not registered.is_valid({**article_event, "payload": {"articleId": str(uuid4())}})
 assert not registered.is_valid({**article_event, "messageType": event["messageType"]})
+line = load(ROOT / "fixtures" / "confirmed-stock-line-v1.json")
+confirmed = validator("confirmed-stock-line-v1.json")
+confirmed.validate(line)
+for invalid in ({"unit": "kg"}, {"quantity": 0}, {"quantity": 1.5}, {"tenantId": str(uuid4())}):
+    assert not confirmed.is_valid({**line, **invalid})
 register_unit = validator("register-unit-v1.json")
 register_unit.validate({"code": "EA"})
 for invalid in ({"code": ""}, {"code": "kg"}, {"code": "EA\n"}, {"code": "1EA"},

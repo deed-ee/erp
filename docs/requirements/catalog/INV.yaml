@@ -10,7 +10,7 @@
   actors:
   - Warehouse operator
   priority: P1
-  status: approved
+  status: in-implementation
   reviewedOn: '2026-11-23'
   disposition: Maintainer selected partial reservation for the first Demo Trading flow (#58). Waiting for all ten is not the reference policy; this does not mandate partial shipment or purchasing.
   dependencies:
@@ -33,9 +33,12 @@
   - 16
   - 24
   - 58
+  - 91
   prs: []
-  contracts: []
-  tests: []
+  contracts:
+  - contracts/schemas/confirmed-stock-line-v1.json
+  tests:
+  - tests/integration/inventory.py
   evidence: []
   questions:
   - Which other order types require a different allocation policy?

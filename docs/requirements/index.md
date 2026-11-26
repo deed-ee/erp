@@ -27,7 +27,7 @@ ERP by everyone, for everyone. Start with the [review guide](guide.md), [scenari
 | [INT-004](catalog/INT.yaml) | Resolve typed references under authorization | M1 | P1 | proposed |
 | [INT-005](catalog/INT.yaml) | Report partial outcomes for bulk commands | M1 | P2 | proposed |
 | [INT-006](catalog/INT.yaml) | Exchange data through replaceable adapters | M7 | P3 | proposed |
-| [INV-001](catalog/INV.yaml) | Conserve available stock under competing reservations | M3 | P1 | approved |
+| [INV-001](catalog/INV.yaml) | Conserve available stock under competing reservations | M3 | P1 | in-implementation |
 | [LOC-001](catalog/LOC.yaml) | Keep resource keys independent of locale | M0 | P1 | proposed |
 | [LOC-002](catalog/LOC.yaml) | Protect approved translations across revisions | M1 | P2 | proposed |
 | [LOC-003](catalog/LOC.yaml) | Carry business date, zone and calendar | M1 | P1 | proposed |

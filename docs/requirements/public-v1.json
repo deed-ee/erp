@@ -677,7 +677,7 @@
       "domain": "INV",
       "capability": "INV.01",
       "type": "functional",
-      "status": "approved",
+      "status": "in-implementation",
       "priority": "P1",
       "milestone": "M3",
       "revision": 2,
@@ -694,10 +694,13 @@
       "issues": [
         16,
         24,
-        58
+        58,
+        91
       ],
       "prs": [],
-      "tests": [],
+      "tests": [
+        "tests/integration/inventory.py"
+      ],
       "evidence": []
     },
     {
