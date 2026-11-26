@@ -1,0 +1,18 @@
+# Inventory: reserve a confirmed line
+
+The local fixture adapter accepts one [confirmed stock line](../../contracts/fixtures/confirmed-stock-line-v1.json) on stdin. It implements the approved SC-05 partial allocation in [INV-001](../../docs/requirements/catalog/INV.yaml): ten EA requested, six available, four expected → six reserved and four outstanding. Expected receipts are never eligible. A reservation is neither permission to ship nor a purchase commitment.
+
+Run from the repository root with Rust and Docker:
+
+```sh
+cargo build --locked -p inventory
+python3 tests/integration/inventory.py
+```
+
+The example starts an isolated, disposable MongoDB replica set, provisions an Inventory-only account, seeds eligible stock and launches a fresh Inventory process for each confirmation. It also runs two competing orders against the same six units. No existing database or Sales service is needed.
+
+**Interface.** The one-shot executable reads a [v1 fixture](../../contracts/schemas/confirmed-stock-line-v1.json), prints `{"reserved":6,"outstanding":4}` after commit and exits. Quantities in this slice are positive whole pieces (`EA`). Only the local operator supplies `INVENTORY_MONGO_URI`, `INVENTORY_TENANT_ID` and `INVENTORY_ORGANIZATION_ID`; do not expose this fixture runner as a public ingress. A future Sales adapter must authenticate its producer and bind the authorized scope before invoking allocation. Build the standalone image with `docker build -f services/inventory/Dockerfile .`.
+
+**Persistence v1.** Inventory owns `inventory.balances` (available pieces by scope/warehouse/article/unit) and `inventory.reservations` (original allocation by scope/order/line). Compound document `_id`s enforce uniqueness. A replica-set transaction commits the decrement and reservation together. Repeating the same line returns the current allocation, even if availability has changed; a different item, warehouse or quantity under the same line key is rejected. A missing balance has zero eligible pieces. Stop the runner to roll back the adapter; retain its database to preserve allocations. Receipt processing and shortage publication are later slices.
+
+**Cancel an existing line.** Submit the [cancellation fixture](../../contracts/fixtures/cancel-stock-line-v1.json) in the same trusted scope. Inventory derives the release from its own reservation: for ten requested and six reserved it returns `{"released":6}`, restores six available pieces and closes four outstanding. The original amounts, time and actor are retained in a cancellation record on the line. Retrying returns `{"released":0}`; retrying the original confirmation reports zero reserved and zero outstanding. Unknown lines are rejected rather than acknowledged, so the caller can retry out-of-order delivery after confirmation. No supplier commitment changes.

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cancel an existing scoped stock line v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "orderId",
+    "lineId"
+  ],
+  "properties": {
+    "contract": {
+      "const": "cancel-stock-line.v1"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "lineId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}
