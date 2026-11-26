@@ -64,6 +64,24 @@ try:
     assert list(map(consume, lines)) == results
     mongo(db + '''if (dbi.reservations.countDocuments({}) !== 5) throw Error("unexpected reservation count");
         if (dbi.balances.countDocuments({available:0,expected:4}) !== 2) throw Error("unexpected stock balance");''')
-    print('Partial allocation, competing orders, scope and restart replay passed')
+    cancel = json.loads(Path('contracts/fixtures/cancel-stock-line-v1.json').read_text())
+    consume(cancel, dict(env, INVENTORY_ORGANIZATION_ID=str(uuid4())), success=False)
+    consume(dict(cancel, quantity=10), success=False)
+    # Competing deliveries in separate processes must produce one release.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(r['released'] for r in pool.map(consume, [cancel, cancel])) == [0, 6]
+    assert consume(cancel) == {'released': 0}
+    assert consume(line) == {'reserved': 0, 'outstanding': 0}
+    balance = f'dbi.balances.findOne({{_id:{json.dumps(key)}}})'
+    assert mongo(db + f'print({balance}.available)') == '6'
+    assert consume(dict(line, orderId=str(uuid4()), quantity=6)) == {'reserved': 6, 'outstanding': 0}
+    # Post the four expected pieces as an Inventory-owned receipt fixture.
+    mongo(db + f'dbi.balances.updateOne({{_id:{json.dumps(key)},expected:4}},{{$inc:{{expected:-4,available:4}}}})')
+    assert consume(line) == {'reserved': 0, 'outstanding': 0}
+    assert consume(cancel) == {'released': 0}
+    assert mongo(db + f'print({balance}.available)') == '4'
+    mongo(db + 'if (dbi.reservations.countDocuments({requested:10,reserved:0,outstanding:0,'
+               '"cancellation.released":6,"cancellation.withdrawnDemand":4}) !== 1) throw Error("release history");')
+    print('Partial allocation, cancellation, competing deliveries, scope and restart replay passed')
 finally:
     subprocess.run(['docker', 'rm', '-fv', container], check=True, stdout=subprocess.DEVNULL)

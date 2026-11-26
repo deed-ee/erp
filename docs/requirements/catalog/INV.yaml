@@ -34,8 +34,10 @@
   - 24
   - 58
   - 91
+  - 93
   prs: []
   contracts:
+  - contracts/schemas/cancel-stock-line-v1.json
   - contracts/schemas/confirmed-stock-line-v1.json
   tests:
   - tests/integration/inventory.py

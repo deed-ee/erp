@@ -12,21 +12,22 @@ use std::{
 };
 use uuid::Uuid;
 
+mod cancellation;
+
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ConfirmedLine {
-    contract: Contract,
-    order_id: Uuid,
-    line_id: Uuid,
-    warehouse_id: Uuid,
-    article_id: Uuid,
-    unit: Unit,
-    quantity: i32,
-}
-#[derive(Deserialize)]
-enum Contract {
+#[serde(tag = "contract", deny_unknown_fields, rename_all_fields = "camelCase")]
+enum Command {
     #[serde(rename = "confirmed-stock-line.v1")]
-    V1,
+    Confirmed {
+        order_id: Uuid,
+        line_id: Uuid,
+        warehouse_id: Uuid,
+        article_id: Uuid,
+        unit: Unit,
+        quantity: i32,
+    },
+    #[serde(rename = "cancel-stock-line.v1")]
+    Cancel { order_id: Uuid, line_id: Uuid },
 }
 #[derive(Deserialize)]
 enum Unit {
@@ -39,15 +40,18 @@ struct Allocation {
     outstanding: i32,
 }
 
+fn line_key(scope: &Document, order_id: Uuid, line_id: Uuid) -> Document {
+    let mut key = scope.clone();
+    key.extend(doc! {"orderId": order_id.to_string(), "lineId": line_id.to_string()});
+    key
+}
+
 async fn reserve(
     db: Database,
-    scope: Document,
-    line: ConfirmedLine,
+    line_key: Document,
+    stock_key: Document,
+    requested: i32,
 ) -> mongodb::error::Result<Allocation> {
-    let mut line_key = scope.clone();
-    line_key.extend(doc! {"orderId":line.order_id.to_string(), "lineId":line.line_id.to_string()});
-    let mut stock_key = scope;
-    stock_key.extend(doc! {"warehouseId":line.warehouse_id.to_string(), "articleId":line.article_id.to_string(), "unit":"EA"});
     let stock = db.collection::<Document>("balances");
     let reservations = db.collection::<Document>("reservations");
     let mut session = db.client().start_session().await?;
@@ -60,7 +64,7 @@ async fn reserve(
                 &reservations,
                 &stock_key,
                 &line_key,
-                line.quantity,
+                requested,
             )
             .await
         })
@@ -141,23 +145,27 @@ async fn run() -> Result<(), &'static str> {
     if bytes.len() > 8192 {
         return Err("fixture too large");
     }
-    let line: ConfirmedLine =
-        serde_json::from_slice(&bytes).map_err(|_| "invalid confirmed stock line")?;
-    let (Contract::V1, Unit::Each) = (&line.contract, &line.unit);
-    if line.quantity <= 0 {
-        return Err("quantity must be positive");
-    }
+    let command: Command =
+        serde_json::from_slice(&bytes).map_err(|_| "invalid Inventory command")?;
     let db = Client::with_uri_str(uri)
         .await
         .map_err(|_| "invalid Inventory connection")?
         .database("inventory");
-    let result = reserve(db, scope, line)
-        .await
-        .map_err(|_| "reservation not acknowledged; check the fixture and retry the same line")?;
-    println!(
-        "{}",
-        serde_json::to_string(&result).map_err(|_| "cannot encode allocation")?
-    );
+    let reply = match command {
+        Command::Confirmed {order_id, line_id, warehouse_id, article_id, unit: Unit::Each, quantity} => {
+            if quantity <= 0 { return Err("quantity must be positive"); }
+            let key = line_key(&scope, order_id, line_id);
+            let mut stock_key = scope;
+            stock_key.extend(doc! { "warehouseId": warehouse_id.to_string(), "articleId": article_id.to_string(), "unit": "EA" });
+            let allocation = reserve(db, key, stock_key, quantity).await.map_err(|_| "reservation not acknowledged")?;
+            serde_json::to_string(&allocation)
+        }
+        Command::Cancel {order_id, line_id} => {
+            let release = cancellation::cancel(&db, line_key(&scope, order_id, line_id)).await.map_err(|_| "cancellation not acknowledged")?;
+            serde_json::to_string(&release)
+        }
+    }.map_err(|_| "cannot encode result")?;
+    println!("{reply}");
     Ok(())
 }
 #[tokio::main]
