@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+from pathlib import Path
 import subprocess
 from uuid import uuid4
 
@@ -8,11 +9,67 @@ from delivery import broker_probe, eventually
 from smoke import env, mongo_eval
 
 
+WIRE_HEADERS = {
+    "protocolVersion": "Erp4us-Protocol-Version",
+    "schemaVersion": "Erp4us-Schema-Version",
+    "serviceVersion": "Erp4us-Service-Version",
+    "messageId": "Erp4us-Message-Id",
+    "correlationId": "Erp4us-Correlation-Id",
+    "sourceService": "Erp4us-Source",
+}
+
+
+def wire_headers(envelope):
+    return {"Content-Type": "application/json",
+            **{header: envelope[field] for field, header in WIRE_HEADERS.items()}}
+
+
+def query_snapshot(compose, example, *, check_invalid=False):
+    inbox = f"_INBOX.article-config-reader.{uuid4().hex}"
+    commands = [f"SUB {inbox}.* 1"]
+
+    def publish(label, **overrides):
+        message_id = str(uuid4())
+        body = {**example, "messageId": message_id, "correlationId": message_id, **overrides}
+        headers = wire_headers(body)
+        if "tenantId" in body:
+            headers["Erp4us-Tenant-Id"] = body["tenantId"]
+        block = "\r\n".join(["NATS/1.0", *(f"{k}: {v}" for k, v in headers.items()), "", ""])
+        payload = json.dumps(body, ensure_ascii=True, separators=(",", ":"))
+        commands.extend([
+            f"HPUB {example['messageType']} {inbox}.{label} {len(block)} {len(block) + len(payload)}",
+            block + payload,
+        ])
+
+    if check_invalid:
+        publish("protocol", protocolVersion="1.1.0")
+        publish("schema", schemaVersion="1.1.0")
+        publish("scope", tenantId=str(uuid4()), actor={"kind": "service", "id": example["sourceService"]})
+    publish("valid")
+    output = broker_probe(compose, "article_config_reader", env["DEV_NATS_CONFIG_READER_PASSWORD"],
+                          commands, seconds=2)
+    lines = output.splitlines()
+    assert not any(line.startswith("-ERR") for line in lines), "Broker rejected the Python wire probe"
+    replies = [(i, line.split()[1]) for i, line in enumerate(lines)
+               if line.startswith(("MSG ", "HMSG "))]
+    if not replies:
+        return None
+    assert [subject for _, subject in replies] == [f"{inbox}.valid"], "Unexpected settings reply"
+    index, _ = replies[0]
+    assert lines[index].startswith("HMSG "), "Expected Content-Type on the query reply"
+    body_index = lines.index("", index + 1)
+    assert lines[index + 1] == "NATS/1.0"
+    assert "content-type: application/json" in [line.lower() for line in lines[index + 2:body_index]]
+    return json.loads(lines[body_index + 1])["result"]
+
+
 def main():
     compose = [os.environ["COMPOSE_BIN"]] if "COMPOSE_BIN" in os.environ else ["docker", "compose"]
     compose += ["-f", "compose.yaml", "-f", "compose.delivery.yaml"]
-    get = "v1.config.system.article-delivery.query.heartbeat.get.v1"
-    changed = "v1.config.system.article-delivery.event.heartbeat.changed.v1"
+    fixture = Path(__file__).resolve().parents[2] / "contracts/examples/nats/relay-heartbeat-config-v1.json"
+    examples = json.loads(fixture.read_text())
+    get = examples["query"]["messageType"]
+    changed = examples["changed"]["messageType"]
     heartbeat = "v1.diagnostics.system.article-delivery.event.service.heartbeat.v1"
     stream = "ERP4US_CONFIG_EVENTS_V1"
 
@@ -20,9 +77,12 @@ def main():
         return subprocess.run([*compose, "run", "--rm", "--no-deps", *args],
                               capture_output=True, text=True, check=check, timeout=25)
 
-    def snapshot():
+    def cli_snapshot():
         result = operator("article-config-reader", check=False)
         return json.loads(result.stdout) if result.returncode == 0 else None
+
+    def snapshot():
+        return query_snapshot(compose, examples["query"])
 
     def journal(revision):
         return mongo_eval(compose, (
@@ -48,8 +108,9 @@ def main():
         return sum(line.startswith((f"MSG {heartbeat} ", f"HMSG {heartbeat} "))
                    for line in probe(f"SUB {heartbeat} 1", seconds=seconds).splitlines())
 
-    initial = eventually(snapshot, "startup configuration snapshot")
+    initial = eventually(cli_snapshot, "startup configuration snapshot")
     assert initial == {"revision": 0, "heartbeatSeconds": 2}
+    assert query_snapshot(compose, examples["query"], check_invalid=True) == initial
     assert heartbeats(4) >= 1
     other = get.replace(".system.", f".{uuid4()}.")
     output = broker_probe(compose, "article_config_reader", env["DEV_NATS_CONFIG_READER_PASSWORD"], [
@@ -79,8 +140,19 @@ def main():
     original = json.loads(stored["notification"])
     message = last_notification()
     assert message["subject"] == changed
-    assert json.loads(base64.b64decode(message["data"])) == original
-    assert original["payload"] == {"revision": 1}
+    event = json.loads(base64.b64decode(message["data"]))
+    assert event == original
+    expected_event = examples["changed"]
+    for field in ("messageType", "protocolVersion", "schemaVersion", "sourceService", "payload"):
+        assert event[field] == expected_event[field]
+    header_lines = base64.b64decode(message["hdrs"]).decode("ascii").splitlines()
+    assert header_lines[0] == "NATS/1.0"
+    headers = {name.lower(): value for name, value in
+               (line.split(": ", 1) for line in header_lines[1:] if line)}
+    for name, value in wire_headers(event).items():
+        assert headers[name.lower()] == value
+    assert headers["nats-msg-id"] == event["messageId"]
+    assert not {"erp4us-tenant-id", "erp4us-organization-id"}.intersection(headers)
     assert heartbeats(5) == 0
 
     # A reader that missed the live event and a restarted owner still recover from storage.
@@ -103,7 +175,7 @@ def main():
     assert retry["seq"] > latest["seq"]
     assert json.loads(base64.b64decode(retry["data"])) == original
     assert snapshot() == {"revision": 2, "heartbeatSeconds": 1}
-    print("Configuration ACL, stale revision, heartbeat, restart and notification retry checks passed")
+    print("Python NATS wire, configuration ACL, heartbeat, restart and notification retry checks passed")
 
 
 if __name__ == "__main__":
