@@ -1,0 +1,9 @@
+{
+  "contract": "stock-shortage.v1",
+  "shortageId": "01a57b1e-5ad5-4257-8003-235908b779df",
+  "orderId": "d583609d-da73-49a2-981d-42b4dbcf7182",
+  "lineId": "95a1dd05-deb0-4167-b7dd-475772e17eb5",
+  "articleId": "61a57b1e-5ad5-4257-8003-c235908b779d",
+  "unit": "EA",
+  "missingQuantity": 4
+}

@@ -27,9 +27,13 @@
   issues:
   - 16
   - 23
+  - 92
   prs: []
-  contracts: []
-  tests: []
+  contracts:
+  - contracts/schemas/get-draft-proposal-v1.json
+  - contracts/schemas/stock-shortage-v1.json
+  tests:
+  - tests/integration/procurement.py
   evidence: []
   questions:
   - Who may approve their own proposal?
