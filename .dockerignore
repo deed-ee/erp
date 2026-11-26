@@ -20,3 +20,7 @@
 !services/inventory/Cargo.toml
 !services/inventory/src/
 !services/inventory/src/**
+!services/procurement/
+!services/procurement/Cargo.toml
+!services/procurement/src/
+!services/procurement/src/**

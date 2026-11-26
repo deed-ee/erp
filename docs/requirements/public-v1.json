@@ -1451,10 +1451,13 @@
       ],
       "issues": [
         16,
-        23
+        23,
+        92
       ],
       "prs": [],
-      "tests": [],
+      "tests": [
+        "tests/integration/procurement.py"
+      ],
       "evidence": []
     },
     {

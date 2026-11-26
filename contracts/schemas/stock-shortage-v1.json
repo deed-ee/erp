@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Stock shortage snapshot for the local Procurement fixture adapter v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "shortageId", "orderId", "lineId", "articleId", "unit", "missingQuantity"],
+  "properties": {
+    "contract": {"const": "stock-shortage.v1"},
+    "shortageId": {"type": "string", "format": "uuid"},
+    "orderId": {"type": "string", "format": "uuid"},
+    "lineId": {"type": "string", "format": "uuid"},
+    "articleId": {"type": "string", "format": "uuid"},
+    "unit": {"const": "EA"},
+    "missingQuantity": {"type": "integer", "minimum": 0, "maximum": 2147483647}
+  }
+}

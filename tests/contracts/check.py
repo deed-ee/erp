@@ -153,6 +153,18 @@ article_event = {
 registered.validate(article_event)
 assert not registered.is_valid({**article_event, "payload": {"articleId": str(uuid4())}})
 assert not registered.is_valid({**article_event, "messageType": event["messageType"]})
+shortage = load(ROOT / "fixtures" / "stock-shortage-v1.json")
+shortage_validator = validator("stock-shortage-v1.json")
+shortage_validator.validate(shortage)
+shortage_validator.validate({**shortage, "missingQuantity": 0})
+for invalid in ({"missingQuantity": -1}, {"missingQuantity": 2147483648},
+                {"missingQuantity": 0.5}, {"unit": "kg"}, {"tenantId": str(uuid4())}):
+    assert not shortage_validator.is_valid({**shortage, **invalid})
+proposal_query = validator("get-draft-proposal-v1.json")
+query = {"contract": "get-draft-proposal.v1", "shortageId": shortage["shortageId"]}
+proposal_query.validate(query)
+assert not proposal_query.is_valid({**query, "organizationId": str(uuid4())})
+
 line = load(ROOT / "fixtures" / "confirmed-stock-line-v1.json")
 confirmed = validator("confirmed-stock-line-v1.json")
 confirmed.validate(line)
