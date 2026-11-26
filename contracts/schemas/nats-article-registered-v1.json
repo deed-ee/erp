@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "nats-envelope-v1.json",
+  "required": ["tenantId", "organizationId", "actor"],
+  "properties": {
+    "messageType": {"pattern": "^v1\\.business\\.[0-9a-f-]{36}\\.master-data\\.event\\.article\\.registered\\.v1$"},
+    "protocolVersion": {"const": "1.0.0"},
+    "schemaVersion": {"const": "1.0.0"},
+    "sourceService": {"const": "erp4us.master-data"},
+    "payload": {
+      "type": "object", "required": ["articleId", "revision"],
+      "properties": {"articleId": {"$ref": "nats-envelope-v1.json#/$defs/id"}, "revision": {"const": 1}}
+    }
+  }
+}

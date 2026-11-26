@@ -2,6 +2,10 @@
 # Install a reviewed Linux x86_64 release in a caller-supplied tools directory.
 set -eu
 case "$1" in
+  cargo-audit)
+    url=https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.23.0/cargo-audit-x86_64-unknown-linux-musl-v0.23.0.tgz
+    sha=4f01c74ed84b2dffd0b1d37012a62cdf2a92c96e25bdf8eec7fcc0d4d3eb7811
+    member=cargo-audit-x86_64-unknown-linux-musl-v0.23.0/cargo-audit ;;
   trivy)
     url=https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
     sha=bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf

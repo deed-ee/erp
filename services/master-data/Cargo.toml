@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 axum = "=0.8.9"
+erp4us-messaging.workspace = true
 mongodb = "=3.10.2"
 serde = { version = "=1.0.228", features = ["derive"] }
 subtle = "=2.6.1"

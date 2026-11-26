@@ -1,6 +1,7 @@
 FROM rust:1.100.0-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates/ crates/
 COPY services/ services/
 RUN cargo build --locked --release -p inventory
 

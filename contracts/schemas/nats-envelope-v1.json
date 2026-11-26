@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["messageId", "messageType", "protocolVersion", "schemaVersion", "serviceVersion",
+               "timestamp", "sourceService", "correlationId", "payload"],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+           "not": {"const": "00000000-0000-0000-0000-000000000000"}},
+    "version": {"type": "string", "pattern": "^[1-9][0-9]*\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"}
+  },
+  "properties": {
+    "messageId": {"$ref": "#/$defs/id"},
+    "messageType": {"type": "string", "pattern": "^v[1-9][0-9]*\\.(config|business|diagnostics)\\.(system|[0-9a-f-]{36})\\.[a-z][a-z0-9-]{0,62}\\.(event|command|query)\\.[a-z][a-z0-9-]{0,62}\\.[a-z][a-z0-9-]{0,62}\\.v[1-9][0-9]*$"},
+    "protocolVersion": {"$ref": "#/$defs/version"},
+    "schemaVersion": {"$ref": "#/$defs/version"},
+    "serviceVersion": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "sourceService": {"type": "string", "maxLength": 127, "pattern": "^[a-z][a-z0-9-]{0,62}(\\.[a-z][a-z0-9-]{0,62})*$"},
+    "tenantId": {"$ref": "#/$defs/id"},
+    "organizationId": {"$ref": "#/$defs/id"},
+    "actor": {
+      "type": "object", "required": ["id", "kind"],
+      "properties": {"id": {"type": "string", "pattern": "\\S"}, "kind": {"enum": ["user", "service", "agent"]}}
+    },
+    "correlationId": {"$ref": "#/$defs/id"},
+    "causationId": {"$ref": "#/$defs/id"},
+    "traceparent": {"type": "string", "pattern": "^00-(?!0{32})[a-f0-9]{32}-(?!0{16})[a-f0-9]{16}-[a-f0-9]{2}$"},
+    "tracestate": {"type": "string", "minLength": 1, "maxLength": 512},
+    "payload": {"type": "object"}
+  },
+  "dependentRequired": {"tenantId": ["actor"], "organizationId": ["tenantId"], "tracestate": ["traceparent"]}
+}

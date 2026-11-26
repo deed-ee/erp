@@ -2,6 +2,11 @@
 !Cargo.toml
 !Cargo.lock
 !rust-toolchain.toml
+!crates/
+!crates/erp4us-messaging/
+!crates/erp4us-messaging/Cargo.toml
+!crates/erp4us-messaging/src/
+!crates/erp4us-messaging/src/**
 !services/
 !services/master-data/
 !services/master-data/Cargo.toml
