@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Proposed fixture format for CAD/PLM released assembly exchanges",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tenantId", "organizationId", "sourceSystem", "assemblies", "units"],
+  "properties": {
+    "schemaVersion": {"type": "integer", "const": 1},
+    "tenantId": {"$ref": "#/$defs/scopeId"},
+    "organizationId": {"$ref": "#/$defs/scopeId"},
+    "sourceSystem": {"$ref": "#/$defs/reference"},
+    "assemblies": {"type": "array", "items": {"$ref": "#/$defs/assembly"}},
+    "units": {"type": "array", "items": {"$ref": "#/$defs/unit"}}
+  },
+  "$defs": {
+    "scopeId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+      "not": {"const": "00000000-0000-0000-0000-000000000000"}
+    },
+    "reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}(?![\\s\\S])"},
+    "designRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assemblyRef", "revision"],
+      "properties": {
+        "assemblyRef": {"$ref": "#/$defs/reference"},
+        "revision": {"$ref": "#/$defs/reference"}
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "articleRef", "quantity", "unit"],
+      "properties": {
+        "position": {"$ref": "#/$defs/reference"},
+        "articleRef": {"$ref": "#/$defs/reference"},
+        "quantity": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,17})(\\.[0-9]{1,9})?(?![\\s\\S])",
+          "not": {"pattern": "^0(?:\\.0+)?(?![\\s\\S])"}
+        },
+        "unit": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{0,15}(?![\\s\\S])"},
+        "structure": {"$ref": "#/$defs/designRef"}
+      }
+    },
+    "assembly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assemblyRef", "revision", "articleRef", "components"],
+      "properties": {
+        "assemblyRef": {"$ref": "#/$defs/reference"},
+        "revision": {"$ref": "#/$defs/reference"},
+        "articleRef": {"$ref": "#/$defs/reference"},
+        "components": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/component"}}
+      }
+    },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceUnitRef", "serial", "design"],
+      "properties": {
+        "sourceUnitRef": {"$ref": "#/$defs/reference"},
+        "serial": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["issuer", "namespace", "value"],
+          "properties": {
+            "issuer": {"$ref": "#/$defs/reference"},
+            "namespace": {"$ref": "#/$defs/reference"},
+            "value": {"$ref": "#/$defs/reference"}
+          }
+        },
+        "design": {"$ref": "#/$defs/designRef"}
+      }
+    }
+  }
+}
