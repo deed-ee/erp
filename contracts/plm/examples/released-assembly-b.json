@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "tenantId": "30000000-0000-4000-8000-000000000001",
+  "organizationId": "40000000-0000-4000-8000-000000000001",
+  "sourceSystem": "demo-engineering-plm",
+  "assemblies": [
+    {
+      "assemblyRef": "machine",
+      "revision": "B",
+      "articleRef": "ENG-MACHINE",
+      "components": [
+        {"position": "010", "articleRef": "ENG-FRAME", "quantity": "1", "unit": "EA",
+         "structure": {"assemblyRef": "frame", "revision": "A"}},
+        {"position": "020", "articleRef": "ENG-FASTENER", "quantity": "6", "unit": "EA"}
+      ]
+    }
+  ],
+  "units": [
+    {
+      "sourceUnitRef": "unit-557",
+      "serial": {"issuer": "maker-b", "namespace": "machine-series", "value": "00042"},
+      "design": {"assemblyRef": "machine", "revision": "B"}
+    }
+  ]
+}
