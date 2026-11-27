@@ -1,4 +1,3 @@
-mod auth;
 mod domain;
 mod http;
 mod partners;
@@ -15,7 +14,7 @@ async fn main() -> io::Result<()> {
         .map_err(|_| io::Error::other("ERP4US_IDENTITY_POLICY is required"))?;
     let issuer_keys = env::var("ERP4US_ISSUER_JWKS")
         .map_err(|_| io::Error::other("ERP4US_ISSUER_JWKS is required"))?;
-    let auth = auth::Auth::load(&identity_policy, &issuer_keys)?;
+    let auth = erp4us_identity::Auth::load(&identity_policy, &issuer_keys)?;
     let uri = env::var("MASTER_DATA_MONGODB_URI")
         .map_err(|_| io::Error::other("MASTER_DATA_MONGODB_URI is required"))?;
     let store = store::Store::open(&uri)

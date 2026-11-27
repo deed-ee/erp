@@ -7,18 +7,73 @@ export type Result = { article: Article } | { error: Message };
 export const isArticleId = (id: string) => /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(id);
 export const isLoopback = () => ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 
+interface Grant { tenant_id: string; organization_id: string; permissions: string[] }
+const fixtureScope = {
+  tenant_id: 'ddcae139-c1e8-47d2-8b48-349cb6f30ce5',
+  organization_id: '3e793fb5-75a7-45f6-8f66-45a58fcec674',
+};
+
 @Injectable({ providedIn: 'root' })
 export class ArticleApi {
   private readonly credential = signal('');
+  private readonly verifiedGrants = signal<Grant[]>([]);
+  private readonly selected = signal(0);
+  private pending?: AbortController;
   readonly hasCredential = computed(() => Boolean(this.credential()));
+  readonly grants = this.verifiedGrants.asReadonly();
+  readonly grant = computed(() => this.grants()[this.selected()]);
+  readonly selectedIndex = this.selected.asReadonly();
+  readonly canPlan = computed(() => this.grant()?.permissions.includes('manufacturing.plan.read') ?? false);
 
   setCredential(value: string) {
     if (!isLoopback() || !value.trim()) return false;
+    this.clearCredential();
     this.credential.set(value.trim());
+    void this.readGrants(value.trim());
     return true;
   }
 
-  clearCredential() { this.credential.set(''); }
+  clearCredential() {
+    this.pending?.abort();
+    this.credential.set('');
+    this.verifiedGrants.set([]);
+    this.selected.set(0);
+  }
+  selectGrant(index: number) {
+    if (this.grants()[index]) this.selected.set(index);
+  }
+  scopeLabel(grant: Grant) {
+    return grant.tenant_id === fixtureScope.tenant_id && grant.organization_id === fixtureScope.organization_id
+      ? 'NovaMotion' : `${grant.tenant_id.slice(0, 8)} / ${grant.organization_id.slice(0, 8)}`;
+  }
+  requestHeaders(): Record<string, string> {
+    const scope = this.grant() ?? fixtureScope;
+    return {
+      Authorization: `Bearer ${this.credential()}`,
+      'X-Erp4us-Tenant': scope.tenant_id,
+      'X-Erp4us-Organization': scope.organization_id,
+    };
+  }
+  private async readGrants(token: string) {
+    const pending = new AbortController();
+    this.pending = pending;
+    try {
+      const response = await fetch('/v1/session', {
+        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', redirect: 'error',
+        signal: AbortSignal.any([pending.signal, AbortSignal.timeout(5000)]),
+      });
+      if (!response.ok) return;
+      const principal: { grants?: Grant[] } = await response.json();
+      if (!pending.signal.aborted && principal && Array.isArray(principal.grants)) {
+        this.verifiedGrants.set(principal.grants.filter(grant => grant && isArticleId(grant.tenant_id)
+          && isArticleId(grant.organization_id) && Array.isArray(grant.permissions)
+          && grant.permissions.every(permission => typeof permission === 'string')));
+      }
+    } catch {
+      // No verified grants are exposed on failure. The original local fixture
+      // flow may still display a request error from the owning service.
+    }
+  }
   register(article: Registration) { return this.request('/v1/articles:register', article); }
   get(id: string, signal?: AbortSignal): Promise<Result> {
     return isArticleId(id) ? this.request(`/v1/articles/${id}`, undefined, signal) : Promise.resolve({ error: 'invalidId' });
@@ -31,9 +86,7 @@ export class ArticleApi {
       const response = await fetch(path, {
         method: body ? 'POST' : 'GET',
         headers: {
-          Authorization: `Bearer ${this.credential()}`,
-          'X-Erp4us-Tenant': 'ddcae139-c1e8-47d2-8b48-349cb6f30ce5',
-          'X-Erp4us-Organization': '3e793fb5-75a7-45f6-8f66-45a58fcec674',
+          ...this.requestHeaders(),
           ...(body ? { 'Content-Type': 'application/json' } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,

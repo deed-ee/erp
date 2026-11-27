@@ -58,7 +58,7 @@ def initialize():
                 **grant(TENANT, ORGANIZATION, "read", "register"),
                 "permissions": [f"master-data.{resource}.{action}"
                                 for resource in ("article", "unit", "partner")
-                                for action in ("read", "register")],
+                                for action in ("read", "register")] + ["manufacturing.plan.read"],
             },
             grant(TENANT, OTHER_ORGANIZATION, "read"),
             grant(OTHER_TENANT, EXTERNAL_ORGANIZATION, "read"),

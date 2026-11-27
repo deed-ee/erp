@@ -132,11 +132,27 @@ jobs:
       - run: docker compose -f compose.yaml -f compose.delivery.yaml up --no-build -d
       - run: python3 tests/integration/delivery.py
       - run: python3 tests/integration/config.py
+      - name: Build Manufacturing release image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: services/manufacturing/Dockerfile
+          tags: erp4us-ci-manufacturing:latest
+          load: true
+          cache-from: type=gha,scope=manufacturing-${{ env.CACHE_NAMESPACE }}
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,ignore-error=true,scope=manufacturing-{0}', env.CACHE_NAMESPACE) || '' }}
+      - name: Seed and exercise the scoped Manufacturing API
+        run: |
+          compose() { docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml "$@"; }
+          compose up --no-build -d manufacturing
+          compose run --rm manufacturing-seed
+          compose run --rm manufacturing-seed
+          python3 tests/integration/manufacturing.py
       - name: Scan built service images
         run: |
           sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
-          for service in master-data article-relay; do
-            container=$(docker compose -f compose.yaml -f compose.delivery.yaml ps -q "$service")
+          for service in master-data article-relay manufacturing; do
+            container=$(docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml ps -q "$service")
             image=$(docker inspect --format '{{.Config.Image}}' "$container")
             "$RUNNER_TEMP/tools/trivy" image --image-src docker --scanners vuln --severity HIGH,CRITICAL \
               --format json --output "$RUNNER_TEMP/trivy.json" "$image"
@@ -152,6 +168,8 @@ jobs:
           path: ~/.npm/_cacache
           key: npm-${{ env.CACHE_NAMESPACE }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ui/.nvmrc', 'ui/package-lock.json') }}
       - name: Build and exercise the Article workspace
+        env:
+          ERP4US_MANUFACTURING_E2E: '1'
         working-directory: ui
         run: |
           npm ci
@@ -166,9 +184,9 @@ jobs:
           path: ~/.npm/_cacache
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
       - if: failure()
-        run: docker compose -f compose.yaml -f compose.delivery.yaml logs --no-color --tail=80
+        run: docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml logs --no-color --tail=80
       - if: always()
-        run: if [ -f .env ]; then docker compose -f compose.yaml -f compose.delivery.yaml down -v; fi
+        run: if [ -f .env ]; then docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml down -v; fi
   audit:
     needs: impact
     if: ${{ !cancelled() && (needs.impact.result != 'success' || needs.impact.outputs.audit != 'false') }}

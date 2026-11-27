@@ -58,6 +58,7 @@ def check_article_reader(api, response_schema, previous):
 
 
 validate_url(OPENAPI.as_uri())
+validate_url((ROOT / "openapi/manufacturing-v1.yaml").as_uri())
 manifest_path = ROOT / "manifests/master-data-v1.json"
 manifest = load(manifest_path)
 validator("service-manifest-v1.json").validate(manifest)

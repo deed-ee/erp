@@ -638,6 +638,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 
 [[package]]
+name = "erp4us-identity"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "jsonwebtoken",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "erp4us-messaging"
 version = "0.1.0"
 dependencies = [
@@ -1310,12 +1321,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "manufacturing"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "erp4us-identity",
+ "mongodb",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "master-data"
 version = "0.2.0"
 dependencies = [
  "axum",
+ "erp4us-identity",
  "erp4us-messaging",
- "jsonwebtoken",
  "mongodb",
  "serde",
  "serde_json",
