@@ -64,7 +64,7 @@ test('real OIDC: platform monitor sees actual application health', async ({ page
   await expect(page.getByText('Awaiting acknowledgement', { exact: true })).toBeVisible();
 });
 
-test('real OIDC: production user saves and reopens a priced sales draft', async ({ page }) => {
+test('real OIDC: production user saves, confirms and reopens a priced sales order', async ({ page }) => {
   test.skip(process.env.ERP4US_REAL_OIDC_E2E !== '1', 'Requires the dedicated Keycloak preview stack');
   await login(page, 'production');
   await page.getByRole('link', { name: 'Sales orders' }).click();
@@ -75,11 +75,22 @@ test('real OIDC: production user saves and reopens a priced sales draft', async 
   const saved = page.waitForResponse(response => response.url().endsWith('/v1/sales/orders')
     && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Save draft' }).click();
-  expect((await saved).status()).toBe(201);
+  const draft = await saved;
+  expect(draft.status()).toBe(201);
+  const {id} = await draft.json();
   await expect(page.getByText('Draft saved: EUR 24900.00')).toBeVisible();
   await page.getByRole('link', { name: 'Manufacturing' }).click();
   await page.getByRole('link', { name: 'Sales orders' }).click();
-  const match = page.getByRole('row').filter({ hasText: 'Atlas Handling Technologies GmbH' })
+  const match = page.getByRole('row').filter({ hasText: id }).filter({ hasText: 'Atlas Handling Technologies GmbH' })
     .filter({ hasText: 'NM-1000' }).filter({ hasText: 'EUR 24900.00' });
-  await expect(match.first()).toContainText('10 EA');
+  await expect(match).toContainText('10 EA');
+  await match.getByRole('button', { name: 'Review confirmation' }).click();
+  await expect(page.getByText('Confirmation commits the saved commercial terms. It does not yet reserve stock.')).toBeVisible();
+  const committed = page.waitForResponse(response => response.url().endsWith(`/v1/sales/orders/${id}/confirmation`));
+  await page.getByRole('button', { name: 'Confirm order' }).click();
+  expect((await committed).status()).toBe(200);
+  await expect(match.getByRole('cell', { name: 'Confirmed', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Manufacturing' }).click();
+  await page.getByRole('link', { name: 'Sales orders' }).click();
+  await expect(match.getByRole('cell', { name: 'Confirmed', exact: true })).toBeVisible();
 });

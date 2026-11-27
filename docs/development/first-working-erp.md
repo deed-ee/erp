@@ -41,16 +41,16 @@ Run `ERP4US_REAL_OIDC_E2E=1 npm run test:e2e -- tests/preview-signin.spec.ts` fr
 ERP4US_IDENTITY_DIR=./.erp4us-preview docker compose -p erp4us-preview \
   --env-file .erp4us-preview/compose.env -f compose.yaml -f compose.delivery.yaml \
   -f compose.manufacturing.yaml -f compose.preview-identity.yaml \
-  -f compose.diagnostics.yaml -f compose.sales.yaml down
+  -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml down
 ```
 
 The explicit demo seed also creates three fictitious customers (including Atlas Handling) and four suppliers in Master Data. Browse the records under **Master data → Business partners** and filter by role. The directory and optional profile are published in the [Master Data API](../../contracts/openapi/master-data-v1.yaml); existing profile-free records remain valid. Seeding again does not overwrite an existing code in its scope. Addresses are synthetic and the current preview has one address and one delivery address per profile, no external identifier import.
 
 The new image scan checks Keycloak and its Java dependencies. The current pinned upstream image still produces one fixable advisory match tracked in [#121](https://github.com/erp4us-org/erp4us/issues/121). Keep this preview loopback-only with synthetic data; do not waive the gate or treat local functional tests as final approval.
 
-### Save a Sales draft
+### Save and confirm a Sales order
 
-Sign in as `production`, open **Sales orders**, choose **Atlas Handling Technologies GmbH**, select **NM-1000** revision **A**, and enter **10** pieces. Saving captures the customer profile and product/price snapshot for **EUR 24,900.00**. Reopen Sales to see the persisted draft. The [Sales API](../../contracts/openapi/sales-v1.yaml) uses a scoped command ID for retries and rejects an ID reused with changed inputs. Sales owns its own MongoDB records. It resolves the requested customer and product via their owning APIs, in the verified scope and under the actor's existing read grants. The preview supports one whole-piece line and EUR terms. It does not create a quotation, confirm an order, let the browser supply the unit price, publish a business event, or reserve stock.
+Sign in as `production`, open **Sales orders**, choose **Atlas Handling Technologies GmbH**, select **NM-1000** revision **A**, and enter **10** pieces. Saving captures the customer profile and product/price snapshot for **EUR 24,900.00**. In its row, select **Review confirmation** and **Confirm order**, then reopen Sales to see the persisted status. Sales owns its own MongoDB records and resolves the customer and product through their scoped owning APIs. The [Sales API](../../contracts/openapi/sales-v1.yaml) uses distinct authorization and revision-aware command retries for confirmation. It commits the original terms and a [pending Sales event](../../contracts/schemas/nats-sales-order-confirmed-v1.json) in the same document update even if JetStream is down. A scoped relay sends the event after recovery. The preview supports one whole-piece line and EUR terms. It does not create a quotation or reserve stock, and the browser cannot supply the unit price.
 
 ### Check application readiness
 
@@ -63,7 +63,7 @@ If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-previ
 ## Remaining acceptance gates
 
 - Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
-- Sales confirmation and durable hand-off, live stock and reservations, shortage drafts, purchasing and partial receipts.
+- Replay-safe Inventory consumption of the confirmed Sales event, live stock and reservations, shortage drafts, purchasing and partial receipts.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
 - Restricted diagnostics collector for actual runtime inventory, heartbeat staleness, and redacted historical/live logs. Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.

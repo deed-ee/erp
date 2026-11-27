@@ -1518,7 +1518,8 @@
         120
       ],
       "tests": [
-        "tests/integration/sales_drafts.py"
+        "tests/integration/sales_drafts.py",
+        "tests/integration/sales_confirmation.py"
       ],
       "evidence": []
     },

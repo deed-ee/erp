@@ -16,6 +16,7 @@ services:
       DEV_NATS_REPLAY_PASSWORD: "\"${DEV_NATS_REPLAY_PASSWORD:?Generate a local replay password}\""
       DEV_NATS_CONFIG_READER_PASSWORD: "\"${DEV_NATS_CONFIG_READER_PASSWORD:?Generate a local config-reader password}\""
       DEV_NATS_DIAGNOSTICS_PASSWORD: "\"${DEV_NATS_DIAGNOSTICS_PASSWORD:?Generate a local diagnostics password}\""
+      DEV_NATS_SALES_RELAY_PASSWORD: "\"${DEV_NATS_SALES_RELAY_PASSWORD:?Generate a local Sales relay password}\""
     volumes:
       - ./infrastructure/compose/article-nats.conf:/etc/nats/article-nats.conf:ro
       - jetstream-data:/data

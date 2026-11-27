@@ -17,27 +17,37 @@ impl CreateDraft {
     pub(crate) fn quantity(&self) -> Option<u16> {
         if self.id.is_nil()
             || self.customer_id.is_nil()
-            || !(1..=64).contains(&self.sku.len())
-            || !self
-                .sku
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'-')
-            || !(1..=32).contains(&self.product_revision.len())
-            || !self
-                .product_revision
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+            || !valid_sku(&self.sku)
+            || !valid_product_revision(&self.product_revision)
         {
             return None;
         }
-        if !(1..=4).contains(&self.pieces.len())
-            || self.pieces.starts_with('0')
-            || !self.pieces.bytes().all(|b| b.is_ascii_digit())
-        {
-            return None;
-        }
-        self.pieces.parse().ok().filter(|n| (1..=1000).contains(n))
+        pieces(&self.pieces)
     }
+}
+
+pub(crate) fn valid_sku(value: &str) -> bool {
+    (1..=64).contains(&value.len())
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'-')
+}
+
+pub(crate) fn valid_product_revision(value: &str) -> bool {
+    (1..=32).contains(&value.len())
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+}
+
+pub(crate) fn pieces(value: &str) -> Option<u16> {
+    if !(1..=4).contains(&value.len())
+        || value.starts_with('0')
+        || !value.bytes().all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    value.parse().ok().filter(|n| (1..=1000).contains(n))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -114,8 +124,8 @@ struct Line {
     unit_price: String,
 }
 
-#[derive(Deserialize, Serialize)]
-enum Unit {
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub(crate) enum Unit {
     #[serde(rename = "EA")]
     Each,
 }
@@ -124,6 +134,7 @@ enum Unit {
 #[serde(rename_all = "snake_case")]
 enum Status {
     Draft,
+    Confirmed,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -143,6 +154,10 @@ pub(crate) struct Draft {
     line: Line,
     currency: Currency,
     total: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    confirmed_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    confirmation_event_id: Option<Uuid>,
 }
 
 // Unit prices are capped at 9,999,999.99 EUR and at most 1000 EA, so totals
@@ -188,7 +203,29 @@ impl Draft {
             },
             currency: Currency::Eur,
             total: format!("{}.{:02}", total / 100, total % 100),
+            confirmed_at: None,
+            confirmation_event_id: None,
         })
+    }
+
+    pub(crate) fn confirmation_payload(&self) -> crate::delivery::ConfirmedOrder {
+        crate::delivery::ConfirmedOrder {
+            order_id: self.id,
+            revision: 2,
+            line_id: self.line.id,
+            sku: self.line.sku.clone(),
+            product_revision: self.line.product_revision.clone(),
+            unit: self.line.unit,
+            pieces: self.line.pieces.clone(),
+        }
+    }
+
+    pub(crate) fn confirmed(mut self, timestamp: String, message_id: Uuid) -> Self {
+        self.status = Status::Confirmed;
+        self.revision = 2;
+        self.confirmed_at = Some(timestamp);
+        self.confirmation_event_id = Some(message_id);
+        self
     }
 }
 

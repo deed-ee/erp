@@ -53,6 +53,8 @@ flowchart LR
 
 JetStream is at least once, not exactly once. Ack after the local effect and inbox commit; keep the inbox across replay. Retry network or database outages with bounded work, backoff and (for general competing workers) jitter. Treat invalid encoding, scope, versions and denied permissions as permanent until corrected. Broker timeouts and store exhaustion must never mark an outbox row published. The single local Article relay polls with a fixed delay; the consumer attempts receipt persistence up to four deliveries and keeps retrying quarantine persistence if unavailable. Local logs remain available when NATS is unavailable.
 
+[Sales order confirmed v1](../../contracts/schemas/nats-sales-order-confirmed-v1.json) is a tenant- and organization-scoped commercial fact on `v1.business.<tenant-uuid>.sales.event.order.confirmed.v1`, retained by `ERP4US_BUSINESS_EVENTS_V1`. It carries the order/line IDs, committed revision, catalog SKU and product revision, and exact whole-piece quantity. Customer details, addresses and prices stay in Sales. The event and confirmation commit in one Sales-owned document write; the relay sends the persisted message ID and advances the outbox only after a broker acknowledgement. The preview deploys one relay for the NovaMotion tenant and uses exact protocol/schema `1.0.0`; the relay does not assume exactly-once transport. [A wire example](../../contracts/examples/nats/sales-order-confirmed-v1.json) is checked independently of the Rust publisher. No Inventory consumer is implied by this event.
+
 ```mermaid
 sequenceDiagram
     participant HTTP as Master Data HTTP

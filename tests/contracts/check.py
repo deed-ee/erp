@@ -61,6 +61,11 @@ validate_url(OPENAPI.as_uri())
 validate_url((ROOT / "openapi/manufacturing-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/diagnostics-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/sales-v1.yaml").as_uri())
+sales_event = load(ROOT / "examples/nats/sales-order-confirmed-v1.json")
+sales_wire = validator("nats-sales-order-confirmed-v1.json")
+sales_wire.validate(sales_event)
+for quantity in (10, "01", "10.0", "1001"):
+    assert not sales_wire.is_valid({**sales_event, "payload": {**sales_event["payload"], "pieces": quantity}})
 for partner in load(ROOT.parent / "services/master-data/src/novamotion-partners.json"):
     validator("register-partner-v1.json").validate(partner)
 manifest_path = ROOT / "manifests/master-data-v1.json"

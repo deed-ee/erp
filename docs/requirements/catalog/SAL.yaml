@@ -33,8 +33,10 @@
   - 120
   contracts:
   - contracts/openapi/sales-v1.yaml
+  - contracts/schemas/nats-sales-order-confirmed-v1.json
   tests:
   - tests/integration/sales_drafts.py
+  - tests/integration/sales_confirmation.py
   evidence: []
   questions:
   - Which changes require a new confirmation?

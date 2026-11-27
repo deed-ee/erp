@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 axum = "=0.8.9"
 erp4us-identity.workspace = true
+erp4us-messaging.workspace = true
 http-body-util = "=0.1.5"
 hyper = { version = "=1.12.0", features = ["client", "http1"] }
 hyper-util = { version = "=0.1.21", features = ["tokio"] }

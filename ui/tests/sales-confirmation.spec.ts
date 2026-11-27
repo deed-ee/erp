@@ -1,0 +1,34 @@
+import { test, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+
+test('fixture: review and confirm a saved order in the authorized scope', async ({ page }) => {
+  test.skip(process.env.ERP4US_SALES_E2E !== '1', 'Requires the scoped Sales fixture stack');
+  const token = execFileSync('python3', ['tests/integration/identity_fixture.py', 'token'], {
+    cwd: '..', encoding: 'utf8',
+  }).trim();
+  await page.goto('/local-access');
+  await page.getByLabel('Demo token').fill(token);
+  await page.getByRole('button', { name: 'Use for this session' }).click();
+  await page.getByRole('link', { name: 'Sales orders' }).click();
+  await expect(page.getByRole('option', { name: /CUS-ATLAS/ })).toHaveCount(1);
+  await page.getByLabel('Customer', { exact: true }).selectOption({ label: 'CUS-ATLAS · Atlas Handling Technologies GmbH' });
+  await expect(page.getByRole('option', { name: /NM-1000/ })).toHaveCount(1);
+  await page.getByLabel('Pieces', { exact: true }).fill('10');
+  const saved = page.waitForResponse(response => response.url().endsWith('/v1/sales/orders')
+    && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  const response = await saved;
+  expect(response.status()).toBe(201);
+  const {id} = await response.json();
+  const row = page.getByRole('row').filter({hasText: id});
+  await expect(row.getByRole('cell', {name: 'Draft', exact: true})).toBeVisible();
+  await row.getByRole('button', {name: 'Review confirmation'}).click();
+  await page.getByRole('button', {name: 'Cancel review'}).click();
+  await expect(row.getByRole('cell', {name: 'Draft', exact: true})).toBeVisible();
+  await row.getByRole('button', {name: 'Review confirmation'}).click();
+  await page.getByRole('button', {name: 'Confirm order'}).click();
+  await expect(row.getByRole('cell', {name: 'Confirmed', exact: true})).toBeVisible();
+  await expect(row).toContainText('EUR 24900.00');
+  await page.getByLabel('Company and organization').selectOption({index: 2});
+  await expect(row).toHaveCount(0);
+});

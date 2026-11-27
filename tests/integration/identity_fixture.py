@@ -59,14 +59,18 @@ def initialize():
                 "permissions": [f"master-data.{resource}.{action}"
                                 for resource in ("article", "unit", "partner")
                                  for action in ("read", "register")] + [
-                                     "manufacturing.plan.read", "sales.order.read", "sales.order.draft.create"],
+                                     "manufacturing.plan.read", "sales.order.read", "sales.order.draft.create",
+                                     "sales.order.confirm"],
             },
             grant(TENANT, OTHER_ORGANIZATION, "read"),
             {"tenant_id": OTHER_TENANT, "organization_id": EXTERNAL_ORGANIZATION,
              "permissions": ["master-data.article.read", "sales.order.read"]},
         ]},
         "synthetic-reader": {"actor_id": "254474cf-c105-473e-9843-38dd023d8a39",
-                             "grants": [grant(TENANT, ORGANIZATION, "read")]},
+                              "grants": [grant(TENANT, ORGANIZATION, "read")]},
+        "synthetic-sales-observer": {"actor_id": "9c8188df-9a86-4359-84a8-fd9df8eb0966",
+                                     "grants": [{"tenant_id": TENANT, "organization_id": ORGANIZATION,
+                                                 "permissions": ["sales.order.read"]}]},
         "synthetic-platform": {"actor_id": "263494cf-c105-473e-9843-38dd023d8a39",
                                "grants": [], "platform_permissions": ["platform.health.read"]},
         "synthetic-registration": {"actor_id": "935c486c-37bc-4408-9629-7857100ba57c",

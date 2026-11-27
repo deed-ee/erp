@@ -1,4 +1,5 @@
 mod catalog;
+mod delivery;
 mod domain;
 mod store;
 
@@ -8,14 +9,14 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use domain::{CreateDraft, Draft};
 use erp4us_identity::{Auth, Denial, Scope};
 use mongodb::Client;
 use serde::{Deserialize, Serialize};
 use std::{env, io};
-use store::{Insert, SavedOrder, Store};
+use store::{Confirm, ConfirmOrder, Insert, SavedOrder, Store};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use uuid::Uuid;
 
@@ -40,6 +41,7 @@ struct Page {
 
 const READ: &str = "sales.order.read";
 const CREATE: &str = "sales.order.draft.create";
+const CONFIRM: &str = "sales.order.confirm";
 
 fn scope(auth: &Auth, headers: &HeaderMap, permission: &str) -> Result<Scope, StatusCode> {
     auth.authorize(headers, permission)
@@ -56,10 +58,7 @@ async fn create(
     input: Result<Json<CreateDraft>, JsonRejection>,
 ) -> Result<(StatusCode, Json<Draft>), StatusCode> {
     let scope = scope(&app.auth, &headers, CREATE)?;
-    let Json(input) = input.map_err(|err| match err.status() {
-        StatusCode::PAYLOAD_TOO_LARGE | StatusCode::UNSUPPORTED_MEDIA_TYPE => err.status(),
-        _ => StatusCode::BAD_REQUEST,
-    })?;
+    let Json(input) = input.map_err(command_rejection)?;
     let quantity = input.quantity().ok_or(StatusCode::UNPROCESSABLE_ENTITY)?;
     // An identical retry returns the original snapshots even if an upstream owner is down.
     if let Some(old) = app.orders.get(scope, input.id).await.map_err(storage)? {
@@ -90,6 +89,41 @@ async fn create(
     }
 }
 
+fn command_rejection(err: JsonRejection) -> StatusCode {
+    match err.status() {
+        StatusCode::PAYLOAD_TOO_LARGE | StatusCode::UNSUPPORTED_MEDIA_TYPE => err.status(),
+        _ => StatusCode::BAD_REQUEST,
+    }
+}
+
+async fn confirm(
+    State(app): State<Sales>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    input: Result<Json<ConfirmOrder>, JsonRejection>,
+) -> Result<Json<Draft>, StatusCode> {
+    let scope = scope(&app.auth, &headers, CONFIRM)?;
+    let Json(input) = input.map_err(command_rejection)?;
+    if id.is_nil() || input.command_id.is_nil() || input.expected_revision == 0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let mut values = headers.get_all("traceparent").iter();
+    let trace = values
+        .next()
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| values.next().is_none() && erp4us_messaging::valid_traceparent(value));
+    match app
+        .orders
+        .confirm(scope, id, input, trace.map(str::to_owned))
+        .await
+        .map_err(storage)?
+    {
+        Confirm::Saved(order) => Ok(Json(*order)),
+        Confirm::Missing => Err(StatusCode::NOT_FOUND),
+        Confirm::Conflict => Err(StatusCode::CONFLICT),
+    }
+}
+
 fn retry(
     old: SavedOrder,
     scope: Scope,
@@ -115,7 +149,7 @@ async fn detail(
         .get(scope, id)
         .await
         .map_err(storage)?
-        .map(|order| Json(order.draft))
+        .map(|order| Json(order.view()))
         .ok_or(StatusCode::NOT_FOUND)
 }
 
@@ -148,10 +182,11 @@ fn required(key: &str) -> io::Result<String> {
 #[tokio::main]
 async fn main() -> io::Result<()> {
     tracing_subscriber::fmt().json().init();
-    let auth = Auth::load(
-        &required("ERP4US_IDENTITY_POLICY")?,
-        &required("ERP4US_ISSUER_JWKS")?,
-    )?;
+    let relay = match env::args().nth(1).as_deref() {
+        None => false,
+        Some("relay") => true,
+        Some(_) => return Err(io::Error::other("Unknown Sales role")),
+    };
     let uri = required("SALES_MONGODB_URI")?;
     let db = Client::with_uri_str(uri)
         .await
@@ -160,6 +195,13 @@ async fn main() -> io::Result<()> {
     let orders = Store::open(db)
         .await
         .map_err(|_| io::Error::other("Could not initialize Sales storage"))?;
+    if relay {
+        return delivery::relay(orders).await;
+    }
+    let auth = Auth::load(
+        &required("ERP4US_IDENTITY_POLICY")?,
+        &required("ERP4US_ISSUER_JWKS")?,
+    )?;
     let ready = orders.clone();
     let listener = tokio::net::TcpListener::bind(
         env::var("ERP4US_BIND").unwrap_or_else(|_| "127.0.0.1:8092".into()),
@@ -182,6 +224,7 @@ async fn main() -> io::Result<()> {
             )
             .route("/v1/sales/orders", get(list).post(create))
             .route("/v1/sales/orders/{id}", get(detail))
+            .route("/v1/sales/orders/{id}/confirmation", post(confirm))
             .layer(DefaultBodyLimit::max(4096))
             .layer(middleware::from_fn(
                 |request: Request, next: Next| async move {
