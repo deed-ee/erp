@@ -17,4 +17,4 @@ time = { version = "=0.3.55", features = ["serde-well-known"] }
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["json"] }
-uuid = { version = "=1.23.1", features = ["v4", "serde"] }
+uuid = { version = "=1.29.3", features = ["v4", "serde"] }
