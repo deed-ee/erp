@@ -34,3 +34,5 @@ The first apply reports `applied`; the replay reports `alreadyApplied`. The expo
 - Exit `0` means the command succeeded, including an exact replay. Exit `2` means no successful apply or export was emitted. A failed initial creation can leave an uninitialized file; choose a new sandbox path rather than treating it as a checkpoint. There is no production schema migration. To roll back the rehearsal, stop using the local sandbox; keep it if needed for evidence.
 
 This proves the checkpoint, retry and comparison behavior on synthetic normalized inputs, not a supported legacy connector, production shadow deployment or authorization to cut over. Live exports and writes still need scoped service contracts; switching the leading system and fallback remain [#110](https://github.com/erp4us-org/erp4us/issues/110).
+
+For the follow-on evidence checks, see the [order-entry cutover and fallback rehearsal](order-entry-cutover-rehearsal.md).
