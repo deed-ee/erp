@@ -32,14 +32,14 @@ class PreviewTest(unittest.TestCase):
         self.context = ["--tenant-id", self.legacy["tenantId"], "--organization-id", self.legacy["organizationId"],
                         "--source-system", self.legacy["sourceSystem"], "--checkpoint", self.legacy["checkpoint"]]
 
-    def run_preview(self):
+    def run_preview(self, *options):
         with tempfile.TemporaryDirectory() as directory:
             files = {"legacy.json": json.dumps(self.legacy), "mapping.json": json.dumps(self.mapping)}
             for filename, content in files.items():
                 (Path(directory) / filename).write_text(content)
             result = subprocess.run(
                 [sys.executable, str(ROOT / "scripts/preview-order-import.py"), *self.context,
-                 "--mapping-revision", "map-3", *files],
+                 "--mapping-revision", "map-3", *options, *files],
                 text=True, capture_output=True, check=False, timeout=10, cwd=directory,
             )
             self.assertEqual({p.name: p.read_text() for p in Path(directory).iterdir()}, files)
@@ -119,3 +119,19 @@ class PreviewTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
         self.assertIn("quantity", result.stderr)
+
+    def test_change_preview_keeps_checkpoint_chain_and_cancellation(self):
+        self.legacy = json.loads((FIXTURES / "legacy-import-change-0043.json").read_text())
+        self.context[-1] = self.legacy["checkpoint"]
+        window_validator = validator("order-change-window-v1.json")
+        window_validator.validate(self.legacy)
+        result = self.run_preview("--change-window")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        window = json.loads(result.stdout)["normalizedWindow"]
+        window_validator.validate(window)
+        self.assertEqual(window, json.loads((FIXTURES / "order-change-0043.json").read_text()))
+        self.assertEqual(window["orders"][1]["status"], "cancelled")
+        self.mapping["mappings"].pop()
+        blocked = self.run_preview("--change-window")
+        self.assertEqual(blocked.returncode, 1, blocked.stderr)
+        self.assertNotIn("normalizedWindow", json.loads(blocked.stdout))

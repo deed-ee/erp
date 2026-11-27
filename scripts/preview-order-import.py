@@ -6,8 +6,8 @@ from pathlib import Path
 import sys
 
 from migration_inputs import (
-    REFERENCE, UNIT, InvalidInput, add_context_arguments, index_rows, matches, read_context,
-    read_scoped, read_snapshot,
+    REFERENCE, UNIT, InvalidInput, add_context_arguments, index_rows, matches,
+    read_change_window, read_context, read_scoped, read_snapshot,
 )
 
 
@@ -51,6 +51,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_context_arguments(parser)
     parser.add_argument("--mapping-revision", required=True)
+    parser.add_argument("--change-window", action="store_true",
+                        help="preview a change window instead of an initial snapshot")
     parser.add_argument("legacy", type=Path)
     parser.add_argument("mapping", type=Path)
     args = parser.parse_args()
@@ -59,10 +61,17 @@ def main():
         parser.error("invalid mapping revision")
     mapping_scope = {key: value for key, value in expected.items() if key != "checkpoint"}
     try:
-        orders = read_snapshot(args.legacy, {**expected, "snapshotRole": "legacy"})
+        if args.change_window:
+            previous, orders = read_change_window(args.legacy, expected)
+            envelope = {"previousCheckpoint": previous}
+            output_key = "normalizedWindow"
+        else:
+            orders = read_snapshot(args.legacy, {**expected, "snapshotRole": "legacy"})
+            if not orders:
+                raise InvalidInput("no orders to preview")
+            envelope = {"snapshotRole": "legacy"}
+            output_key = "normalizedSnapshot"
         mapping = read_mapping(args.mapping, {**mapping_scope, "mappingRevision": args.mapping_revision})
-        if not orders:
-            raise InvalidInput("no orders to preview")
     except InvalidInput as error:
         print(f"preview: {error}", file=sys.stderr)
         return 2
@@ -70,11 +79,9 @@ def main():
     report = {"schemaVersion": 1, **expected, "mappingRevision": args.mapping_revision,
               "acceptedOrderCount": len(normalized), "rejectedOrderCount": len(rejected),
               "rejectedOrders": rejected}
-    # The output snapshot always covers the full source window, never a partial order set.
+    # The output always covers the full source window, never a partial order set.
     if not rejected:
-        report["normalizedSnapshot"] = {
-            "schemaVersion": 1, "snapshotRole": "legacy", **expected, "orders": normalized,
-        }
+        report[output_key] = {"schemaVersion": 1, **envelope, **expected, "orders": normalized}
     print(json.dumps(report, indent=2))
     return 1 if rejected else 0
 
