@@ -17,6 +17,7 @@ const fixtureScope = {
 export class ArticleApi {
   private readonly credential = signal('');
   private readonly verifiedGrants = signal<Grant[]>([]);
+  private readonly verifiedPlatform = signal<string[]>([]);
   private readonly selected = signal(0);
   private pending?: AbortController;
   readonly hasCredential = computed(() => Boolean(this.credential()));
@@ -25,6 +26,7 @@ export class ArticleApi {
   readonly selectedIndex = this.selected.asReadonly();
   readonly canPlan = computed(() => this.grant()?.permissions.includes('manufacturing.plan.read') ?? false);
   readonly canReadPartners = computed(() => this.grant()?.permissions.includes('master-data.partner.read') ?? false);
+  readonly canReadHealth = computed(() => this.verifiedPlatform().includes('platform.health.read'));
 
   setCredential(value: string) {
     if (!isLoopback() || !value.trim()) return false;
@@ -47,6 +49,7 @@ export class ArticleApi {
     this.pending?.abort();
     this.credential.set('');
     this.verifiedGrants.set([]);
+    this.verifiedPlatform.set([]);
     this.selected.set(0);
   }
   selectGrant(index: number) {
@@ -59,10 +62,13 @@ export class ArticleApi {
   requestHeaders(): Record<string, string> {
     const scope = this.grant() ?? fixtureScope;
     return {
-      Authorization: `Bearer ${this.credential()}`,
+      ...this.bearerHeaders(),
       'X-Erp4us-Tenant': scope.tenant_id,
       'X-Erp4us-Organization': scope.organization_id,
     };
+  }
+  bearerHeaders() {
+    return { Authorization: `Bearer ${this.credential()}` };
   }
   private async readGrants(token: string): Promise<boolean> {
     const pending = new AbortController();
@@ -73,12 +79,15 @@ export class ArticleApi {
         signal: AbortSignal.any([pending.signal, AbortSignal.timeout(5000)]),
       });
       if (!response.ok) return false;
-      const principal: { grants?: Grant[] } = await response.json();
+      const principal: { grants?: Grant[]; platform_permissions?: string[] } = await response.json();
       if (!pending.signal.aborted && principal && Array.isArray(principal.grants)) {
         this.verifiedGrants.set(principal.grants.filter(grant => grant && isArticleId(grant.tenant_id)
           && isArticleId(grant.organization_id) && Array.isArray(grant.permissions)
           && grant.permissions.every(permission => typeof permission === 'string')));
-        return this.verifiedGrants().length > 0;
+        if (Array.isArray(principal.platform_permissions)) {
+          this.verifiedPlatform.set(principal.platform_permissions.filter(permission => typeof permission === 'string'));
+        }
+        return this.verifiedGrants().length > 0 || this.verifiedPlatform().length > 0;
       }
     } catch {
       // No verified grants are exposed on failure. The original local fixture

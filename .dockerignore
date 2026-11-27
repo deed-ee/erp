@@ -32,3 +32,7 @@
 !services/manufacturing/Cargo.toml
 !services/manufacturing/src/
 !services/manufacturing/src/**
+!services/diagnostics/
+!services/diagnostics/Cargo.toml
+!services/diagnostics/src/
+!services/diagnostics/src/**

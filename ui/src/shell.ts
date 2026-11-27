@@ -22,7 +22,10 @@ export class Shell {
   readonly api = inject(ArticleApi);
   readonly visible = computed(() => visibleModules(this.registration.modules, {
     ...this.registration.access,
-    permissions: new Set(this.api.grant()?.permissions ?? []),
+    permissions: new Set([
+      ...(this.api.grant()?.permissions ?? []).filter(permission => !permission.startsWith('platform.')),
+      ...(this.api.canReadHealth() ? ['platform.health.read'] : []),
+    ]),
   }));
   readonly routeData = signal<Record<string, unknown>>({});
   readonly mobileNav = signal(false);

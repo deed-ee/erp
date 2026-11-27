@@ -4,10 +4,17 @@ cd "$(dirname "$0")/.."
 python3 scripts/preview-identity.py prepare
 export ERP4US_IDENTITY_DIR=./.erp4us-preview
 export ERP4US_ENV_FILE="$PWD/.erp4us-preview/compose.env"
+export COMPOSE_PROJECT_NAME=erp4us-preview
 if [ ! -f "$ERP4US_ENV_FILE" ]; then sh scripts/init-dev.sh; fi
+if ! grep -q '^DEV_NATS_DIAGNOSTICS_PASSWORD=' "$ERP4US_ENV_FILE"; then
+    password=$(openssl rand -hex 32)
+    printf 'DEV_NATS_DIAGNOSTICS_PASSWORD=%s\n' "$password" >> "$ERP4US_ENV_FILE"
+    unset password
+fi
 compose() {
     docker compose -p erp4us-preview --env-file "$ERP4US_ENV_FILE" \
-        -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml "$@"
+        -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml \
+        -f compose.preview-identity.yaml -f compose.diagnostics.yaml "$@"
 }
 compose up -d preview-identity
 python3 scripts/preview-identity.py configure

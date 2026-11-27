@@ -24,7 +24,7 @@ The synthetic issuer is only for automated fixture tests, not user authenticatio
 
 ## Try the real browser login
 
-On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 9443 and 4200 free, run:
+On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 8091, 9443 and 4200 free, run:
 
 ```sh
 sh scripts/demo-start.sh
@@ -33,24 +33,33 @@ npm ci
 npm start
 ```
 
-This uses the fixed `erp4us-preview` Compose project, generated local infrastructure credentials, a pinned Keycloak development instance, MongoDB and the existing NATS delivery infrastructure. It provisions two fictional users with different tenant permissions. It stores secrets in the private `.erp4us-preview/` directory, not in Git or the UI configuration. If necessary trust the generated local-only certificate at `.erp4us-preview/provider/localhost.crt` in the browser used for the demo; do not alter production trust settings. Visit `http://127.0.0.1:4200/local-access` and use **Sign in with Keycloak** and `production` from the local credentials file. Choose **Manufacturing**, **NM-1000** and ten pieces to see both subassemblies and the gross material table. `auditor` is scoped to the other tenant and cannot read NovaMotion planning data. The login uses authorization code with PKCE and the backend makes scope and permissions available through the verified session endpoint. Access tokens are kept in memory; there is no production token refresh or identity-policy management in this checkpoint.
+This uses the fixed `erp4us-preview` Compose project, generated local infrastructure credentials, a pinned Keycloak development instance, MongoDB and the existing NATS delivery infrastructure. It provisions two fictional tenant users and a separate platform monitor. It stores secrets in the private `.erp4us-preview/` directory, not in Git or the UI configuration. If necessary trust the generated local-only certificate at `.erp4us-preview/provider/localhost.crt` in the browser used for the demo; do not alter production trust settings. Visit `http://127.0.0.1:4200/local-access` and use **Sign in with Keycloak** and `production` from the local credentials file. Choose **Manufacturing**, **NM-1000** and ten pieces to see both subassemblies and the gross material table. `auditor` is scoped to the other tenant and cannot read NovaMotion planning data. The login uses authorization code with PKCE and the backend makes scope and permissions available through the verified session endpoint. Access tokens are kept in memory; there is no production token refresh or identity-policy management in this checkpoint.
 
 Run `ERP4US_REAL_OIDC_E2E=1 npm run test:e2e -- tests/preview-signin.spec.ts` from `ui/` against this stack. The Playwright certificate exception applies only to that dedicated local test. To stop without deleting volumes:
 
 ```sh
 ERP4US_IDENTITY_DIR=./.erp4us-preview docker compose -p erp4us-preview \
   --env-file .erp4us-preview/compose.env -f compose.yaml -f compose.delivery.yaml \
-  -f compose.manufacturing.yaml -f compose.preview-identity.yaml down
+  -f compose.manufacturing.yaml -f compose.preview-identity.yaml \
+  -f compose.diagnostics.yaml down
 ```
 
 The explicit demo seed also creates three fictitious customers (including Atlas Handling) and four suppliers in Master Data. Browse the records under **Master data → Business partners** and filter by role. The directory and optional profile are published in the [Master Data API](../../contracts/openapi/master-data-v1.yaml); existing profile-free records remain valid. Seeding again does not overwrite an existing code in its scope. Addresses are synthetic and the current preview has one address and one delivery address per profile, no external identifier import.
 
 The new image scan checks Keycloak and its Java dependencies. The current pinned upstream image still produces one fixable advisory match tracked in [#121](https://github.com/erp4us-org/erp4us/issues/121). Keep this preview loopback-only with synthetic data; do not waive the gate or treat local functional tests as final approval.
 
+### Check application readiness
+
+Sign in with the separate `platform-monitor` account and open **Administration**. The [diagnostics adapter](../adr/0007-preview-application-observation.md) probes Master Data, Manufacturing and JetStream. A responding service can still be unready; a stopped service produces **Not responding**, not a fabricated container status. The screen refreshes about every six seconds. Tenant roles do not implicitly grant platform access.
+
+The same screen shows live counters for the preview business stream and `article-receipts` consumer, with missing observations marked unavailable rather than shown as zero. The adapter uses a dedicated metadata-only broker grant, no Docker socket or forwarded upstream response bodies. Runtime inventory, heartbeat age and redacted logs remain in [#122](https://github.com/erp4us-org/erp4us/issues/122).
+
+If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-preview-data` **only when the isolated synthetic data can be discarded**. The script targets the fixed `erp4us-preview` project and its Compose volumes, not the old fixture or any other project. It archives locally generated identity material under a private git-ignored directory. Start again to generate fresh users and keys.
+
 ## Remaining acceptance gates
 
 - Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
 - Scoped draft orders and confirmation, live stock and reservations, shortage drafts, purchasing and partial receipts.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
-- Restricted diagnostics/collector, actual health/heartbeat status and logs. Do not grant runtime access to any UI, gateway or business container.
+- Restricted diagnostics collector for actual runtime inventory, heartbeat staleness, and redacted historical/live logs. Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.

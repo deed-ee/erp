@@ -13,6 +13,7 @@ service_password=$(openssl rand -hex 32)
     printf 'DEV_NATS_RECEIPTS_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_NATS_REPLAY_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_NATS_CONFIG_READER_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+    printf 'DEV_NATS_DIAGNOSTICS_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_RECEIPTS_MONGO_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_MANUFACTURING_MONGO_PASSWORD=%s\n' "$(openssl rand -hex 32)"
 } > "${ERP4US_ENV_FILE:-.env}"

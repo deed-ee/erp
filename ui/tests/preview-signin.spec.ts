@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 test.use({ ignoreHTTPSErrors: true }); // Only for the locally generated preview certificate.
 
-async function login(page: Page, user: 'production' | 'auditor') {
+async function login(page: Page, user: 'production' | 'auditor' | 'platform-monitor') {
   const passwords: Record<string, string> = JSON.parse(readFileSync('../.erp4us-preview/credentials.json', 'utf8'));
   await page.goto('/local-access');
   await page.getByRole('button', { name: 'Sign in with Keycloak' }).click();
@@ -11,7 +11,11 @@ async function login(page: Page, user: 'production' | 'auditor') {
   await page.locator('#username').fill(user);
   await page.locator('#password').fill(passwords[user]);
   await page.locator('#kc-login').click();
-  await expect(page.getByLabel('Company and organization')).toBeVisible({ timeout: 20000 });
+  if (user === 'platform-monitor') {
+    await expect(page.getByRole('banner')).toContainText('Platform operations', { timeout: 20000 });
+  } else {
+    await expect(page.getByLabel('Company and organization')).toBeVisible({ timeout: 20000 });
+  }
   await expect(page).toHaveURL('http://127.0.0.1:4200/');
 }
 
@@ -44,4 +48,17 @@ test('real OIDC: the other tenant cannot read NovaMotion manufacturing data', as
     'X-Erp4us-Organization': '3e793fb5-75a7-45f6-8f66-45a58fcec674',
   }});
   expect(result.status()).toBe(403);
+  expect((await page.request.get('/v1/admin/application-health', { headers: { Authorization: authorization } })).status()).toBe(403);
+});
+
+test('real OIDC: platform monitor sees actual application health', async ({ page }) => {
+  test.skip(process.env.ERP4US_REAL_OIDC_E2E !== '1', 'Requires the dedicated Keycloak preview stack');
+  await login(page, 'platform-monitor');
+  await page.getByRole('link', { name: 'Administration' }).click();
+  await expect(page.getByRole('heading', { name: 'Application health' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'master-data' }).getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'manufacturing' }).getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'jetstream' }).getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
+  await expect(page.getByText('Stored messages', { exact: true })).toBeVisible();
+  await expect(page.getByText('Awaiting acknowledgement', { exact: true })).toBeVisible();
 });

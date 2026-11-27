@@ -9,7 +9,7 @@ import sys
 import time
 
 
-DIRECTORY = Path(".dev-auth")
+DIRECTORY = Path(os.getenv("ERP4US_TEST_IDENTITY_DIR", ".dev-auth"))
 KEY = DIRECTORY / "issuer-test.key"
 ISSUER = "https://issuer.erp4us.test/realms/synthetic"
 AUDIENCE = "erp4us-master-data"
@@ -65,6 +65,8 @@ def initialize():
         ]},
         "synthetic-reader": {"actor_id": "254474cf-c105-473e-9843-38dd023d8a39",
                              "grants": [grant(TENANT, ORGANIZATION, "read")]},
+        "synthetic-platform": {"actor_id": "263494cf-c105-473e-9843-38dd023d8a39",
+                               "grants": [], "platform_permissions": ["platform.health.read"]},
         "synthetic-registration": {"actor_id": "935c486c-37bc-4408-9629-7857100ba57c",
                                    "grants": [grant(TENANT, OTHER_ORGANIZATION, "register"),
                                               grant(OTHER_TENANT, EXTERNAL_ORGANIZATION, "register")]},

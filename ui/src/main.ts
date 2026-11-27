@@ -1,6 +1,6 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideRouter, type Routes } from '@angular/router';
-import { LucideBoxes, LucideFactory, LucideLayoutDashboard } from '@lucide/angular';
+import { LucideActivity, LucideBoxes, LucideFactory, LucideLayoutDashboard } from '@lucide/angular';
 import { Shell } from './shell';
 import { Workspace, DemoAccess } from './workspace';
 import { isLoopback } from './article-api';
@@ -9,6 +9,7 @@ import { SHELL_REGISTRATION, type ShellRegistration } from './navigation';
 import { Manufacturing } from './manufacturing';
 import { SignInCallback } from './sign-in-callback';
 import { Partners } from './partners';
+import { ApplicationDiagnostics } from './application-diagnostics';
 
 const registration: ShellRegistration = {
   modules: [
@@ -20,12 +21,14 @@ const registration: ShellRegistration = {
       ] }
     ] },
     { schemaVersion: 1, id: 'manufacturing', label: 'manufacturing', icon: LucideFactory,
-      route: '/manufacturing', groups: [], permissions: ['manufacturing.plan.read'] }
+      route: '/manufacturing', groups: [], permissions: ['manufacturing.plan.read'] },
+    { schemaVersion: 1, id: 'administration', label: 'administration', icon: LucideActivity,
+      route: '/administration', groups: [], permissions: ['platform.health.read'] }
   ],
   panels: [{ id: 'product-guide', title: 'productGuide', component: ProductGuide }],
   access: {
-    installed: new Set(['workspace', 'master-data', 'manufacturing']),
-    enabled: new Set(['workspace', 'master-data', 'manufacturing']),
+    installed: new Set(['workspace', 'master-data', 'manufacturing', 'administration']),
+    enabled: new Set(['workspace', 'master-data', 'manufacturing', 'administration']),
     permissions: new Set()
   },
   localSetup: isLoopback()
@@ -42,6 +45,7 @@ const routes: Routes = [
   { path: 'auth/callback', component: SignInCallback, canMatch: [isLoopback] },
   { path: 'partners', component: Partners, data: {module: 'master-data'} },
   { path: 'manufacturing', component: Manufacturing, data: { module: 'manufacturing' } },
+  { path: 'administration', component: ApplicationDiagnostics, data: { module: 'administration' } },
   { path: '**', redirectTo: '' }
 ];
 

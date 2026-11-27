@@ -12,7 +12,7 @@ from identity_fixture import (ACTOR, EXTERNAL_ORGANIZATION, ORGANIZATION, OTHER_
                               OTHER_TENANT, TENANT, token)
 
 
-env = dict(line.split("=", 1) for line in Path(".env").read_text().splitlines()
+env = dict(line.split("=", 1) for line in Path(os.getenv("ERP4US_TEST_ENV_FILE", ".env")).read_text().splitlines()
            if line.strip() and not line.lstrip().startswith("#"))
 base = f"http://127.0.0.1:{os.getenv('ERP4US_PORT', env.get('ERP4US_PORT', '8080'))}"
 DEFAULT_BEARER = object()

@@ -19,7 +19,8 @@ CLIENT = "erp4us-workspace"
 AUDIENCE = "erp4us-master-data"
 NOVA = ("ddcae139-c1e8-47d2-8b48-349cb6f30ce5", "3e793fb5-75a7-45f6-8f66-45a58fcec674")
 OTHER = ("a260610d-ebcf-4bb7-b871-9d221ace30a8", "2886c61e-85d8-4688-813a-b59c6641f9f8")
-USERS = {"production": "142a290f-4bbc-438e-aefe-e3697a8bcd16", "auditor": "154474cf-c105-473e-9843-38dd023d8a39"}
+USERS = {"production": "142a290f-4bbc-438e-aefe-e3697a8bcd16", "auditor": "154474cf-c105-473e-9843-38dd023d8a39",
+         "platform-monitor": "163494cf-c105-473e-9843-38dd023d8a39"}
 
 
 def save(path, value, mode=0o600):
@@ -37,6 +38,8 @@ def prepare():
     if DEMO.exists():
         if not (DEMO / "credentials.json").is_file():
             raise SystemExit("Incomplete preview identity directory; inspect it before retrying")
+        if set(json.loads((DEMO / "credentials.json").read_text())) != USERS.keys():
+            raise SystemExit("Preview identity seed changed; reset the disposable preview before starting")
         return
     DEMO.mkdir(mode=0o700)
     for name in ("provider", "realm"):
@@ -81,6 +84,8 @@ def prepare():
             "master-data.partner.read", "master-data.unit.read",
         ])]},
         USERS["auditor"]: {"actor_id": USERS["auditor"], "grants": [grant(OTHER, ["master-data.article.read"])]},
+        USERS["platform-monitor"]: {"actor_id": USERS["platform-monitor"], "grants": [],
+                                    "platform_permissions": ["platform.health.read"]},
     }}, 0o644)
     save(DEMO / "credentials.json", credentials)
 

@@ -29,6 +29,8 @@ struct Config {
 pub struct Principal {
     actor_id: Uuid,
     grants: Vec<Grant>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    platform_permissions: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -166,6 +168,16 @@ impl Auth {
             organization,
             actor: principal.actor_id,
         })
+    }
+
+    pub fn authorize_platform(&self, headers: &HeaderMap, permission: &str) -> Result<(), Denial> {
+        let principal = self.authenticate(headers)?;
+        principal
+            .platform_permissions
+            .iter()
+            .any(|grant| grant == permission)
+            .then_some(())
+            .ok_or(Denial::Forbidden)
     }
 }
 

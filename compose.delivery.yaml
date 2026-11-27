@@ -15,6 +15,7 @@ services:
       DEV_NATS_RECEIPTS_PASSWORD: "\"${DEV_NATS_RECEIPTS_PASSWORD:?Run sh scripts/init-dev.sh first}\""
       DEV_NATS_REPLAY_PASSWORD: "\"${DEV_NATS_REPLAY_PASSWORD:?Generate a local replay password}\""
       DEV_NATS_CONFIG_READER_PASSWORD: "\"${DEV_NATS_CONFIG_READER_PASSWORD:?Generate a local config-reader password}\""
+      DEV_NATS_DIAGNOSTICS_PASSWORD: "\"${DEV_NATS_DIAGNOSTICS_PASSWORD:?Generate a local diagnostics password}\""
     volumes:
       - ./infrastructure/compose/article-nats.conf:/etc/nats/article-nats.conf:ro
       - jetstream-data:/data

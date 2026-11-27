@@ -12,7 +12,8 @@
           <option [value]="$index">{{ api.scopeLabel(grant) }}</option>
         }
       </select>
-    } @else { {{ t()('scope') }} }
+    } @else if (api.canReadHealth()) { {{ t()('platformContext') }} }
+    @else { {{ t()('scope') }} }
   </span>
   <div class="top-actions">
     <label class="sr-only" for="language">{{ t()('language') }}</label>

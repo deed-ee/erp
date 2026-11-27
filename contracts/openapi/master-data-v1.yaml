@@ -21,6 +21,7 @@ paths:
                 required: [actor_id, grants]
                 properties:
                   actor_id: { type: string, format: uuid }
+                  platform_permissions: { type: array, items: { type: string } }
                   grants:
                     type: array
                     items:
