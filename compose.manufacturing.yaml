@@ -23,8 +23,8 @@ services:
       ERP4US_IDENTITY_POLICY: /etc/erp4us/identity-policy.json
       ERP4US_ISSUER_JWKS: /etc/erp4us/issuer-jwks.json
     volumes:
-      - ./.dev-auth/identity-policy.json:/etc/erp4us/identity-policy.json:ro
-      - ./.dev-auth/issuer-jwks.json:/etc/erp4us/issuer-jwks.json:ro
+      - ${ERP4US_IDENTITY_DIR:-./.dev-auth}/identity-policy.json:/etc/erp4us/identity-policy.json:ro
+      - ${ERP4US_IDENTITY_DIR:-./.dev-auth}/issuer-jwks.json:/etc/erp4us/issuer-jwks.json:ro
     depends_on:
       manufacturing-db-init:
         condition: service_completed_successfully

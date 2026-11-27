@@ -93,7 +93,7 @@ jobs:
     needs: impact
     if: ${{ !cancelled() && (needs.impact.result != 'success' || needs.impact.outputs.compose != 'false') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       COMPOSE_PROJECT_NAME: erp4us-ci
       ERP4US_HEARTBEAT_SECONDS: "2"
@@ -177,6 +177,23 @@ jobs:
           npm run build
           npx playwright install --with-deps chromium
           npm run test:e2e
+      - name: Run real preview login and wrong-tenant browser checks
+        env:
+          ERP4US_PORT: '8180'
+          ERP4US_MANUFACTURING_PORT: '8190'
+          ERP4US_IDENTITY_DIR: ./.erp4us-preview
+          ERP4US_REAL_OIDC_E2E: '1'
+        run: |
+          python3 scripts/preview-identity.py prepare
+          jq -r 'to_entries[].value | "::add-mask::" + .' .erp4us-preview/credentials.json
+          docker tag erp4us-ci-master-data erp4us-ci-identity-master-data
+          docker tag erp4us-ci-manufacturing erp4us-ci-identity-manufacturing
+          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml "$@"; }
+          preview up -d preview-identity
+          python3 scripts/preview-identity.py configure
+          preview up --no-build -d master-data manufacturing
+          preview run --rm manufacturing-seed
+          npm --prefix ui run test:e2e -- tests/preview-signin.spec.ts
       - name: Save trusted npm download cache
         if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -187,6 +204,13 @@ jobs:
         run: docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml logs --no-color --tail=80
       - if: always()
         run: if [ -f .env ]; then docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml down -v; fi
+      - if: always()
+        env:
+          ERP4US_IDENTITY_DIR: ./.erp4us-preview
+        run: |
+          if [ -f .erp4us-preview/identity-policy.json ]; then
+            docker compose -p erp4us-ci-identity -f compose.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml down -v
+          fi
   audit:
     needs: impact
     if: ${{ !cancelled() && (needs.impact.result != 'success' || needs.impact.outputs.audit != 'false') }}

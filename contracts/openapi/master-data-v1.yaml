@@ -7,6 +7,31 @@ servers:
 security:
   - AccessToken: []
 paths:
+  /v1/session:
+    get:
+      operationId: getVerifiedSession
+      description: Return the operator-configured actor and grants for this verified bearer. Does not accept a tenant or organization selector.
+      responses:
+        '200':
+          description: Actor and its organization-scoped permission grants. Not cacheable.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [actor_id, grants]
+                properties:
+                  actor_id: { type: string, format: uuid }
+                  grants:
+                    type: array
+                    items:
+                      type: object
+                      required: [tenant_id, organization_id, permissions]
+                      properties:
+                        tenant_id: { type: string, format: uuid }
+                        organization_id: { type: string, format: uuid }
+                        permissions: { type: array, items: { type: string } }
+        '401': { description: Missing or invalid access token }
+        '403': { description: No operator grant policy for the principal }
   /v1/articles:register:
     parameters:
       - $ref: '#/components/parameters/Tenant'

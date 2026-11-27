@@ -22,9 +22,30 @@ python3 tests/integration/manufacturing.py
 
 The synthetic issuer is only for automated fixture tests, not user authentication. Run `npm ci` then `npm start` from `ui/`; `ERP4US_MANUFACTURING_E2E=1 npm run test:e2e` exercises the planning view through the running API. The [manufacturing contract](../../contracts/openapi/manufacturing-v1.yaml) documents the two scoped operations. Stop the isolated project with its same Compose files and project name. No migration touches existing Master Data, Inventory or Procurement state.
 
+## Try the real browser login
+
+On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 9443 and 4200 free, run:
+
+```sh
+sh scripts/demo-start.sh
+cd ui
+npm ci
+npm start
+```
+
+This uses the fixed `erp4us-preview` Compose project, generated local infrastructure credentials, a pinned Keycloak development instance, MongoDB and the existing NATS delivery infrastructure. It provisions two fictional users with different tenant permissions. It stores secrets in the private `.erp4us-preview/` directory, not in Git or the UI configuration. If necessary trust the generated local-only certificate at `.erp4us-preview/provider/localhost.crt` in the browser used for the demo; do not alter production trust settings. Visit `http://127.0.0.1:4200/local-access` and use **Sign in with Keycloak** and `production` from the local credentials file. Choose **Manufacturing**, **NM-1000** and ten pieces to see both subassemblies and the gross material table. `auditor` is scoped to the other tenant and cannot read NovaMotion planning data. The login uses authorization code with PKCE and the backend makes scope and permissions available through the verified session endpoint. Access tokens are kept in memory; there is no production token refresh or identity-policy management in this checkpoint.
+
+Run `ERP4US_REAL_OIDC_E2E=1 npm run test:e2e -- tests/preview-signin.spec.ts` from `ui/` against this stack. The Playwright certificate exception applies only to that dedicated local test. To stop without deleting volumes:
+
+```sh
+ERP4US_IDENTITY_DIR=./.erp4us-preview docker compose -p erp4us-preview \
+  --env-file .erp4us-preview/compose.env -f compose.yaml -f compose.delivery.yaml \
+  -f compose.manufacturing.yaml -f compose.preview-identity.yaml down
+```
+
 ## Remaining acceptance gates
 
-- Real provider/browser sign-in, permission-aware workflows, and editable tenant, organization, warehouse and role administration.
+- Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
 - Scoped draft orders and confirmation, live stock and reservations, shortage drafts, purchasing and partial receipts.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
 - Restricted diagnostics/collector, actual health/heartbeat status and logs. Do not grant runtime access to any UI, gateway or business container.

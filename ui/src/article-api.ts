@@ -33,6 +33,15 @@ export class ArticleApi {
     return true;
   }
 
+  async acceptAccessToken(token: string): Promise<boolean> {
+    if (!isLoopback() || !token.trim()) return false;
+    this.clearCredential();
+    this.credential.set(token);
+    if (await this.readGrants(token)) return true;
+    if (this.credential() === token) this.clearCredential();
+    return false;
+  }
+
   clearCredential() {
     this.pending?.abort();
     this.credential.set('');
@@ -54,7 +63,7 @@ export class ArticleApi {
       'X-Erp4us-Organization': scope.organization_id,
     };
   }
-  private async readGrants(token: string) {
+  private async readGrants(token: string): Promise<boolean> {
     const pending = new AbortController();
     this.pending = pending;
     try {
@@ -62,17 +71,19 @@ export class ArticleApi {
         headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', redirect: 'error',
         signal: AbortSignal.any([pending.signal, AbortSignal.timeout(5000)]),
       });
-      if (!response.ok) return;
+      if (!response.ok) return false;
       const principal: { grants?: Grant[] } = await response.json();
       if (!pending.signal.aborted && principal && Array.isArray(principal.grants)) {
         this.verifiedGrants.set(principal.grants.filter(grant => grant && isArticleId(grant.tenant_id)
           && isArticleId(grant.organization_id) && Array.isArray(grant.permissions)
           && grant.permissions.every(permission => typeof permission === 'string')));
+        return this.verifiedGrants().length > 0;
       }
     } catch {
       // No verified grants are exposed on failure. The original local fixture
       // flow may still display a request error from the owning service.
     }
+    return false;
   }
   register(article: Registration) { return this.request('/v1/articles:register', article); }
   get(id: string, signal?: AbortSignal): Promise<Result> {

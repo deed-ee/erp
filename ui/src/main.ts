@@ -7,6 +7,7 @@ import { isLoopback } from './article-api';
 import { Products, ProductRegistration, ProductDetail, ProductGuide, confirmLeave } from './products';
 import { SHELL_REGISTRATION, type ShellRegistration } from './navigation';
 import { Manufacturing } from './manufacturing';
+import { SignInCallback } from './sign-in-callback';
 
 const registration: ShellRegistration = {
   modules: [
@@ -34,6 +35,7 @@ const routes: Routes = [
     { path: ':id', component: ProductDetail, data: { panel: 'product-guide' } }
   ] },
   { path: 'local-access', component: DemoAccess, canMatch: [isLoopback] },
+  { path: 'auth/callback', component: SignInCallback, canMatch: [isLoopback] },
   { path: 'manufacturing', component: Manufacturing, data: { module: 'manufacturing' } },
   { path: '**', redirectTo: '' }
 ];

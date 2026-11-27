@@ -3,3 +3,5 @@
 /.venv/
 /.dev-auth/
 __pycache__/
+/.erp4us-preview/
+/ui/public/demo-oidc.json

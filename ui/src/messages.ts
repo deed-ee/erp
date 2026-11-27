@@ -1,4 +1,5 @@
 const en = {
+  signIn: 'Sign in with Keycloak', signOut: 'Sign out', signInFailed: 'Sign-in failed. Start again from local access.',
   selectScope: "Company and organization",
   manufacturing: "Manufacturing",
   manufacturingIntro: "Expand a released bill of materials and inspect gross requirements. Stock and purchase orders are not changed.",
@@ -42,6 +43,7 @@ const en = {
   unavailable: 'Request failed. Check the local API service and try again.'
 };
 const de: typeof en = {
+  signIn: 'Mit Keycloak anmelden', signOut: 'Abmelden', signInFailed: 'Anmeldung fehlgeschlagen. Starte erneut beim lokalen Zugang.',
   selectScope: "Mandant und Organisation",
   manufacturing: "Fertigung",
   manufacturingIntro: "Löse eine freigegebene Stückliste auf und prüfe den Bruttobedarf. Bestände und Bestellungen bleiben unverändert.",
