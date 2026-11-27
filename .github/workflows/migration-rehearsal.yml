@@ -8,6 +8,7 @@ on:
       - 'scripts/reconcile-orders.py'
       - 'scripts/migration_inputs.py'
       - 'scripts/preview-order-import.py'
+      - 'scripts/shadow-orders.py'
       - 'tests/migration/**'
       - 'tests/contracts/requirements.txt'
   push:
@@ -18,6 +19,7 @@ on:
       - 'scripts/reconcile-orders.py'
       - 'scripts/migration_inputs.py'
       - 'scripts/preview-order-import.py'
+      - 'scripts/shadow-orders.py'
       - 'tests/migration/**'
       - 'tests/contracts/requirements.txt'
 
