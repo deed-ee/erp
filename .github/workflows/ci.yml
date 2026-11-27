@@ -225,8 +225,11 @@ jobs:
           preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml "$@"; }
           preview up -d preview-identity
           python3 scripts/preview-identity.py configure
-          preview up --no-build -d master-data manufacturing sales diagnostics delivery-init
-          preview wait delivery-init
+          preview up --no-build -d --wait nats
+          # A foreground one-shot returns the initializer's exit status even if
+          # it exits before Compose could attach a separate wait operation.
+          preview run --rm --no-deps -T delivery-init
+          preview up --no-build -d master-data manufacturing sales diagnostics
           preview run --rm manufacturing-seed
           preview run --rm master-data-seed
           npm --prefix ui run test:e2e -- tests/preview-signin.spec.ts
