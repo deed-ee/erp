@@ -72,6 +72,14 @@ def read_snapshot(path, expected):
     return index_orders(snapshot["orders"])
 
 
+def read_change_window(path, expected):
+    window = read_scoped(path, expected, {"previousCheckpoint", "orders"}, "change window")
+    previous = window["previousCheckpoint"]
+    if not matches(REFERENCE, previous) or previous == expected["checkpoint"]:
+        raise InvalidInput("invalid previous checkpoint")
+    return previous, index_orders(window["orders"])
+
+
 def index_rows(rows, shape, id_field, validate, label):
     if not isinstance(rows, list):
         raise InvalidInput(f"expected {label} array")

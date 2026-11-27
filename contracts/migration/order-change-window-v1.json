@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scoped order change window for offline ERP migration rehearsal, version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tenantId", "organizationId", "sourceSystem", "previousCheckpoint", "checkpoint", "orders"],
+  "properties": {
+    "schemaVersion": {"type": "integer", "const": 1},
+    "tenantId": {"$ref": "order-snapshot-v1.json#/$defs/scopeId"},
+    "organizationId": {"$ref": "order-snapshot-v1.json#/$defs/scopeId"},
+    "sourceSystem": {"$ref": "order-snapshot-v1.json#/$defs/reference"},
+    "previousCheckpoint": {"$ref": "order-snapshot-v1.json#/$defs/reference"},
+    "checkpoint": {"$ref": "order-snapshot-v1.json#/$defs/reference"},
+    "orders": {"type": "array", "items": {"$ref": "order-snapshot-v1.json#/$defs/order"}}
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "tenantId": "10000000-0000-4000-8000-000000000001",
+  "organizationId": "20000000-0000-4000-8000-000000000001",
+  "sourceSystem": "demo-trading-legacy",
+  "previousCheckpoint": "order-export-0042",
+  "checkpoint": "order-export-0043",
+  "orders": [
+    {
+      "orderRef": "SO-100",
+      "status": "open",
+      "totalAmount": "100.00",
+      "currency": "EUR",
+      "lines": [
+        {"lineRef": "10", "articleRef": "BRACKET", "unit": "EA", "remainingQuantity": "3"},
+        {"lineRef": "20", "articleRef": "SCREW", "unit": "EA", "remainingQuantity": "4"}
+      ]
+    },
+    {
+      "orderRef": "SO-300",
+      "status": "cancelled",
+      "totalAmount": "12.34",
+      "currency": "EUR",
+      "lines": [
+        {"lineRef": "10", "articleRef": "STEEL", "unit": "KG", "remainingQuantity": "0"}
+      ]
+    }
+  ]
+}

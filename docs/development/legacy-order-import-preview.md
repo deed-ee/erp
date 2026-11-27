@@ -23,4 +23,8 @@ The [order snapshot contract](../../contracts/migration/order-snapshot-v1.json) 
 | `1` | At least one order has an unmapped article or unit mismatch. Find the source order and line in `rejectedOrders`. No partial normalized snapshot is emitted. |
 | `2` | An input is unusable, e.g. invalid structure, duplicate mapping, another scope, unexpected checkpoint, or stale mapping revision. No report is emitted. |
 
+For a [legacy change window](../../contracts/migration/order-change-window-v1.json), use `--change-window`, pass its new checkpoint and select the corresponding file. The passing report contains `normalizedWindow` instead of `normalizedSnapshot`, preserving both checkpoints. An empty change window is allowed; it explicitly records no touched orders.
+
 Use independently reviewed synthetic inputs; the tool does not prove the mapping reflects a live target catalog. Treat reports with real references as confidential and do not commit them. Applying an accepted batch, retaining checkpoints across runs, and catching up after initial load remain open in #108. No database migration or routing change is required.
+
+For a disposable demonstration of checkpointed apply and catch-up, see the [local shadow rehearsal](legacy-order-shadow.md). It uses normalized synthetic exports and does not import into a live service.
