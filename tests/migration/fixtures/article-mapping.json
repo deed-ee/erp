@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "tenantId": "10000000-0000-4000-8000-000000000001",
+  "organizationId": "20000000-0000-4000-8000-000000000001",
+  "sourceSystem": "demo-trading-legacy",
+  "mappingRevision": "map-3",
+  "mappings": [
+    {"sourceArticleRef": "OLD-BRACKET", "targetArticleRef": "BRACKET", "unit": "EA"},
+    {"sourceArticleRef": "OLD-SCREW", "targetArticleRef": "SCREW", "unit": "EA"},
+    {"sourceArticleRef": "OLD-STEEL", "targetArticleRef": "STEEL", "unit": "KG"}
+  ]
+}

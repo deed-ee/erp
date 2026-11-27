@@ -32,3 +32,5 @@ The report finds four discrepancies even though both sides have three orders: sw
 4. Inspect differences by order and line. Missing or unexpected orders/lines are separate from differences in values. Fix source mapping or import problems and repeat the rehearsal against a common checkpoint. `matches: true` describes the supplied records only; it is not proof of completeness or permission to change the leading system.
 
 This slice does not execute the legacy import or catch-up in [#108](https://github.com/erp4us-org/erp4us/issues/108), prove a production shadow environment suppresses outbound actions, or perform the cutover and fallback in [#110](https://github.com/erp4us-org/erp4us/issues/110). The synthetic contract can be replaced by reviewed export adapters later. There is no database migration to revert.
+
+If the legacy snapshot still uses source article codes, run the [offline import preview](legacy-order-import-preview.md) first. It emits a normalized snapshot only when every order maps cleanly.

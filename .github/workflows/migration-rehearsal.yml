@@ -6,6 +6,8 @@ on:
       - '.github/workflows/migration-rehearsal.yml'
       - 'contracts/migration/**'
       - 'scripts/reconcile-orders.py'
+      - 'scripts/migration_inputs.py'
+      - 'scripts/preview-order-import.py'
       - 'tests/migration/**'
       - 'tests/contracts/requirements.txt'
   push:
@@ -14,6 +16,8 @@ on:
       - '.github/workflows/migration-rehearsal.yml'
       - 'contracts/migration/**'
       - 'scripts/reconcile-orders.py'
+      - 'scripts/migration_inputs.py'
+      - 'scripts/preview-order-import.py'
       - 'tests/migration/**'
       - 'tests/contracts/requirements.txt'
 
