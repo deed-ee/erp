@@ -13,6 +13,11 @@ COPY . .
 RUN cargo build --locked --release -p article-delivery
 
 FROM debian:bookworm-20261104-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
+# Remove this layer once the pinned base ships the CVE-2025-6020 fix.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade libpam-modules libpam-modules-bin libpam-runtime libpam0g \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libpam-modules)" ge 1.5.2-6+deb12u3 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/target/release/article-delivery /usr/local/bin/article-delivery
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/article-delivery"]

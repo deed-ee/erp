@@ -7,10 +7,12 @@ Main pushes, merge groups, manual dispatches, and weekly monitoring always run t
 | Cache | Contents and invalidation | Policy |
 | --- | --- | --- |
 | Rust | Swatinem workspace dependency artifacts and Cargo downloads keyed by runner/toolchain, manifests, lockfile and relevant build settings. CI disables incremental builds and debug info to keep dependencies compact. No workspace binaries or Cargo-installed tools. | Restore on checked refs; save on `main` only. |
-| Docker | BuildKit `gha`, one scope per image and namespace. `cargo-chef` freezes the dependency recipe ahead of source compilation. Runtime stages contain only the release executables. | Save intermediate layers on `main`; other refs only import. A cache miss still builds the image normally. |
+| Docker | BuildKit `gha`, one scope per image and namespace. `cargo-chef` freezes the dependency recipe ahead of source compilation. Runtime stages use a pinned base and copy the release executables, not the build tools. | Save intermediate layers on `main`; other refs only import. A cache miss still builds the image normally. |
 | npm | `~/.npm/_cacache`, keyed by Node pin, OS/architecture and `ui/package-lock.json`. `npm ci` still verifies the lockfile and installs fresh. | Restore on checked refs; save on `main` only. |
 
 All caches are disposable and may be evicted. No credentials, `.env`, private registry configuration, or deployment artifacts belong in a cache. Keep the manual approval policy for Copilot PR workflows; do not use `pull_request_target` to run PR code. For a new compatible Rust service, include its build inputs in `.dockerignore`, give its image a separate scope, and keep module dependencies in the workspace. Monitor cache quota before adding scopes; if import/export outweighs recompilation, reduce retained layers or remove the least useful cache rather than bypassing checks.
+
+Master Data and Article Delivery temporarily install the Bookworm PAM security update during the runtime build because the published base does not yet include the fix for CVE-2025-6020. Once an official pinned base contains the fix, remove the package upgrade layer and run the same release-image advisory gate.
 
 ## Baseline and measurement
 
