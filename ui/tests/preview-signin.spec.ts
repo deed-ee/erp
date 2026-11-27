@@ -21,6 +21,13 @@ test('real OIDC: production planner calculates the NovaMotion bill of materials'
   await page.getByRole('link', { name: 'Manufacturing' }).click();
   await page.getByRole('button', { name: 'Calculate gross needs' }).click();
   await expect(page.getByRole('row').filter({ hasText: 'NM-ENDPLATE' })).toContainText('20 EA');
+  await page.getByRole('link', { name: 'Master data', exact: true }).click();
+  await page.getByRole('link', { name: 'Business partners' }).click();
+  await page.getByLabel('Role', { exact: true }).selectOption('customer');
+  await expect(page.getByRole('row').filter({ hasText: 'Atlas Handling Technologies GmbH' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'VectorDrive' })).toHaveCount(0);
+  await page.getByLabel('Role', { exact: true }).selectOption('supplier');
+  await expect(page.getByRole('row').filter({ hasText: 'VectorDrive' })).toBeVisible();
 });
 
 test('real OIDC: the other tenant cannot read NovaMotion manufacturing data', async ({ page }) => {

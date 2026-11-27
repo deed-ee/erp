@@ -13,5 +13,6 @@ compose up -d preview-identity
 python3 scripts/preview-identity.py configure
 compose up --build -d
 compose run --rm manufacturing-seed
+compose run --rm master-data-seed
 printf '%s\n' 'Preview API, broker and provider started. Start the Angular workspace with: cd ui && npm ci && npm start' \
     'Open http://127.0.0.1:4200/local-access. Demo credentials are in .erp4us-preview/credentials.json (local, private).'

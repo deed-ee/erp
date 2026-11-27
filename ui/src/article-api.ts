@@ -24,6 +24,7 @@ export class ArticleApi {
   readonly grant = computed(() => this.grants()[this.selected()]);
   readonly selectedIndex = this.selected.asReadonly();
   readonly canPlan = computed(() => this.grant()?.permissions.includes('manufacturing.plan.read') ?? false);
+  readonly canReadPartners = computed(() => this.grant()?.permissions.includes('master-data.partner.read') ?? false);
 
   setCredential(value: string) {
     if (!isLoopback() || !value.trim()) return false;

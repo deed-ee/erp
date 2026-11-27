@@ -147,7 +147,10 @@ jobs:
           compose up --no-build -d manufacturing
           compose run --rm manufacturing-seed
           compose run --rm manufacturing-seed
+          compose run --rm master-data-seed
+          compose run --rm master-data-seed
           python3 tests/integration/manufacturing.py
+          python3 tests/integration/preview_partners.py
       - name: Scan built service images
         run: |
           sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
@@ -193,6 +196,7 @@ jobs:
           python3 scripts/preview-identity.py configure
           preview up --no-build -d master-data manufacturing
           preview run --rm manufacturing-seed
+          preview run --rm master-data-seed
           npm --prefix ui run test:e2e -- tests/preview-signin.spec.ts
       - name: Save trusted npm download cache
         if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'

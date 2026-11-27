@@ -8,12 +8,16 @@ import { Products, ProductRegistration, ProductDetail, ProductGuide, confirmLeav
 import { SHELL_REGISTRATION, type ShellRegistration } from './navigation';
 import { Manufacturing } from './manufacturing';
 import { SignInCallback } from './sign-in-callback';
+import { Partners } from './partners';
 
 const registration: ShellRegistration = {
   modules: [
     { schemaVersion: 1, id: 'workspace', label: 'workspace', icon: LucideLayoutDashboard, route: '/', groups: [] },
     { schemaVersion: 1, id: 'master-data', label: 'masterData', icon: LucideBoxes, route: '/products', groups: [
-      { id: 'catalog', label: 'catalog', entries: [{ id: 'products', label: 'products', route: '/products' }] }
+      { id: 'catalog', label: 'catalog', entries: [
+        { id: 'products', label: 'products', route: '/products' },
+        { id: 'partners', label: 'partners', route: '/partners', permissions: ['master-data.partner.read'] },
+      ] }
     ] },
     { schemaVersion: 1, id: 'manufacturing', label: 'manufacturing', icon: LucideFactory,
       route: '/manufacturing', groups: [], permissions: ['manufacturing.plan.read'] }
@@ -36,6 +40,7 @@ const routes: Routes = [
   ] },
   { path: 'local-access', component: DemoAccess, canMatch: [isLoopback] },
   { path: 'auth/callback', component: SignInCallback, canMatch: [isLoopback] },
+  { path: 'partners', component: Partners, data: {module: 'master-data'} },
   { path: 'manufacturing', component: Manufacturing, data: { module: 'manufacturing' } },
   { path: '**', redirectTo: '' }
 ];

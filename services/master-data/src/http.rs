@@ -47,6 +47,13 @@ pub(crate) fn router(store: Store, auth: Auth) -> Router {
             )),
         )
         .route(
+            "/v1/partners",
+            get(partners::list).layer(middleware::from_fn_with_state(
+                (auth.clone(), "master-data.partner.read"),
+                authorize,
+            )),
+        )
+        .route(
             "/v1/partners:register",
             post(partners::register).layer(middleware::from_fn_with_state(
                 (auth.clone(), "master-data.partner.register"),
