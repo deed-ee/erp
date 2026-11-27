@@ -4,10 +4,31 @@ from pathlib import Path
 import re
 import secrets
 import subprocess
+from time import monotonic, sleep
 
 
 def output(*args, **kwargs):
     return subprocess.check_output(args, text=True, timeout=120, **kwargs).strip()
+
+
+def wait_for_mongod(container):
+    # docker run -d returns before mongod is listening, especially on a cold runner.
+    command = ('docker', 'exec', container, 'mongosh', '--quiet',
+               'mongodb://127.0.0.1/?directConnection=true&serverSelectionTimeoutMS=1000',
+               '--eval', 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)')
+    deadline = monotonic() + 30
+    while monotonic() < deadline:
+        try:
+            probe = subprocess.run(command, capture_output=True, timeout=5, check=False)
+            if probe.returncode == 0:
+                return
+        except subprocess.TimeoutExpired:
+            pass
+        if output('docker', 'inspect', '--format', '{{.State.Running}}', container) != 'true':
+            break
+        sleep(0.25)
+    subprocess.run(['docker', 'logs', '--tail', '30', container], timeout=5, check=False)
+    raise RuntimeError('fixture mongod did not become ready to initialize')
 
 
 @contextmanager
@@ -24,6 +45,7 @@ def fixture_replica_set(database):
         return output('docker', 'exec', '-i', container, 'mongosh', '--quiet', '--nodb', '--file', '/dev/stdin', input=js)
 
     try:
+        wait_for_mongod(container)
         port = output('docker', 'port', container, '27017/tcp').split(':')[-1]
         # Only localhost inside the new container may bootstrap its first user.
         mongo('''const c = new Mongo("mongodb://127.0.0.1/?directConnection=true&serverSelectionTimeoutMS=10000");
