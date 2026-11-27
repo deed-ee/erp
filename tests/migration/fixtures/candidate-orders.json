@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "snapshotRole": "candidate",
+  "tenantId": "10000000-0000-4000-8000-000000000001",
+  "organizationId": "20000000-0000-4000-8000-000000000001",
+  "sourceSystem": "demo-trading-legacy",
+  "checkpoint": "order-export-0042",
+  "orders": [
+    {
+      "orderRef": "SO-100",
+      "status": "open",
+      "totalAmount": "100.0",
+      "currency": "EUR",
+      "lines": [
+        {"lineRef": "20", "articleRef": "SCREW", "unit": "EA", "remainingQuantity": "6"},
+        {"lineRef": "10", "articleRef": "BRACKET", "unit": "EA", "remainingQuantity": "4"}
+      ]
+    },
+    {
+      "orderRef": "SO-200",
+      "status": "open",
+      "totalAmount": "0",
+      "currency": "EUR",
+      "lines": [
+        {"lineRef": "10", "articleRef": "BRACKET", "unit": "EA", "remainingQuantity": "0"}
+      ]
+    },
+    {
+      "orderRef": "SO-300",
+      "status": "open",
+      "totalAmount": "12.3400",
+      "currency": "CHF",
+      "lines": [
+        {"lineRef": "10", "articleRef": "STEEL", "unit": "KG", "remainingQuantity": "1.1250"}
+      ]
+    }
+  ]
+}
