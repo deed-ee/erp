@@ -1,10 +1,10 @@
 use crate::{
     domain::Scope,
-    http::{DEMO_SCOPE, problem, unavailable},
+    http::{problem, unavailable},
     store::{InsertError, Store},
 };
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State, rejection::JsonRejection},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
@@ -84,13 +84,14 @@ struct UnitView {
 
 pub(crate) async fn register(
     State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
     body: Result<Json<RegisterUnit>, JsonRejection>,
 ) -> Response {
     let Json(command) = match body {
         Ok(body) => body,
         Err(rejection) => return problem(rejection.status(), "Invalid JSON request"),
     };
-    let unit = match Unit::register(DEMO_SCOPE, command) {
+    let unit = match Unit::register(scope, command) {
         Ok(unit) => unit,
         Err(detail) => return problem(StatusCode::UNPROCESSABLE_ENTITY, detail),
     };
@@ -106,11 +107,15 @@ pub(crate) async fn register(
     }
 }
 
-pub(crate) async fn find(State(store): State<Store>, Path(id): Path<String>) -> Response {
+pub(crate) async fn find(
+    State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
+    Path(id): Path<String>,
+) -> Response {
     let Ok(id) = Uuid::parse_str(&id) else {
         return problem(StatusCode::BAD_REQUEST, "Invalid unit ID");
     };
-    match store.get_unit(DEMO_SCOPE, id).await {
+    match store.get_unit(scope, id).await {
         Ok(Some(unit)) => Json(unit.view()).into_response(),
         Ok(None) => problem(StatusCode::NOT_FOUND, "Unit not found"),
         Err(error) => unavailable("find_unit", error),

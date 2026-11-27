@@ -30,7 +30,12 @@ export class ArticleApi {
     try {
       const response = await fetch(path, {
         method: body ? 'POST' : 'GET',
-        headers: { Authorization: `Bearer ${this.credential()}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        headers: {
+          Authorization: `Bearer ${this.credential()}`,
+          'X-Erp4us-Tenant': 'ddcae139-c1e8-47d2-8b48-349cb6f30ce5',
+          'X-Erp4us-Organization': '3e793fb5-75a7-45f6-8f66-45a58fcec674',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
         body: body ? JSON.stringify(body) : undefined,
         redirect: 'error', cache: 'no-store', signal: signal ? AbortSignal.any([signal, timeLimit]) : timeLimit
       });

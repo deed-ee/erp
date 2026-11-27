@@ -1,6 +1,6 @@
 [package]
 name = "master-data"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 rust-version.workspace = true
 publish = false
@@ -8,10 +8,11 @@ license.workspace = true
 
 [dependencies]
 axum = "=0.8.9"
+jsonwebtoken = { version = "=12.0.0", default-features = false, features = ["aws_lc_rs"] }
 erp4us-messaging.workspace = true
 mongodb = "=3.10.2"
 serde = { version = "=1.0.228", features = ["derive"] }
-subtle = "=2.6.1"
+serde_json.workspace = true
 time = { version = "=0.3.55", features = ["serde-well-known"] }
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "=0.1.44"

@@ -226,13 +226,23 @@ async fn run(role: &str, sequence: Option<u64>) -> Result<()> {
         return replay(&js, &mongo.database("article_receipts"), sequence).await;
     }
     if role == "relay" {
+        let tenant = match env::var("ARTICLE_RELAY_TENANT") {
+            Ok(value) => Some(
+                Uuid::parse_str(&value)
+                    .ok()
+                    .filter(|uuid| !uuid.is_nil())
+                    .ok_or_else(|| io::Error::other("Invalid ARTICLE_RELAY_TENANT"))?,
+            ),
+            Err(env::VarError::NotPresent) => None,
+            Err(error) => return Err(error.into()),
+        };
         let fallback =
             env::var("HEARTBEAT_SECONDS").map_or(Ok(15), |value| settings::period(&value))?;
         let db = mongo.database("master_data");
         let settings = settings::Settings::new(&db, fallback);
         let (period, updates) = tokio::sync::watch::channel(None);
         tokio::select! {
-            result = relay(&js, db.collection("outbox")) => result,
+            result = relay(&js, db.collection("outbox"), tenant) => result,
             result = settings.serve(&nats) => result,
             _ = settings.refresh(&js, period) => Ok(()),
             _ = heartbeat(&nats, updates) => Ok(()),
@@ -458,9 +468,9 @@ async fn provision(js: &JetStream) -> Result<()> {
     Ok(())
 }
 
-async fn relay(js: &JetStream, outbox: Collection<Document>) -> Result<()> {
+async fn relay(js: &JetStream, outbox: Collection<Document>, tenant: Option<Uuid>) -> Result<()> {
     loop {
-        match publish_next(js, &outbox).await {
+        match publish_next(js, &outbox, tenant).await {
             Ok(true) => continue,
             Ok(false) => {}
             Err(_) => eprintln!("Outbox delivery failed; will retry"),
@@ -469,11 +479,18 @@ async fn relay(js: &JetStream, outbox: Collection<Document>) -> Result<()> {
     }
 }
 
-async fn publish_next(js: &JetStream, outbox: &Collection<Document>) -> Result<bool> {
+async fn publish_next(
+    js: &JetStream,
+    outbox: &Collection<Document>,
+    tenant: Option<Uuid>,
+) -> Result<bool> {
+    let mut filter =
+        doc! {"publishedAt": {"$exists": false}, "deliveryRejectedAt": {"$exists": false}};
+    if let Some(tenant) = tenant {
+        filter.insert("tenantId", tenant.to_string());
+    }
     let Some(mut envelope) = outbox
-        .find_one(
-            doc! {"publishedAt": {"$exists": false}, "deliveryRejectedAt": {"$exists": false}},
-        )
+        .find_one(filter)
         .sort(doc! {"timestamp": 1, "_id": 1})
         .await?
     else {

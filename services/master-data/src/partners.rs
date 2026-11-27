@@ -1,14 +1,13 @@
 use crate::{
     domain::Scope,
-    http::{DEMO_SCOPE, problem, unavailable},
+    http::{problem, unavailable},
     store::Store,
 };
 use axum::{
-    Json, Router,
+    Extension, Json,
     extract::{Path, State, rejection::JsonRejection},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{get, post},
 };
 use mongodb::{
     Collection, Database, IndexModel,
@@ -28,7 +27,7 @@ enum Role {
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct RegisterPartner {
+pub(crate) struct RegisterPartner {
     code: String,
     name: String,
     roles: Vec<Role>,
@@ -130,21 +129,16 @@ pub(crate) async fn ensure_index(database: &Database) -> mongodb::error::Result<
     Ok(())
 }
 
-pub(crate) fn routes() -> Router<Store> {
-    Router::new()
-        .route("/v1/partners:register", post(register))
-        .route("/v1/partners/{id}", get(find))
-}
-
-async fn register(
+pub(crate) async fn register(
     State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
     body: Result<Json<RegisterPartner>, JsonRejection>,
 ) -> Response {
     let Json(command) = match body {
         Ok(body) => body,
         Err(rejection) => return problem(rejection.status(), "Invalid JSON request"),
     };
-    let partner = match Partner::new(DEMO_SCOPE, command) {
+    let partner = match Partner::new(scope, command) {
         Ok(partner) => partner,
         Err(detail) => return problem(StatusCode::UNPROCESSABLE_ENTITY, detail),
     };
@@ -164,11 +158,14 @@ async fn register(
     }
 }
 
-async fn find(State(store): State<Store>, Path(id): Path<String>) -> Response {
+pub(crate) async fn find(
+    State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
+    Path(id): Path<String>,
+) -> Response {
     let Ok(id) = Uuid::parse_str(&id) else {
         return problem(StatusCode::BAD_REQUEST, "Invalid partner ID");
     };
-    let scope = DEMO_SCOPE;
     match collection(store.database())
         .find_one(doc! {
             "_id": id.to_string(),

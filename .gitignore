@@ -1,4 +1,5 @@
 /target/
 /.env
 /.venv/
+/.dev-auth/
 __pycache__/

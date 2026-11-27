@@ -4,7 +4,7 @@
 
 erp4us aims to make business software composable: organizations should be able to run their own ERP and combine independently maintained business services without handing over their data or depending on any particular cloud or AI provider. People and agents operate on the same business commands, under the same authorization and audit rules. An open protocol and semantic models make those commands discoverable without exposing a service's database.
 
-**Status: foundation, not an ERP release.** The current local-only slice registers an article by SKU and retrieves it from MongoDB through the API or the Angular workspace. An optional JetStream demo delivers registration events to a separate receipt service. It does not yet have real tenant authentication or cross-service business workflows. Do not deploy it publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
+**Status: foundation, not an ERP release.** Master Data accepts verified OAuth access tokens and enforces operator-managed tenant and organization grants. The Angular workspace uses the synthetic local scope. An optional JetStream demo delivers registration events to a separate receipt service for that scope only. Do not deploy the Compose fixture publicly or enter real business data. Project materials are licensed under [Apache-2.0](LICENSE).
 
 ## Run the first slice
 
@@ -12,11 +12,12 @@ Prerequisites: Docker Engine 28+ or Docker Desktop with Compose v2, `openssl`, a
 
 ```sh
 sh scripts/init-dev.sh
+python3 tests/integration/identity_fixture.py
 docker compose up --build -d
 python3 tests/integration/smoke.py --restart
 ```
 
-The script waits for readiness, registers a synthetic article, verifies authorization and validation failures, restarts the service, and retrieves the same article. The command and response are documented in [OpenAPI](contracts/openapi/master-data-v1.yaml). The API listens on `127.0.0.1:8080`; set `ERP4US_PORT` in `.env` if needed. Stop with `docker compose down`; it preserves the local database. `docker compose down -v` **deletes** the demo data. Keep `.env` with the volume: regenerating it does not rotate existing MongoDB credentials.
+The fixture generates a machine-local test signing key and synthetic grants, not an identity provider. The smoke test exercises token verification, scope isolation and service restart. The request contract is in [OpenAPI](contracts/openapi/master-data-v1.yaml); see [Identity integration](docs/development/identity.md) for a self-hosted provider configuration. The API listens on `127.0.0.1:8080`; export `ERP4US_PORT` before starting Compose and running the smoke test to use a different port. `docker compose down` preserves the database; `docker compose down -v` **deletes** it. Keep `.env` with the volume: regenerating it does not rotate existing MongoDB credentials.
 
 Use the pinned Rust toolchain for `cargo test --locked`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets --locked -- -D warnings`. For contracts, install `tests/contracts/requirements.txt` in a Python virtual environment and run `python tests/contracts/check.py`.
 
@@ -24,7 +25,7 @@ Compose initializes a single-member MongoDB replica set for transactions. An exi
 
 The Compose CI job also runs the smoke test with `--outbox --units --restore` and the separate partner integration test (`tests/integration/partners.py`). Run these checks only with a disposable synthetic demo database and no concurrent writers. The outbox check temporarily rejects event inserts to prove that article registration rolls back. The restore check takes a logical dump of `master_data`, restores it into a fresh Compose project, and verifies that the article is readable and its SKU still cannot be registered twice. The restore API uses `127.0.0.1:8081` by default; set `ERP4US_RESTORE_PORT` to a free port if needed. The test leaves the source volume in place and removes the temporary project and dump. This is a local recovery drill, not a production backup procedure.
 
-The demo API also supports registering and fetching units of measure (for example `EA` for pieces). Submit `{"code":"EA"}` to `POST /v1/units:register` with the demo bearer token and use its `Location` header to fetch the unit. Codes are local to the tenant and organization; a code does not imply a conversion factor or a universal catalog entry. This does not yet link units to articles or perform quantity calculations.
+The demo API also supports registering and fetching units of measure (for example `EA` for pieces). Submit `{"code":"EA"}` to `POST /v1/units:register` with a scoped access token and use its `Location` header to fetch the unit. Codes are local to the tenant and organization; a code does not imply a conversion factor or a universal catalog entry. This does not yet link units to articles or perform quantity calculations.
 
 ### Try event delivery
 
@@ -56,7 +57,7 @@ npm ci
 npm start
 ```
 
-Open **http://127.0.0.1:4200/** and choose **Local demo access**. Paste only the `ERP4US_DEMO_TOKEN` value from the repository's local `.env` into the password field and select **Use for this session**. It lives in memory until reload; do not share it. In **Products**, register a synthetic article, then use the returned ID to retrieve it. Products cannot yet be browsed as a list, edited or deleted. Theme, language and density settings do not store business data or credentials.
+From the repository root, run `python3 tests/integration/identity_fixture.py token` to mint a short-lived local access token. Open **http://127.0.0.1:4200/**, choose **Local demo access**, paste the token into the password field, and select **Use for this session**. It lives in memory until reload; do not share it. In **Products**, register a synthetic article, then use the returned ID to retrieve it. Products cannot yet be browsed as a list, edited or deleted. Theme, language and density settings do not store business data or credentials.
 
 The Angular development server forwards `/v1/` to the loopback API. If you changed the API port in `.env`, start the UI with `ERP4US_PORT=<port> npm start`. This is a local preview on the existing demo auth contract, not the planned registry-driven UI or an OIDC login. From `ui/`, `npm run build` creates the static bundle; `npx playwright install chromium` and `npm run test:e2e` exercise the UI against the running demo API with synthetic data.
 
@@ -64,7 +65,7 @@ See the [UI component guide](ui/README.md), [architecture decision](docs/adr/000
 
 ## Help shape the first workflow
 
-The local demo API can register a business partner with `POST /v1/partners:register` and retrieve it from the response's `Location`. For example, send `{"code":"BP-100","name":"Example Trading","roles":["customer","supplier"]}` with the demo bearer token. Both roles refer to the same partner ID. Partner codes are unique within the tenant and organization. This slice does not yet support role changes, addresses, or real tenant authentication.
+The local demo API can register a business partner with `POST /v1/partners:register` and retrieve it from the response's `Location`. For example, send `{"code":"BP-100","name":"Example Trading","roles":["customer","supplier"]}` with a scoped access token. Both roles refer to the same partner ID. Partner codes are unique within the tenant and organization. This slice does not yet support role changes or addresses.
 
 - **Try the quickstart above.** Could you register and retrieve an article on your machine? If a step failed, [report where you got stuck](https://github.com/deed-ee/erp4us/issues/new?template=bug.md) with your OS, Docker version and the first failing step. Leave out credentials and use synthetic data.
 - **Bring an ERP example.** Suppose a customer orders ten units but only six are available. What should the salesperson see, and who decides what happens to the remaining four? Add an anonymized example and the outcome you would expect to the [order-to-procurement discussion in issue #16](https://github.com/deed-ee/erp4us/issues/16).

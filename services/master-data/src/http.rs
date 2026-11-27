@@ -1,10 +1,11 @@
 use crate::{
+    auth::{Auth, Denial, Permission},
     domain::{Article, RegisterArticle, Scope},
     partners,
     store::{InsertError, Store},
 };
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     extract::{DefaultBodyLimit, Path, Request, State, rejection::JsonRejection},
     http::{HeaderValue, StatusCode, header},
     middleware::{self, Next},
@@ -12,51 +13,86 @@ use axum::{
     routing::{get, post},
 };
 use serde::Serialize;
-use subtle::ConstantTimeEq;
 use time::OffsetDateTime;
-use uuid::{Uuid, uuid};
+use uuid::Uuid;
 
-pub(crate) const DEMO_SCOPE: Scope = Scope {
-    tenant: uuid!("ddcae139-c1e8-47d2-8b48-349cb6f30ce5"),
-    organization: uuid!("3e793fb5-75a7-45f6-8f66-45a58fcec674"),
-    actor: uuid!("242a290f-4bbc-438e-aefe-e3697a8bcd16"),
-};
-
-pub(crate) fn router(store: Store, token: String) -> Router {
+pub(crate) fn router(store: Store, auth: Auth) -> Router {
     Router::new()
-        .merge(partners::routes())
-        .route("/v1/articles:register", post(register))
-        .route("/v1/articles/{id}", get(find))
-        .route("/v1/units:register", post(crate::units::register))
-        .route("/v1/units/{id}", get(crate::units::find))
-        .route_layer(middleware::from_fn_with_state(token, authenticate))
+        .route(
+            "/v1/articles:register",
+            post(register).layer(middleware::from_fn_with_state(
+                (auth.clone(), Permission::Register),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/articles/{id}",
+            get(find).layer(middleware::from_fn_with_state(
+                (auth.clone(), Permission::Read),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/units:register",
+            post(crate::units::register).layer(middleware::from_fn_with_state(
+                (auth.clone(), Permission::RegisterUnit),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/units/{id}",
+            get(crate::units::find).layer(middleware::from_fn_with_state(
+                (auth.clone(), Permission::ReadUnit),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/partners:register",
+            post(partners::register).layer(middleware::from_fn_with_state(
+                (auth.clone(), Permission::RegisterPartner),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/partners/{id}",
+            get(partners::find).layer(middleware::from_fn_with_state(
+                (auth, Permission::ReadPartner),
+                authorize,
+            )),
+        )
         .layer(DefaultBodyLimit::max(4096))
         .route("/health/live", get(|| async { StatusCode::NO_CONTENT }))
         .route("/health/ready", get(ready))
         .with_state(store)
 }
 
-async fn authenticate(State(token): State<String>, request: Request, next: Next) -> Response {
-    let accepted = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split_once(' '))
-        .is_some_and(|(scheme, candidate)| {
-            scheme.eq_ignore_ascii_case("bearer")
-                && bool::from(token.as_bytes().ct_eq(candidate.as_bytes()))
-        });
-    if !accepted {
-        return (
+async fn authorize(
+    State((auth, permission)): State<(Auth, Permission)>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let mut response = match auth.authorize(request.headers(), permission) {
+        Ok(scope) => {
+            request.extensions_mut().insert(scope);
+            next.run(request).await
+        }
+        Err(Denial::Unauthenticated) => (
             [(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"))],
             problem(
                 StatusCode::UNAUTHORIZED,
-                "A valid demo bearer token is required",
+                "A valid bearer access token is required",
             ),
         )
-            .into_response();
-    }
-    let mut response = next.run(request).await;
+            .into_response(),
+        Err(Denial::InvalidScope) => problem(
+            StatusCode::BAD_REQUEST,
+            "Valid tenant and organization headers are required",
+        ),
+        Err(Denial::Forbidden) => problem(
+            StatusCode::FORBIDDEN,
+            "Operation not permitted in the requested scope",
+        ),
+    };
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -102,13 +138,14 @@ impl From<Article> for ArticleView {
 
 async fn register(
     State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
     body: Result<Json<RegisterArticle>, JsonRejection>,
 ) -> Response {
     let Json(command) = match body {
         Ok(body) => body,
         Err(rejection) => return problem(rejection.status(), "Invalid JSON request"),
     };
-    let article = match Article::register(DEMO_SCOPE, command) {
+    let article = match Article::register(scope, command) {
         Ok(article) => article,
         Err(detail) => return problem(StatusCode::UNPROCESSABLE_ENTITY, detail),
     };
@@ -130,11 +167,15 @@ async fn register(
     }
 }
 
-async fn find(State(store): State<Store>, Path(id): Path<String>) -> Response {
+async fn find(
+    State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
+    Path(id): Path<String>,
+) -> Response {
     let Ok(id) = Uuid::parse_str(&id) else {
         return problem(StatusCode::BAD_REQUEST, "Invalid article ID");
     };
-    match store.get(DEMO_SCOPE, id).await {
+    match store.get(scope, id).await {
         Ok(Some(article)) => Json(ArticleView::from(article)).into_response(),
         Ok(None) => problem(StatusCode::NOT_FOUND, "Article not found"),
         Err(error) => unavailable("find_article", error),

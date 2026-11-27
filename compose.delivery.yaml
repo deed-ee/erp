@@ -53,6 +53,7 @@ services:
     restart: on-failure
     environment:
       NATS_USER: article_relay
+      ARTICLE_RELAY_TENANT: ddcae139-c1e8-47d2-8b48-349cb6f30ce5
       NATS_PASSWORD: ${DEV_NATS_RELAY_PASSWORD:?Run sh scripts/init-dev.sh first}
       HEARTBEAT_SECONDS: ${ERP4US_HEARTBEAT_SECONDS:-15}
       MONGODB_URI: mongodb://master_data_app:${DEV_MASTER_DATA_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/master_data?replicaSet=erp4us&serverSelectionTimeoutMS=3000&w=majority

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 async function setDemoAccess(page: Page, token: string) {
@@ -10,8 +10,9 @@ async function setDemoAccess(page: Page, token: string) {
 }
 
 test('real API: keyboard registration, duplicate recovery and retrieval after reload', async ({ page }) => {
-  const token = /^ERP4US_DEMO_TOKEN=(.+)$/m.exec(readFileSync('../.env', 'utf8'))?.[1];
-  if (!token) throw new Error('Initialize the local demo first.');
+  const token = execFileSync('python3', ['tests/integration/identity_fixture.py', 'token'], {
+    cwd: '..', encoding: 'utf8',
+  }).trim();
   await page.goto('/');
   await setDemoAccess(page, token);
   await page.getByRole('link', { name: 'Open products' }).click();
