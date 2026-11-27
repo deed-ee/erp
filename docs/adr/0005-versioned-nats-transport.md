@@ -1,0 +1,9 @@
+# ADR 0005: Versioned NATS transport and shared Rust adapter
+
+**Status:** proposed for merge review; tracked in [the transport RFC issue](https://github.com/erp4us-org/erp4us/issues/97).
+
+Use one broker per deployment environment, with `config`, `business` and `diagnostics` as logical layers, not deployment stages. All new application subjects use `v<protocol-major>.<layer>.<scope>.<domain>.<kind>.<resource>.<action>.v<schema-major>`. Full versions travel in headers and the envelope. These are independent version axes; service and library have their own versions. The old subject format is historical only. See the [wire specification](../specifications/nats-messaging.md) for the normative rules.
+
+Retain [ADR 0002](0002-at-least-once.md): durable delivery uses a local outbox, broker acknowledgement, and a local idempotent consumer. Keep Core NATS for queries and ephemeral messages. Avoid three brokers at bootstrap, shared business models, and unscoped subjects. The shared Rust crate owns transport validation, not authorization or database policy. Separate TLS endpoints and connections per layer can be configured later without changing the wire contracts.
+
+On the baseline, Master Data writes Article and outbox together; the existing Article Delivery binary runs relay, receipt consumer, replay and provisioning as separate roles. Trace context, durable idempotency and recovery already existed. The old stream used a static unscoped subject, unversioned headers (except native deduplication and trace), broad inbox subscriptions, and no age limit. The new adapter replaces the delivery worker's wire code; Master Data stores the self-contained v1 envelope without connecting to the broker. Existing HTTP, semantic descriptors and agent boundaries stay unchanged. The [cutover runbook](../../infrastructure/nats/README.md) retains old data and explicitly gates the switch.

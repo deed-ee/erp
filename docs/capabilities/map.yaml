@@ -1,0 +1,626 @@
+PLT:
+  name: Platform Foundation
+  capability: PLT.01
+  outcome: Operate a recoverable installation
+  actors: Operator
+  owner: Platform operations
+  relationships: release → installation
+  actions: validate, promote, restore
+  exampleEvent: InstallationRestored
+  invariant: A failed upgrade leaves a recoverable checkpoint
+  report: Restore duration by release
+  dependsOn:
+  - INT
+  question: Recovery targets per installation?
+  lifecycle: uninitialized → ready → degraded → restored
+  permissionBoundary: Operator restores only into the selected installation
+  configurationAndVariants: Optional services disabled; size by tested workload
+  historicalEvidence: Retain deployment tuple, migration checkpoint and restore drill date
+IAM:
+  name: Identity and Access Management
+  capability: IAM.01
+  outcome: Delegate an explicit grant
+  actors: Access administrator
+  owner: 'IdP: identity; Organizations: memberships; each service: enforcement'
+  relationships: subject → membership → grant
+  actions: issue, revoke, expire
+  exampleEvent: MembershipRevoked
+  invariant: Discovery never grants execution
+  report: Denied operations by scope, without payloads
+  dependsOn:
+  - ORG
+  question: Revocation time for an offline service?
+  lifecycle: issued → active → expired/revoked
+  permissionBoundary: Grant administrator cannot infer membership from a selected scope
+  configurationAndVariants: Delegate per organization and purpose; reader ≠ writer
+  historicalEvidence: Keep issuer/subject binding and revocation evidence without bearer values
+ORG:
+  name: Organization Management
+  capability: ORG.01
+  outcome: Represent business responsibility
+  actors: Company administrator
+  owner: Organizations
+  relationships: tenant → legal entity → operating site
+  actions: establish, reorganize, retire
+  exampleEvent: SiteReassigned
+  invariant: Reporting lines do not grant access
+  report: Sites by legal entity at a date
+  dependsOn:
+  - IAM
+  question: Can a site serve two entities?
+  lifecycle: formed → active → reorganized → dissolved
+  permissionBoundary: Legal controller confirms ownership; hierarchy editor cannot extend grants
+  configurationAndVariants: Permit independent legal, operational and reporting hierarchies
+  historicalEvidence: Retain dated reassignments, zone and calendar applicable at posting
+LOC:
+  name: Localization and Internationalization
+  capability: LOC.01
+  outcome: Deliver reviewed local meaning
+  actors: Translator and local reviewer
+  owner: Resource owner approves text; localization coordinates
+  relationships: source revision → translation candidate
+  actions: draft, review, supersede
+  exampleEvent: TranslationApproved
+  invariant: A retry cannot overwrite approved human text
+  report: Missing and stale text by locale
+  dependsOn:
+  - ORG
+  - MDM
+  question: Which source fields may leave the tenant?
+  lifecycle: source → candidate → approved → stale
+  permissionBoundary: Translator writes candidates; resource owner approves
+  configurationAndVariants: BCP 47 fallback and local/provider policy per content class
+  historicalEvidence: Preserve source revision, glossary/memory version, origin and review
+MDM:
+  name: Master Data Management
+  capability: MDM.01
+  outcome: Maintain reusable record identity
+  actors: Data steward
+  owner: Master Data
+  relationships: article → identifier assignments
+  actions: register, amend, retire
+  exampleEvent: ArticleRegistered
+  invariant: An identifier change cannot change record identity
+  report: Duplicate candidates by scheme
+  dependsOn:
+  - ORG
+  question: Which records may be shared?
+  lifecycle: draft → active → superseded/retired
+  permissionBoundary: Steward may amend a record but not its use in another scope
+  configurationAndVariants: Shared definitions require opt-in, local attributes use typed definitions
+  historicalEvidence: Keep stable IDs, redirects and revision used in references
+BP:
+  name: Business Partner Management
+  capability: BP.01
+  outcome: Recognize one trading party in multiple roles
+  actors: Partner steward
+  owner: Master Data
+  relationships: partner → role → dated address
+  actions: qualify, activate, suspend role
+  exampleEvent: PartnerRoleSuspended
+  invariant: Suspending buying need not suspend selling
+  report: Active roles per partner
+  dependsOn:
+  - MDM
+  - ORG
+  question: Which address becomes binding at order time?
+  lifecycle: prospect → active role → suspended role
+  permissionBoundary: Buyer grants supplier eligibility; sales manages customer status
+  configurationAndVariants: Allow international address formats and several contact purposes
+  historicalEvidence: Snapshot address and role effective at commercial commitment
+PRD:
+  name: Product Management
+  capability: PRD.01
+  outcome: Compose saleable offerings
+  actors: Product owner
+  owner: 'Master Data: identity; each behavior owner: capability'
+  relationships: product → capability version
+  actions: define, activate, withdraw
+  exampleEvent: OfferingWithdrawn
+  invariant: Selling time requires no warehouse
+  report: Offerings by permitted capability
+  dependsOn:
+  - MDM
+  - UOM
+  question: Which combinations conflict?
+  lifecycle: defined → capabilities active → withdrawn
+  permissionBoundary: Product steward defines identity; capability owner enables behavior
+  configurationAndVariants: Physical, digital, service and mixed offerings coexist
+  historicalEvidence: Retain definition version for each delivered line
+UOM:
+  name: Units and Quantities
+  capability: UOM.01
+  outcome: Interpret an actual measurement
+  actors: Receiving clerk
+  owner: 'Master Data: definitions; posting owner: observed value'
+  relationships: reading → unit → conversion basis
+  actions: measure, convert, reconcile
+  exampleEvent: QuantityRecorded
+  invariant: Unrelated dimensions need explicit contextual evidence
+  report: Original and converted totals by unit
+  dependsOn:
+  - MDM
+  question: At what step is rounding applied?
+  lifecycle: defined → effective → retired
+  permissionBoundary: Unit steward publishes factors; poster records observations
+  configurationAndVariants: Decimal separators are presentation; pack factors can be product-specific
+  historicalEvidence: Keep source quantity, dimension, factor, rounding and conditions
+PIM:
+  name: Product Information Management
+  capability: PIM.01
+  outcome: Publish appropriate product descriptions
+  actors: Catalog editor
+  owner: Catalog editorial owner; Master Data owns product ID
+  relationships: product → localized channel entry
+  actions: author, approve, publish
+  exampleEvent: ListingPublished
+  invariant: An unpublished translation stays out of a public channel
+  report: Coverage by market and language
+  dependsOn:
+  - PRD
+  - LOC
+  question: Which channel gets fallback text?
+  lifecycle: draft → reviewed → published → withdrawn
+  permissionBoundary: Editor curates channel copy; reviewer releases to market
+  configurationAndVariants: Channel-specific locale and fallback; no assumed global taxonomy
+  historicalEvidence: Preserve published text, asset references and approval per edition
+DOC:
+  name: Document Management
+  capability: DOC.01
+  outcome: Preserve retrievable document evidence
+  actors: Document controller
+  owner: Documents
+  relationships: resource → document → file version
+  actions: stage, finalize, archive
+  exampleEvent: DocumentFinalized
+  invariant: An incomplete upload must not replace the released version
+  report: Missing certificates and expiry dates
+  dependsOn:
+  - IAM
+  - ORG
+  question: How long are superseded files retained?
+  lifecycle: pending → finalized → archived
+  permissionBoundary: Uploader cannot read another tenant's signed content
+  configurationAndVariants: Retention and localization differ for safety sheets and drawings
+  historicalEvidence: Keep checksums, content revisions, expiry and access evidence
+BOM:
+  name: Product Structures
+  capability: BOM.01
+  outcome: Release an effective component definition
+  actors: Design engineer
+  owner: Product engineering candidate
+  relationships: structure revision → component or output role
+  actions: draft, release, supersede
+  exampleEvent: StructureReleased
+  invariant: Changing a plan cannot rewrite a built instance
+  report: Where-used at a revision
+  dependsOn:
+  - PRD
+  - UOM
+  question: Which structures permit alternatives?
+  lifecycle: draft → released → superseded
+  permissionBoundary: Engineer releases an independently reviewed revision
+  configurationAndVariants: Permit alternatives, packaging, sales and formula structures
+  historicalEvidence: Freeze actual chosen revision, units and effective range
+INV:
+  name: Inventory Management
+  capability: INV.01
+  outcome: Control availability and reservations
+  actors: Warehouse operator
+  owner: Inventory
+  relationships: warehouse → ledger movement → reservation
+  actions: receive, reserve, reverse
+  exampleEvent: StockReserved
+  invariant: A reversal references its original posting
+  report: Available and held quantity by warehouse
+  dependsOn:
+  - PRD
+  - UOM
+  - ORG
+  question: Is partial reservation allowed?
+  lifecycle: eligible → held/reserved → shipped/reversed
+  permissionBoundary: Stock operator posts within warehouse scope; no edits to ledger
+  configurationAndVariants: Allow quarantine and partial policy by eligible stock class
+  historicalEvidence: Retain original movement, reservation and linked reversal
+PUR:
+  name: Procurement
+  capability: PUR.01
+  outcome: Turn a need into an authorized commitment
+  actors: Buyer and approver
+  owner: Procurement
+  relationships: requisition → proposal → purchase order
+  actions: propose, approve, issue
+  exampleEvent: PurchaseOrderIssued
+  invariant: Receipt facts belong to Inventory
+  report: Open obligations by supplier
+  dependsOn:
+  - BP
+  - UOM
+  question: Who approves a changed price?
+  lifecycle: requested → proposed → approved → issued
+  permissionBoundary: Approval limit scoped to buyer organization and amount
+  configurationAndVariants: Separate requisition and spending authority; supplier currency explicit
+  historicalEvidence: Keep order terms, approval basis and source demand
+SAL:
+  name: Sales
+  capability: SAL.01
+  outcome: Commit a reproducible customer promise
+  actors: Sales representative
+  owner: Sales
+  relationships: quotation → order → line snapshot
+  actions: quote, confirm, cancel
+  exampleEvent: OrderConfirmed
+  invariant: Later catalog prices cannot change a confirmed line
+  report: Open commitments by customer and date
+  dependsOn:
+  - BP
+  - PRD
+  question: When can the customer accept a split?
+  lifecycle: quoted → accepted → confirmed → cancelled
+  permissionBoundary: Sales confirms only within price/discount authority
+  configurationAndVariants: Partial fulfillment, taxes and non-stock line obligations vary
+  historicalEvidence: Store customer, quantity, price, currency and effective discount snapshot
+TRC:
+  name: Identification and Traceability
+  capability: TRC.01
+  outcome: Identify impact in both directions
+  actors: Recall coordinator
+  owner: 'Transaction owners: origin evidence; trace projection: navigation'
+  relationships: lot or serial → transformation → shipment
+  actions: assign, trace, correct
+  exampleEvent: LineageCorrected
+  invariant: Broker retention is not retention of business evidence
+  report: Affected lots and shipments with provenance
+  dependsOn:
+  - INV
+  - MFG
+  question: Who may see a downstream customer?
+  lifecycle: identified → transformed → shipped → corrected
+  permissionBoundary: Recall coordinator may traverse only permitted endpoints
+  configurationAndVariants: Allow serial, lot, supplier label and mixed measurements
+  historicalEvidence: Retain actual genealogy separately from planned recipes
+WFL:
+  name: Workflow Management
+  capability: WFL.01
+  outcome: Resume an interrupted business process
+  actors: Operations coordinator
+  owner: 'Workflow: process history; services: business effects'
+  relationships: correlation → step → compensation
+  actions: advance, suspend, resume
+  exampleEvent: ProcessResumed
+  invariant: Changing the screen state cannot create a stock posting
+  report: Waiting steps by cause and age
+  dependsOn:
+  - INT
+  - IAM
+  question: When should an operator intervene?
+  lifecycle: waiting → executing → blocked → resumed/completed
+  permissionBoundary: Operator can retry a step, not approve its business command by implication
+  configurationAndVariants: Configurable sequencing cannot skip mandatory domain approval
+  historicalEvidence: Keep transitions, causes, correlation and compensation links
+INT:
+  name: Integration
+  capability: INT.01
+  outcome: Exchange business facts reliably
+  actors: Integration operator
+  owner: 'Producer: contract and outbox; consumer: effects'
+  relationships: business revision → event → inbox effect
+  actions: publish, retry, quarantine, replay
+  exampleEvent: MessageQuarantined
+  invariant: Replay cannot duplicate an accepted effect
+  report: Lag and quarantines by consumer
+  dependsOn:
+  - PLT
+  - IAM
+  question: What is the replay horizon?
+  lifecycle: accepted → pending → acknowledged/quarantined
+  permissionBoundary: Replay operator restricted to tenant, producer and consumer
+  configurationAndVariants: Mappings vary by issuer, protocol and external schema
+  historicalEvidence: Keep version, correlation, source binding and dedup window
+AI:
+  name: AI and Agent Integration
+  capability: AI.01
+  outcome: Delegate approved business operations
+  actors: Agent operator and human approver
+  owner: 'Agent gateway: discovery; domain owner: execution'
+  relationships: tool schema → preview → approval → result
+  actions: discover, preview, approve, execute
+  exampleEvent: ApprovedActionExecuted
+  invariant: Approval binds arguments and revision; no model needed
+  report: Action evidence by correlation
+  dependsOn:
+  - IAM
+  - INT
+  question: Which actions always need human approval?
+  lifecycle: discovered → previewed → approved → executed/expired
+  permissionBoundary: Delegation checked at execution and approval
+  configurationAndVariants: Provider optional; set budgets, allowed tools and human review policy
+  historicalEvidence: Keep actor, input digest, revision, approval and explained result
+MFG:
+  name: Manufacturing
+  capability: MFG.01
+  outcome: Record work and measured outputs
+  actors: Production supervisor
+  owner: Manufacturing candidate
+  relationships: released plan → run → actual inputs and outputs
+  actions: plan, release, complete, correct
+  exampleEvent: RunCompleted
+  invariant: Planned yield is not actual output
+  report: Yield variance per run and grade
+  dependsOn:
+  - BOM
+  - UOM
+  - INV
+  question: How is rework attributed?
+  lifecycle: planned → released → running → completed/reworked
+  permissionBoundary: Supervisor releases work; operator records actuals
+  configurationAndVariants: Discrete assembly, batch and recovery runs can have multiple outputs
+  historicalEvidence: Keep actual inputs, observations and measured yield per run
+PLM:
+  name: Product Lifecycle Management
+  capability: PLM.01
+  outcome: Retain distinct product lifecycle views
+  actors: Lifecycle engineer
+  owner: Source services own facts; lifecycle view composes
+  relationships: design revision → serial → installed configuration
+  actions: release, deliver, replace
+  exampleEvent: ConfigurationChanged
+  invariant: Later service work cannot rewrite as-built evidence
+  report: Differences between built and maintained
+  dependsOn:
+  - BOM
+  - TRC
+  - DOC
+  question: Which gaps must an incomplete view expose?
+  lifecycle: designed → planned → built → delivered → maintained
+  permissionBoundary: Source owners authorize views and disclosure fields
+  configurationAndVariants: Allow sparse digital views and incomplete source coverage
+  historicalEvidence: Keep dated perspectives, linked evidence and freshness
+QMS:
+  name: Quality Management
+  capability: QMS.01
+  outcome: Determine disposition of inspected goods
+  actors: Quality inspector
+  owner: 'Quality: disposition; Inventory: availability'
+  relationships: inspection → finding → disposition
+  actions: sample, hold, release
+  exampleEvent: InspectionReleased
+  invariant: Only accepted disposition releases quarantined stock
+  report: Held quantities and unresolved deviations
+  dependsOn:
+  - INV
+  - DOC
+  question: Can a lot be partially released?
+  lifecycle: awaiting inspection → held → released/rejected
+  permissionBoundary: Authorized disposition independent of receipt
+  configurationAndVariants: Inspection rules and partial release vary by lot and jurisdiction
+  historicalEvidence: Retain sampling basis, result, disposition and effective standard
+PRJ:
+  name: Project Management
+  capability: PRJ.01
+  outcome: Deliver contracted work within a budget
+  actors: Project manager
+  owner: Projects candidate
+  relationships: project → work package → progress measurement
+  actions: plan, authorize, measure, close
+  exampleEvent: ProgressAccepted
+  invariant: Measured progress must refer to the applicable scope
+  report: Budget versus committed and actual
+  dependsOn:
+  - ORG
+  - CST
+  question: Who certifies subcontractor progress?
+  lifecycle: estimated → contracted → in progress → accepted
+  permissionBoundary: Project lead assigns work; customer delegate certifies progress
+  configurationAndVariants: Progress, time/material or milestone billing per contract
+  historicalEvidence: Keep scope revision, partial acceptance and change orders
+FIN:
+  name: Finance
+  capability: FIN.01
+  outcome: Record balanced legal books
+  actors: Accountant
+  owner: Finance candidate
+  relationships: legal entity → journal → posting
+  actions: prepare, post, reverse, close
+  exampleEvent: JournalPosted
+  invariant: Correct through compensating entries; never edit posted amounts
+  report: Trial balance and reconciliation by entity
+  dependsOn:
+  - ORG
+  - LOC
+  question: Which jurisdiction is in scope first?
+  lifecycle: draft → posted → reversed/closed
+  permissionBoundary: Accountant posts to authorized entity and open period
+  configurationAndVariants: Local charts, tax rules and currencies require jurisdiction review
+  historicalEvidence: Retain original entries, rate source and compensations
+CST:
+  name: Cost Management
+  capability: CST.01
+  outcome: Attribute resource consumption
+  actors: Controller
+  owner: Controlling candidate; Finance owns ledger
+  relationships: cost object → driver → allocation
+  actions: collect, allocate, reconcile
+  exampleEvent: CostAllocated
+  invariant: Allocated amounts reconcile to source and rounding residual
+  report: Actual versus planned by project
+  dependsOn:
+  - FIN
+  - ORG
+  question: Who owns allocation policy versions?
+  lifecycle: planned → accumulated → allocated → reconciled
+  permissionBoundary: Controller approves driver for reporting perimeter
+  configurationAndVariants: Cost center and project views can overlap without double posting
+  historicalEvidence: Keep driver version, cost basis and rounding residual
+LOG:
+  name: Logistics
+  capability: LOG.01
+  outcome: Track physical fulfillment
+  actors: Dispatcher
+  owner: 'Logistics: consignment; Inventory: movements'
+  relationships: delivery → consignment → proof
+  actions: pick, dispatch, acknowledge
+  exampleEvent: ConsignmentDelivered
+  invariant: Delivery evidence does not alone recognize revenue
+  report: Outstanding deliveries by destination
+  dependsOn:
+  - INV
+  - SAL
+  question: What constitutes accepted delivery?
+  lifecycle: planned → picked → dispatched → acknowledged
+  permissionBoundary: Carrier can acknowledge only assigned consignment
+  configurationAndVariants: Address, delivery terms and acceptance rules vary by market
+  historicalEvidence: Retain actual quantities, proof, time and source delivery
+AST:
+  name: Asset Management
+  capability: AST.01
+  outcome: Identify a managed physical instance
+  actors: Asset custodian
+  owner: Assets candidate
+  relationships: serial → asset → custody assignment
+  actions: commission, transfer, retire
+  exampleEvent: CustodyTransferred
+  invariant: Overlapping exclusive custody is invalid
+  report: Installed assets as of date
+  dependsOn:
+  - TRC
+  - ORG
+  question: When is a rented item a managed asset?
+  lifecycle: acquired → commissioned → in custody → retired
+  permissionBoundary: Custodian transfers a specific asset for a dated interval
+  configurationAndVariants: Rented and customer-owned assets need not be capitalized
+  historicalEvidence: Keep custody periods separately from title and financial value
+MNT:
+  name: Maintenance
+  capability: MNT.01
+  outcome: Restore fitness for use
+  actors: Maintenance planner
+  owner: Maintenance candidate
+  relationships: asset → work order → service entry
+  actions: schedule, isolate, repair, release
+  exampleEvent: AssetReturnedToUse
+  invariant: Out-of-service time blocks promised availability
+  report: Downtime and due work
+  dependsOn:
+  - AST
+  - DOC
+  question: Who approves release after repair?
+  lifecycle: scheduled → isolated → repaired → released
+  permissionBoundary: Technician records work; designated releaser restores availability
+  configurationAndVariants: Interval basis may be elapsed time or metered use
+  historicalEvidence: Keep replacement serials, inspection result and downtime
+SVC:
+  name: Service Management
+  capability: SVC.01
+  outcome: Deliver an agreed service outcome
+  actors: Service coordinator
+  owner: Service candidate
+  relationships: agreement → request → delivered work
+  actions: accept, assign, resolve, confirm
+  exampleEvent: ServiceAccepted
+  invariant: Service delivery must not require a stock movement
+  report: Unresolved requests and billable time
+  dependsOn:
+  - BP
+  - PRJ
+  question: When is customer acceptance required?
+  lifecycle: requested → assigned → delivered → accepted
+  permissionBoundary: Coordinator assigns; authorized recipient accepts outcome
+  configurationAndVariants: Digital entitlement or labor delivery need not ship a product
+  historicalEvidence: Keep agreement version, actual delivery and billable evidence
+HR:
+  name: Human Resources
+  capability: HR.01
+  outcome: Assign qualified people
+  actors: Workforce planner
+  owner: Workforce candidate
+  relationships: worker → qualification → assignment
+  actions: qualify, assign, expire
+  exampleEvent: QualificationExpired
+  invariant: An expired credential cannot satisfy a mandatory skill
+  report: Coverage of required skills without exposing private records
+  dependsOn:
+  - ORG
+  - IAM
+  question: Which details may a planner see?
+  lifecycle: qualified → assigned → qualification expired
+  permissionBoundary: Planner sees eligibility, not private personnel documents
+  configurationAndVariants: Local privacy rules and calendars restrict assignment
+  historicalEvidence: Retain eligibility as of service date under bounded retention
+ANA:
+  name: Analytics and Reporting
+  capability: ANA.01
+  outcome: Explain measures from authorized facts
+  actors: Analyst
+  owner: 'Fact owners: measures; analytics: projections'
+  relationships: fact revision → projection → report
+  actions: aggregate, reconcile, rebuild
+  exampleEvent: ProjectionRebuilt
+  invariant: Aggregates cannot reveal inaccessible organizations
+  report: As-of totals with freshness and source
+  dependsOn:
+  - INT
+  - IAM
+  question: What lag is acceptable per report?
+  lifecycle: defined → computed → stale → rebuilt
+  permissionBoundary: Analyst receives only authorized projection inputs and aggregates
+  configurationAndVariants: Saved filters and reporting hierarchies do not expand access
+  historicalEvidence: Keep source watermark, metric definition and rebuild provenance
+ESG:
+  name: Sustainability
+  capability: ESG.01
+  outcome: Account for measured material recovery
+  actors: Sustainability analyst
+  owner: Measurement owners; ESG reporting candidate
+  relationships: material stream → classification → indicator
+  actions: measure, classify, attest
+  exampleEvent: RecoveryMeasured
+  invariant: Do not count one output twice across indicators
+  report: Mass balance with unknown classifications
+  dependsOn:
+  - TRC
+  - UOM
+  question: Which reporting method and cutoff apply?
+  lifecycle: measured → classified → estimated/attested
+  permissionBoundary: Reviewer attests methodology, not unobserved measurements
+  configurationAndVariants: Schemes vary by country and material stream
+  historicalEvidence: Retain mass basis, source lot and distinction between estimates and facts
+CMP:
+  name: Compliance
+  capability: CMP.01
+  outcome: Demonstrate application of a local policy
+  actors: Compliance reviewer
+  owner: Owning service enforces reviewed local policy
+  relationships: jurisdiction → policy revision → evidence
+  actions: assess, approve, retain, expire
+  exampleEvent: PolicyApplied
+  invariant: An installed package is not proof of legal compliance
+  report: Exceptions by policy version
+  dependsOn:
+  - LOC
+  - DOC
+  question: Who validates local interpretation?
+  lifecycle: draft rule → reviewed → effective → expired
+  permissionBoundary: Local reviewer authorizes policy change, not blanket compliance
+  configurationAndVariants: Local regulation is a reviewed package rather than a universal invariant
+  historicalEvidence: Keep jurisdiction, policy version and retention/legal-hold decision
+IND:
+  name: Industry Packages
+  capability: IND.01
+  outcome: Extend shared models without a fork
+  actors: Package author and operator
+  owner: Registry validates; services enforce
+  relationships: package version → dependency → capability
+  actions: stage, validate, activate, retire
+  exampleEvent: PackageActivated
+  invariant: A package cannot expand actor permissions
+  report: Compatibility and active versions by organization
+  dependsOn:
+  - PLT
+  - IAM
+  - PRD
+  question: How are overlapping definitions reconciled?
+  lifecycle: proposed → compatible → active → retired
+  permissionBoundary: Operator activates package; services enforce command authority
+  configurationAndVariants: Resolve namespaced typed attributes, dependencies and migration
+  historicalEvidence: Retired package must leave referenced historical definitions readable

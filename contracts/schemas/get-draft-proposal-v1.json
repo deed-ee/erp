@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Look up a scoped Procurement draft by shortage reference v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "shortageId"],
+  "properties": {
+    "contract": {"const": "get-draft-proposal.v1"},
+    "shortageId": {"type": "string", "format": "uuid"}
+  }
+}

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 
@@ -53,7 +54,12 @@ def initialize():
                       "e": "AQAB"}]}
     policy = {"issuer": ISSUER, "audience": AUDIENCE, "principals": {
         "synthetic-writer": {"actor_id": ACTOR, "grants": [
-            grant(TENANT, ORGANIZATION, "read", "register"),
+            {
+                **grant(TENANT, ORGANIZATION, "read", "register"),
+                "permissions": [f"master-data.{resource}.{action}"
+                                for resource in ("article", "unit", "partner")
+                                for action in ("read", "register")],
+            },
             grant(TENANT, OTHER_ORGANIZATION, "read"),
             grant(OTHER_TENANT, EXTERNAL_ORGANIZATION, "read"),
         ]},
@@ -71,4 +77,9 @@ def initialize():
 
 
 if __name__ == "__main__":
-    initialize()
+    if sys.argv[1:] == ["token"]:
+        print(token())
+    elif not sys.argv[1:]:
+        initialize()
+    else:
+        sys.exit("Usage: identity_fixture.py [token]")

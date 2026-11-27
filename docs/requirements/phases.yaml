@@ -1,0 +1,34 @@
+M0:
+  name: Platform foundation
+  githubMilestone: 2
+  gate: Verified identity, scoped contracts, locale keys and reliable delivery on one local flow.
+M1:
+  name: Business foundation
+  githubMilestone: 4
+  gate: Two organizations, reusable partner roles and approved master-data scope; no inventory needed for a service
+    business.
+M2:
+  name: Product foundation
+  githubMilestone: 3
+  gate: Minimum product identity, units and snapshots needed by the first physical flow; advanced documents may
+    ship later.
+M3:
+  name: First business flow
+  githubMilestone: 3
+  gate: Demonstrate the ten/six/four order scenario and replay without duplicated effects.
+M4:
+  name: Manufacturing and traceability
+  githubMilestone: null
+  gate: Reconcile one measured transformation and trace a recall after replay.
+M5:
+  name: Digital product records
+  githubMilestone: null
+  gate: Compare original delivery and later maintenance from source evidence.
+M6:
+  name: International business
+  githubMilestone: null
+  gate: Reconcile two legal books under a reviewed jurisdiction-specific policy.
+M7:
+  name: Industry ecosystem
+  githubMilestone: null
+  gate: Show two compatible packages coexisting without extending grants.

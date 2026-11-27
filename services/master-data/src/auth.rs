@@ -46,6 +46,14 @@ pub(crate) enum Permission {
     Read,
     #[serde(rename = "master-data.article.register")]
     Register,
+    #[serde(rename = "master-data.unit.read")]
+    ReadUnit,
+    #[serde(rename = "master-data.unit.register")]
+    RegisterUnit,
+    #[serde(rename = "master-data.partner.read")]
+    ReadPartner,
+    #[serde(rename = "master-data.partner.register")]
+    RegisterPartner,
 }
 
 #[derive(Deserialize)]

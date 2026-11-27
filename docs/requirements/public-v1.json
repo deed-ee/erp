@@ -1,0 +1,1699 @@
+{
+  "schemaVersion": 1,
+  "requirements": [
+    {
+      "id": "AI-001",
+      "title": "Discover typed permitted actions",
+      "domain": "AI",
+      "capability": "AI.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-06"
+      ],
+      "industries": [
+        "professional-services",
+        "trade"
+      ],
+      "dependencies": [
+        "IAM-002",
+        "INT-002"
+      ],
+      "issues": [
+        19,
+        44
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "AI-002",
+      "title": "Bind preview and approval to execution",
+      "domain": "AI",
+      "capability": "AI.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [
+        "AI-001",
+        "INT-003"
+      ],
+      "issues": [
+        19,
+        44
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "ANA-001",
+      "title": "Rebuild scope-filtered indicators",
+      "domain": "ANA",
+      "capability": "ANA.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M3",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "INT-004"
+      ],
+      "issues": [
+        52
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "AST-001",
+      "title": "Prevent overlapping exclusive bookings",
+      "domain": "AST",
+      "capability": "AST.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M5",
+      "revision": 1,
+      "scenarios": [
+        "SC-11",
+        "SC-12"
+      ],
+      "industries": [
+        "agriculture",
+        "rental"
+      ],
+      "dependencies": [
+        "ORG-001"
+      ],
+      "issues": [
+        50
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "BOM-001",
+      "title": "Freeze the structure used for delivery",
+      "domain": "BOM",
+      "capability": "BOM.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M4",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-03"
+      ],
+      "industries": [
+        "chemicals",
+        "engineering"
+      ],
+      "dependencies": [
+        "PRD-001",
+        "UOM-001"
+      ],
+      "issues": [
+        46
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "BP-001",
+      "title": "Use one party across customer and supplier roles",
+      "domain": "BP",
+      "capability": "BP.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "ORG-001"
+      ],
+      "issues": [
+        26,
+        40
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "BP-002",
+      "title": "Retain dated contacts and addresses",
+      "domain": "BP",
+      "capability": "BP.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 2,
+      "scenarios": [
+        "SC-04",
+        "SC-08"
+      ],
+      "industries": [
+        "construction",
+        "international-group"
+      ],
+      "dependencies": [
+        "BP-001"
+      ],
+      "issues": [
+        26,
+        40
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "CMP-001",
+      "title": "Trace a jurisdiction-specific rule",
+      "domain": "CMP",
+      "capability": "CMP.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P3",
+      "milestone": "M6",
+      "revision": 1,
+      "scenarios": [
+        "SC-03",
+        "SC-07",
+        "SC-08"
+      ],
+      "industries": [
+        "chemicals",
+        "food",
+        "international-group"
+      ],
+      "dependencies": [
+        "LOC-003",
+        "DOC-001"
+      ],
+      "issues": [
+        43
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "CST-001",
+      "title": "Explain allocation residuals",
+      "domain": "CST",
+      "capability": "CST.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P3",
+      "milestone": "M6",
+      "revision": 1,
+      "scenarios": [
+        "SC-04",
+        "SC-08"
+      ],
+      "industries": [
+        "construction",
+        "international-group"
+      ],
+      "dependencies": [
+        "FIN-001"
+      ],
+      "issues": [
+        49
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "DOC-001",
+      "title": "Publish only complete document versions",
+      "domain": "DOC",
+      "capability": "DOC.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M2",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-03"
+      ],
+      "industries": [
+        "chemicals",
+        "engineering"
+      ],
+      "dependencies": [
+        "ORG-001"
+      ],
+      "issues": [
+        17,
+        45
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "ESG-001",
+      "title": "Separate measured and estimated recovery",
+      "domain": "ESG",
+      "capability": "ESG.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P3",
+      "milestone": "M7",
+      "revision": 1,
+      "scenarios": [
+        "SC-10",
+        "SC-12"
+      ],
+      "industries": [
+        "agriculture",
+        "recycling"
+      ],
+      "dependencies": [
+        "TRC-001"
+      ],
+      "issues": [
+        52
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FIN-001",
+      "title": "Explain currency and compensating postings",
+      "domain": "FIN",
+      "capability": "FIN.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M6",
+      "revision": 1,
+      "scenarios": [
+        "SC-04",
+        "SC-08"
+      ],
+      "industries": [
+        "construction",
+        "international-group"
+      ],
+      "dependencies": [
+        "ORG-002",
+        "LOC-003"
+      ],
+      "issues": [
+        49
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "HR-001",
+      "title": "Assign only currently qualified resources",
+      "domain": "HR",
+      "capability": "HR.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P3",
+      "milestone": "M5",
+      "revision": 1,
+      "scenarios": [
+        "SC-04",
+        "SC-06"
+      ],
+      "industries": [
+        "construction",
+        "professional-services"
+      ],
+      "dependencies": [
+        "IAM-002"
+      ],
+      "issues": [
+        48
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "IAM-001",
+      "title": "Verify the calling principal",
+      "domain": "IAM",
+      "capability": "IAM.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P0",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-08"
+      ],
+      "industries": [
+        "international-group"
+      ],
+      "dependencies": [],
+      "issues": [
+        2,
+        39
+      ],
+      "prs": [
+        15
+      ],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "IAM-002",
+      "title": "Separate read and write grants",
+      "domain": "IAM",
+      "capability": "IAM.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P0",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "IAM-001"
+      ],
+      "issues": [
+        2,
+        39
+      ],
+      "prs": [
+        15
+      ],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "IAM-003",
+      "title": "Protect service and agent identity lifecycle",
+      "domain": "IAM",
+      "capability": "IAM.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P0",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "IAM-001"
+      ],
+      "issues": [
+        2,
+        19,
+        39
+      ],
+      "prs": [
+        15
+      ],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "IND-001",
+      "title": "Prevent package authority escalation",
+      "domain": "IND",
+      "capability": "IND.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M7",
+      "revision": 1,
+      "scenarios": [
+        "SC-02",
+        "SC-06"
+      ],
+      "industries": [
+        "professional-services",
+        "timber"
+      ],
+      "dependencies": [
+        "IAM-002",
+        "INT-002"
+      ],
+      "issues": [
+        53
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "INT-001",
+      "title": "Deliver durable events with one local effect",
+      "domain": "INT",
+      "capability": "INT.01",
+      "type": "functional",
+      "status": "in-implementation",
+      "priority": "P0",
+      "milestone": "M0",
+      "revision": 2,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [],
+      "issues": [
+        4,
+        44
+      ],
+      "prs": [
+        68,
+        70
+      ],
+      "tests": [
+        "tests/integration/smoke.py"
+      ],
+      "evidence": [
+        "https://github.com/erp4us-org/erp4us/actions/runs/45273562523"
+      ]
+    },
+    {
+      "id": "INT-002",
+      "title": "Reject incompatible contract changes",
+      "domain": "INT",
+      "capability": "INT.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-05"
+      ],
+      "industries": [
+        "engineering",
+        "trade"
+      ],
+      "dependencies": [],
+      "issues": [
+        20,
+        44,
+        61
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "INT-003",
+      "title": "Retry a command without duplicating its effect",
+      "domain": "INT",
+      "capability": "INT.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-09"
+      ],
+      "industries": [
+        "software",
+        "trade"
+      ],
+      "dependencies": [
+        "ORG-001"
+      ],
+      "issues": [
+        44,
+        65
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "INT-004",
+      "title": "Resolve typed references under authorization",
+      "domain": "INT",
+      "capability": "INT.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-08"
+      ],
+      "industries": [
+        "engineering",
+        "international-group"
+      ],
+      "dependencies": [
+        "ORG-001",
+        "INT-002"
+      ],
+      "issues": [
+        20,
+        44
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "INT-005",
+      "title": "Report partial outcomes for bulk commands",
+      "domain": "INT",
+      "capability": "INT.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "INT-003"
+      ],
+      "issues": [
+        44
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "INT-006",
+      "title": "Exchange data through replaceable adapters",
+      "domain": "INT",
+      "capability": "INT.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P3",
+      "milestone": "M7",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-02"
+      ],
+      "industries": [
+        "engineering",
+        "timber"
+      ],
+      "dependencies": [
+        "MDM-002",
+        "INT-003"
+      ],
+      "issues": [
+        20,
+        44
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "INV-001",
+      "title": "Conserve available stock under competing reservations",
+      "domain": "INV",
+      "capability": "INV.01",
+      "type": "functional",
+      "status": "in-implementation",
+      "priority": "P1",
+      "milestone": "M3",
+      "revision": 2,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [
+        "UOM-001",
+        "INT-001"
+      ],
+      "issues": [
+        16,
+        24,
+        58,
+        91,
+        93
+      ],
+      "prs": [],
+      "tests": [
+        "tests/integration/inventory.py"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "LOC-001",
+      "title": "Keep resource keys independent of locale",
+      "domain": "LOC",
+      "capability": "LOC.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-06",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "professional-services"
+      ],
+      "dependencies": [],
+      "issues": [
+        3,
+        43
+      ],
+      "prs": [
+        38
+      ],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "LOC-002",
+      "title": "Protect approved translations across revisions",
+      "domain": "LOC",
+      "capability": "LOC.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-07",
+        "SC-08"
+      ],
+      "industries": [
+        "food",
+        "international-group"
+      ],
+      "dependencies": [
+        "LOC-001",
+        "MDM-003"
+      ],
+      "issues": [
+        43,
+        57
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "LOC-003",
+      "title": "Carry business date, zone and calendar",
+      "domain": "LOC",
+      "capability": "LOC.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-08",
+        "SC-12"
+      ],
+      "industries": [
+        "agriculture",
+        "international-group"
+      ],
+      "dependencies": [
+        "ORG-002"
+      ],
+      "issues": [
+        43,
+        64
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "LOG-001",
+      "title": "Relate shipments to accepted delivery",
+      "domain": "LOG",
+      "capability": "LOG.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M3",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "INV-001",
+        "SAL-001"
+      ],
+      "issues": [
+        51
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "MDM-001",
+      "title": "Register and retrieve an article in the local slice",
+      "domain": "MDM",
+      "capability": "MDM.01",
+      "type": "functional",
+      "status": "implemented",
+      "priority": "P0",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [],
+      "issues": [
+        36,
+        40
+      ],
+      "prs": [],
+      "tests": [
+        "tests/integration/smoke.py",
+        "tests/contracts/check.py"
+      ],
+      "evidence": [
+        "https://github.com/erp4us-org/erp4us/actions/runs/45234126484"
+      ]
+    },
+    {
+      "id": "MDM-002",
+      "title": "Preserve external identifier namespaces",
+      "domain": "MDM",
+      "capability": "MDM.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "ORG-001"
+      ],
+      "issues": [
+        40,
+        62
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "MDM-003",
+      "title": "Detect a stale edit",
+      "domain": "MDM",
+      "capability": "MDM.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-08"
+      ],
+      "industries": [
+        "engineering",
+        "international-group"
+      ],
+      "dependencies": [
+        "MDM-001"
+      ],
+      "issues": [
+        40,
+        63
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "MDM-004",
+      "title": "Separate valid time from recorded time",
+      "domain": "MDM",
+      "capability": "MDM.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-08"
+      ],
+      "industries": [
+        "engineering",
+        "international-group"
+      ],
+      "dependencies": [
+        "MDM-003"
+      ],
+      "issues": [
+        40,
+        55
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "MFG-001",
+      "title": "Reconcile measured outputs rather than assumed yield",
+      "domain": "MFG",
+      "capability": "MFG.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M4",
+      "revision": 1,
+      "scenarios": [
+        "SC-02",
+        "SC-03",
+        "SC-07",
+        "SC-10",
+        "SC-12"
+      ],
+      "industries": [
+        "agriculture",
+        "chemicals",
+        "food",
+        "recycling",
+        "timber"
+      ],
+      "dependencies": [
+        "BOM-001",
+        "UOM-001"
+      ],
+      "issues": [
+        46
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "MNT-001",
+      "title": "Block use during repair",
+      "domain": "MNT",
+      "capability": "MNT.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M5",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-11"
+      ],
+      "industries": [
+        "engineering",
+        "rental"
+      ],
+      "dependencies": [
+        "AST-001"
+      ],
+      "issues": [
+        50
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "ORG-001",
+      "title": "Isolate equal identifiers across tenants",
+      "domain": "ORG",
+      "capability": "ORG.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P0",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "IAM-002"
+      ],
+      "issues": [
+        2,
+        39
+      ],
+      "prs": [
+        15
+      ],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "ORG-002",
+      "title": "Distinguish operating and legal responsibility",
+      "domain": "ORG",
+      "capability": "ORG.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-04",
+        "SC-08"
+      ],
+      "industries": [
+        "construction",
+        "international-group"
+      ],
+      "dependencies": [],
+      "issues": [
+        39
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "ORG-003",
+      "title": "Share only nominated master records",
+      "domain": "ORG",
+      "capability": "ORG.01",
+      "type": "functional",
+      "status": "approved",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 2,
+      "scenarios": [
+        "SC-08"
+      ],
+      "industries": [
+        "international-group"
+      ],
+      "dependencies": [
+        "ORG-001",
+        "ORG-002"
+      ],
+      "issues": [
+        39,
+        54
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "ORG-004",
+      "title": "Allocate scoped business numbers",
+      "domain": "ORG",
+      "capability": "ORG.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-04",
+        "SC-08"
+      ],
+      "industries": [
+        "construction",
+        "international-group"
+      ],
+      "dependencies": [
+        "ORG-002",
+        "INT-003"
+      ],
+      "issues": [
+        39,
+        59
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PIM-001",
+      "title": "Publish a market-specific product description",
+      "domain": "PIM",
+      "capability": "PIM.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M2",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-07"
+      ],
+      "industries": [
+        "food",
+        "trade"
+      ],
+      "dependencies": [
+        "LOC-002",
+        "PRD-001"
+      ],
+      "issues": [
+        41
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PLM-001",
+      "title": "Compare delivered and maintained configuration",
+      "domain": "PLM",
+      "capability": "PLM.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M5",
+      "revision": 1,
+      "scenarios": [
+        "SC-01",
+        "SC-11"
+      ],
+      "industries": [
+        "engineering",
+        "rental"
+      ],
+      "dependencies": [
+        "BOM-001",
+        "TRC-001"
+      ],
+      "issues": [
+        45
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PLT-001",
+      "title": "Restore a synthetic installation",
+      "domain": "PLT",
+      "capability": "PLT.01",
+      "type": "non-functional",
+      "status": "in-implementation",
+      "priority": "P0",
+      "milestone": "M0",
+      "revision": 2,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [],
+      "issues": [
+        18
+      ],
+      "prs": [
+        37
+      ],
+      "tests": [
+        "tests/integration/smoke.py"
+      ],
+      "evidence": [
+        "https://github.com/erp4us-org/erp4us/actions/runs/45273562523"
+      ]
+    },
+    {
+      "id": "PLT-002",
+      "title": "Make deployment and migrations reproducible",
+      "domain": "PLT",
+      "capability": "PLT.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [
+        "PLT-001"
+      ],
+      "issues": [
+        18
+      ],
+      "prs": [
+        37
+      ],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PLT-003",
+      "title": "Measure resource and latency baselines",
+      "domain": "PLT",
+      "capability": "PLT.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [],
+      "issues": [
+        18,
+        60
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PLT-004",
+      "title": "Port business data to a fresh installation",
+      "domain": "PLT",
+      "capability": "PLT.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "ORG-001"
+      ],
+      "issues": [
+        18
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PLT-005",
+      "title": "Operate a keyboard-accessible workspace",
+      "domain": "PLT",
+      "capability": "PLT.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M0",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-06"
+      ],
+      "industries": [
+        "professional-services",
+        "trade"
+      ],
+      "dependencies": [],
+      "issues": [
+        3,
+        34
+      ],
+      "prs": [
+        38
+      ],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PLT-006",
+      "title": "Preserve scope across personalized workspaces",
+      "domain": "PLT",
+      "capability": "PLT.01",
+      "type": "non-functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-08"
+      ],
+      "industries": [
+        "international-group",
+        "trade"
+      ],
+      "dependencies": [
+        "IAM-002"
+      ],
+      "issues": [
+        3
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PRD-001",
+      "title": "Sell a service without inventory configuration",
+      "domain": "PRD",
+      "capability": "PRD.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-06",
+        "SC-09"
+      ],
+      "industries": [
+        "professional-services",
+        "software"
+      ],
+      "dependencies": [
+        "MDM-001"
+      ],
+      "issues": [
+        16,
+        41
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PRD-002",
+      "title": "Apply typed attributes through reviewed classifications",
+      "domain": "PRD",
+      "capability": "PRD.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M2",
+      "revision": 1,
+      "scenarios": [
+        "SC-02",
+        "SC-07"
+      ],
+      "industries": [
+        "timber",
+        "food"
+      ],
+      "dependencies": [
+        "PRD-001",
+        "UOM-001"
+      ],
+      "issues": [
+        41,
+        53
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PRJ-001",
+      "title": "Reconcile partial delivery against approved scope",
+      "domain": "PRJ",
+      "capability": "PRJ.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M3",
+      "revision": 1,
+      "scenarios": [
+        "SC-04",
+        "SC-06"
+      ],
+      "industries": [
+        "construction",
+        "professional-services"
+      ],
+      "dependencies": [
+        "ORG-002"
+      ],
+      "issues": [
+        48
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "PUR-001",
+      "title": "Authorize shortage procurement",
+      "domain": "PUR",
+      "capability": "PUR.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M3",
+      "revision": 1,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [
+        "INV-001",
+        "BP-001"
+      ],
+      "issues": [
+        16,
+        23,
+        92
+      ],
+      "prs": [],
+      "tests": [
+        "tests/integration/procurement.py"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "QMS-001",
+      "title": "Hold unapproved stock",
+      "domain": "QMS",
+      "capability": "QMS.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M4",
+      "revision": 1,
+      "scenarios": [
+        "SC-03",
+        "SC-07"
+      ],
+      "industries": [
+        "chemicals",
+        "food"
+      ],
+      "dependencies": [
+        "INV-001"
+      ],
+      "issues": [
+        47
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "SAL-001",
+      "title": "Confirm a priced commercial snapshot",
+      "domain": "SAL",
+      "capability": "SAL.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M3",
+      "revision": 1,
+      "scenarios": [
+        "SC-05",
+        "SC-09"
+      ],
+      "industries": [
+        "software",
+        "trade"
+      ],
+      "dependencies": [
+        "BP-001",
+        "PRD-001"
+      ],
+      "issues": [
+        16,
+        27
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "SVC-001",
+      "title": "Recognize non-physical delivery",
+      "domain": "SVC",
+      "capability": "SVC.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M3",
+      "revision": 1,
+      "scenarios": [
+        "SC-06",
+        "SC-09"
+      ],
+      "industries": [
+        "professional-services",
+        "software"
+      ],
+      "dependencies": [
+        "PRD-001"
+      ],
+      "issues": [
+        48
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "TRC-001",
+      "title": "Recall actual outputs after event expiry",
+      "domain": "TRC",
+      "capability": "TRC.01",
+      "type": "business",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M4",
+      "revision": 1,
+      "scenarios": [
+        "SC-02",
+        "SC-07",
+        "SC-10",
+        "SC-12"
+      ],
+      "industries": [
+        "agriculture",
+        "food",
+        "recycling",
+        "timber"
+      ],
+      "dependencies": [
+        "MFG-001",
+        "INV-001"
+      ],
+      "issues": [
+        47
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "UOM-001",
+      "title": "Require exact quantities and compatible units",
+      "domain": "UOM",
+      "capability": "UOM.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M1",
+      "revision": 1,
+      "scenarios": [
+        "SC-02",
+        "SC-05"
+      ],
+      "industries": [
+        "timber",
+        "trade"
+      ],
+      "dependencies": [],
+      "issues": [
+        26,
+        42
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "UOM-002",
+      "title": "Retain contextual conversion evidence",
+      "domain": "UOM",
+      "capability": "UOM.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M2",
+      "revision": 1,
+      "scenarios": [
+        "SC-02",
+        "SC-05"
+      ],
+      "industries": [
+        "timber",
+        "trade"
+      ],
+      "dependencies": [
+        "UOM-001"
+      ],
+      "issues": [
+        26,
+        42,
+        56
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "WFL-001",
+      "title": "Explain and resume a blocked order",
+      "domain": "WFL",
+      "capability": "WFL.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P1",
+      "milestone": "M3",
+      "revision": 1,
+      "scenarios": [
+        "SC-05"
+      ],
+      "industries": [
+        "trade"
+      ],
+      "dependencies": [
+        "INT-001",
+        "INV-001",
+        "PUR-001",
+        "SAL-001"
+      ],
+      "issues": [
+        16,
+        22
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "WFL-002",
+      "title": "Keep collaborative work attached to its authorized object",
+      "domain": "WFL",
+      "capability": "WFL.01",
+      "type": "functional",
+      "status": "proposed",
+      "priority": "P2",
+      "milestone": "M3",
+      "revision": 1,
+      "scenarios": [
+        "SC-04",
+        "SC-06"
+      ],
+      "industries": [
+        "construction",
+        "professional-services"
+      ],
+      "dependencies": [
+        "IAM-002",
+        "DOC-001"
+      ],
+      "issues": [
+        16
+      ],
+      "prs": [],
+      "tests": [],
+      "evidence": []
+    }
+  ]
+}

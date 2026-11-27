@@ -1,0 +1,113 @@
+- id: LOC-001
+  title: Keep resource keys independent of locale
+  description: Resolve declared UI labels from a selected locale with a documented fallback.
+  rationale: A missing translation must not prevent deterministic work.
+  type: functional
+  domain: LOC
+  capability: LOC.01
+  industries:
+  - international-group
+  - professional-services
+  actors:
+  - Translator and local reviewer
+  priority: P1
+  status: proposed
+  dependencies: []
+  milestone: M0
+  acceptance:
+  - Switch English to German without changing the article ID; a missing German label falls back to English; an untranslated
+    key is reported for review.
+  scenarios:
+  - SC-06
+  - SC-08
+  decisions:
+  - docs/adr/0003-semantic-contracts.md
+  refines:
+  - BD-006
+  issues:
+  - 3
+  - 43
+  prs:
+  - 38
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Who owns vocabulary review?
+  revision: 1
+- id: LOC-002
+  title: Protect approved translations across revisions
+  description: Track source revision for business data, documents and attribute labels; support manual work with
+    no provider.
+  rationale: Stale machine output must not silently replace reviewed content.
+  type: functional
+  domain: LOC
+  capability: LOC.01
+  industries:
+  - food
+  - international-group
+  actors:
+  - Translator and local reviewer
+  priority: P2
+  status: proposed
+  dependencies:
+  - LOC-001
+  - MDM-003
+  milestone: M1
+  acceptance:
+  - After source revision changes mark the old translation stale; retry an old job and retain approved text; prohibited
+    text causes zero outbound provider calls.
+  scenarios:
+  - SC-07
+  - SC-08
+  decisions:
+  - docs/adr/0003-semantic-contracts.md
+  refines:
+  - BD-006
+  issues:
+  - 43
+  - 57
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Which content permits translation memory reuse?
+  revision: 1
+- id: LOC-003
+  title: Carry business date, zone and calendar
+  description: Resolve effective business dates using the applicable calendar and zone rather than server date.
+  rationale: Period and season boundaries differ between organizations.
+  type: functional
+  domain: LOC
+  capability: LOC.01
+  industries:
+  - agriculture
+  - international-group
+  actors:
+  - Translator and local reviewer
+  priority: P1
+  status: proposed
+  dependencies:
+  - ORG-002
+  milestone: M1
+  acceptance:
+  - 'Record one instant straddling midnight for two offices: each shows its local business date and retains the
+    same instant; a later zone change does not move a posted date.'
+  scenarios:
+  - SC-08
+  - SC-12
+  decisions:
+  - docs/adr/0003-semantic-contracts.md
+  refines:
+  - BD-003
+  issues:
+  - 43
+  - 64
+  prs: []
+  contracts: []
+  tests: []
+  evidence: []
+  questions:
+  - Who approves local holiday calendars?
+  revision: 1

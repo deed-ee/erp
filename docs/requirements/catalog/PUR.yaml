@@ -1,0 +1,40 @@
+- id: PUR-001
+  title: Authorize shortage procurement
+  description: Turn an unmet demand into a proposal distinct from a supplier commitment.
+  rationale: A shortage notice is not permission to spend money.
+  type: functional
+  domain: PUR
+  capability: PUR.01
+  industries:
+  - trade
+  actors:
+  - Buyer and approver
+  priority: P1
+  status: proposed
+  dependencies:
+  - INV-001
+  - BP-001
+  milestone: M3
+  acceptance:
+  - Ten requested and six eligible create one proposal for four under the chosen partial policy; a non-approver
+    cannot issue it; approved receipt satisfies waiting demand only once.
+  scenarios:
+  - SC-05
+  decisions:
+  - docs/adr/0001-independent-services.md
+  refines:
+  - BD-019
+  issues:
+  - 16
+  - 23
+  - 92
+  prs: []
+  contracts:
+  - contracts/schemas/get-draft-proposal-v1.json
+  - contracts/schemas/stock-shortage-v1.json
+  tests:
+  - tests/integration/procurement.py
+  evidence: []
+  questions:
+  - Who may approve their own proposal?
+  revision: 1

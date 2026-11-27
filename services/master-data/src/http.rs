@@ -1,6 +1,7 @@
 use crate::{
     auth::{Auth, Denial, Permission},
     domain::{Article, RegisterArticle, Scope},
+    partners,
     store::{InsertError, Store},
 };
 use axum::{
@@ -27,7 +28,35 @@ pub(crate) fn router(store: Store, auth: Auth) -> Router {
         .route(
             "/v1/articles/{id}",
             get(find).layer(middleware::from_fn_with_state(
-                (auth, Permission::Read),
+                (auth.clone(), Permission::Read),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/units:register",
+            post(crate::units::register).layer(middleware::from_fn_with_state(
+                (auth.clone(), Permission::RegisterUnit),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/units/{id}",
+            get(crate::units::find).layer(middleware::from_fn_with_state(
+                (auth.clone(), Permission::ReadUnit),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/partners:register",
+            post(partners::register).layer(middleware::from_fn_with_state(
+                (auth.clone(), Permission::RegisterPartner),
+                authorize,
+            )),
+        )
+        .route(
+            "/v1/partners/{id}",
+            get(partners::find).layer(middleware::from_fn_with_state(
+                (auth, Permission::ReadPartner),
                 authorize,
             )),
         )
@@ -120,13 +149,19 @@ async fn register(
         Ok(article) => article,
         Err(detail) => return problem(StatusCode::UNPROCESSABLE_ENTITY, detail),
     };
-    match store.insert(&article).await {
-        Ok(()) => (
-            StatusCode::CREATED,
-            [(header::LOCATION, format!("/v1/articles/{}", article.id))],
-            Json(ArticleView::from(article)),
-        )
-            .into_response(),
+    let span_id = Uuid::new_v4().simple().to_string();
+    let traceparent = format!("00-{}-{}-00", Uuid::new_v4().simple(), &span_id[..16]);
+    match store.insert(&article, &traceparent).await {
+        Ok(()) => {
+            tracing::info!(%traceparent, "Article registration committed");
+            (
+                StatusCode::CREATED,
+                [(header::LOCATION, format!("/v1/articles/{}", article.id))],
+                [("traceparent", traceparent)],
+                Json(ArticleView::from(article)),
+            )
+                .into_response()
+        }
         Err(InsertError::Conflict) => problem(StatusCode::CONFLICT, "SKU already registered"),
         Err(InsertError::Database(error)) => unavailable("register_article", error),
     }
@@ -147,7 +182,7 @@ async fn find(
     }
 }
 
-fn unavailable(operation: &str, _error: mongodb::error::Error) -> Response {
+pub(crate) fn unavailable(operation: &str, _error: mongodb::error::Error) -> Response {
     tracing::error!(operation, "MongoDB operation failed");
     problem(StatusCode::SERVICE_UNAVAILABLE, "Persistence unavailable")
 }
@@ -158,7 +193,7 @@ struct Problem {
     detail: &'static str,
 }
 
-fn problem(status: StatusCode, detail: &'static str) -> Response {
+pub(crate) fn problem(status: StatusCode, detail: &'static str) -> Response {
     (
         status,
         [(header::CONTENT_TYPE, "application/problem+json")],

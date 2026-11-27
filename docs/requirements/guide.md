@@ -1,0 +1,44 @@
+# Requirements engineering: from an example to evidence
+
+**Vision:** ERP by everyone, for everyone. A solo consultant must not create a warehouse to send a service order. A manufacturer that also sells engineering time should add physical fulfillment per line, not migrate to a different core. These are product principles, not a claim that either flow exists today.
+
+## Delivery baseline
+
+At application `main` commit `0313eee`, the executable business flow is local Article register/get: [domain](../../services/master-data/src/domain.rs), [HTTP](../../services/master-data/src/http.rs), [API](../../contracts/openapi/master-data-v1.yaml) and [semantic descriptor](../../contracts/entities/article-v1.json). The demo bearer still has fixed scope. ADRs 0001–0003 establish ownership, messaging semantics and contract layering; they do not establish production tenant isolation.
+
+| Requirement | Demonstrated on this baseline | Still needed for acceptance |
+|---|---|---|
+| INT-001 | [#68](https://github.com/erp4us-org/erp4us/pull/68) persists the article and pending event in one local transaction. Rejecting the outbox insert rolls back the article. | A persisted event is not delivery. Broker outage, relay restart and one consumer effect after replay require separate evidence; [#70](https://github.com/erp4us-org/erp4us/pull/70) is proposed delivery work. |
+| PLT-001 | [#37](https://github.com/erp4us-org/erp4us/pull/37) restores the synthetic database to a separate Compose project and checks the article and duplicate-SKU constraint. | A successful restore does not demonstrate handling a damaged backup, reconciliation of counts or measured recovery time and data gap. |
+
+Evidence: [passing CI on the baseline commit](https://github.com/erp4us-org/erp4us/actions/runs/45273562523), [contract checks](../../tests/contracts/check.py), [outbox and restore checks](../../tests/integration/smoke.py). Both broader requirements are **in implementation**, not verified. Open [identity #15](https://github.com/erp4us-org/erp4us/pull/15), [roadmap #28](https://github.com/erp4us-org/erp4us/pull/28), [industry model #31](https://github.com/erp4us-org/erp4us/pull/31) and [local UI #38](https://github.com/erp4us-org/erp4us/pull/38) are context, not default-branch capabilities. The [public forum](https://github.com/erp4us-org/erp4us/discussions) is open for practitioner feedback; no consensus is assumed. #16 remains the first cross-service process epic.
+
+## Record of authority
+
+Vision → principles → [capabilities](../capabilities/README.md) → business needs → functional and non-functional constraints → [scenarios](../scenarios/README.md) → measurable acceptance → epic → task → executable test and evidence. Different types can refine the same need. One owner per fact, not one service per capability. Use the [glossary](../glossary/README.md) and [process catalog](../processes/README.md). The existing [roadmap](../../ROADMAP.md) orders delivery. `phases.yaml` is an analysis crosswalk, not a parallel release schedule.
+
+[PR #31's BD-001–024 register](https://github.com/erp4us-org/erp4us/blob/611ee6a11ee9cf0bc54d7c79fae1894acfbe9cd4/docs/requirements/README.md) is a **draft** upstream source. `refines` identifies the business theme, not a prerequisite or assertion of acceptance. Keep the BD and SC identifiers; do not renumber them when that PR lands. This PR adds domain-level, testable slices and a schema on distinct paths; it does not adopt proposed ADRs 0004–0007. Reconcile overlapping prose in #31 by linking the structured slice rather than maintaining two status registers.
+
+## Working agreement
+
+1. **Intake:** post an anonymized example using the business intake form or [Discussions](https://github.com/erp4us-org/erp4us/discussions). No technical design, Git experience or code is required. Search for prior IDs, open PRs and exceptions; record a counterexample from a non-manufacturing business.
+2. **Triage:** identify actor, value, owner, scope, variants, failure, and a measurable outcome. Allocate the next unused domain ID on review; do not reuse withdrawn IDs. Add or revise the domain YAML by PR. Raise the revision for a semantic change. A changed domain does not invalidate an existing ID; preserve it or supersede it with a linked replacement.
+3. **Decide:** proposed → needs-analysis / in-review. A maintainer records approval, deferral, rejection or supersession with reasons in the issue or RFC and links the decision in Git. Accepting this catalog does not approve every entry. Use the [RFC process](../../GOVERNANCE.md#rfc-process) for consequential policy/architecture changes. No legal or regulatory certification is implied.
+4. **Deliver:** approved → in-implementation → implemented on the default branch. Link issue, PR, affected contract, test and revision. Verified requires passing acceptance evidence for the stated scope, including negative cases; a merged PR, fixture-schema check or screenshot alone is not proof of a broader business outcome. Move back to review when evidence no longer applies. Keep rejected/deferred history with rationale.
+5. **Handoff:** periodic triage compares active issues against dependencies, recent contract changes and stale evidence, then agrees the next smallest demonstrable slice. A GitHub label coordinates work; Git owns requirement status. Issue closure is not a status transition. Record decisions in a linked PR rather than in a private agent log.
+
+## Priority, milestones and open decisions
+
+P0 blocks trust or foundational integrity; P1 enables multiple operating models or the first order; P2 has clear value but can follow a proven slice; P3 needs narrower evidence. Rank using reach, security, integrity, rework cost and dependency, not votes alone. A high-priority prerequisite does not approve an entire deployment. Null GitHub milestone means analysis horizon only. Existing `01 - Platform foundation` maps to M0; M1 collects business-foundation discovery; existing `02 - Order-to-procurement MVP` spans the minimum M2/M3 slices. `03 - Community preview` is a horizontal readiness gate (restore, document access, agent/external integration), **not** a synonym for M3 or M7. No dates for M4–M7. Basic isolation, international addresses, exact arithmetic and locale keys start now, not in M6.
+
+**Recommended sequence:** prove #2 and #4 independently. Validate grants and locale fallback on the first article. Use the approved SC-08 sharing rule when refining partner roles for #26; agree units and exercise the approved SC-05 partial reservation before #24. #27 + #24 + #23 + #22 prove #16. Exercise a service-only counterexample before generalizing Sales. Promote demo/preview only after recovery and isolation gates. Keep universal product structures and translation providers as investigations, not first-slice dependencies.
+
+## Publishing and checking
+
+Each `catalog/DOMAIN.yaml` uses [the JSON Schema](schema.json). `dependencies` lists requirement prerequisites (acyclic), `refines` lists draft BD themes, and capability map overlaps may be cyclic. Issue/PR numbers are in this repository. Tests and contracts are repository-relative paths. `evidence` is a reviewable run or artifact, distinct from a test definition. Absence means no demonstration claimed.
+
+Install `tests/contracts/requirements.txt` into a virtual environment. Run `python tests/requirements/check.py` and `python -m unittest discover -s tests/requirements`. Use `python tests/requirements/check.py --export /tmp/erp4us-requirements.json` to generate the website feed from the same revision (no network or database). Pin the source commit during import and validate before replacing a previously known-good snapshot. `--audit` reports untracked delivery work and evidence gaps for triage; counts describe catalog entries, not product completion. Consumers must display status and evidence, never infer availability from priority or issue closure.
+
+For a static website, fetch `docs/requirements/public-v1.json` by reviewed commit SHA. For the full map, scenarios, processes and criteria use `--export`. Run `python tests/requirements/check.py --refresh-index` after editing YAML; CI rejects stale generated files. The [research queue](../rfc/README.md) records the next decisions. Review evidence again whenever an affected contract, scenario or temporal policy changes, not simply because an issue has been open for a long time.
+
+`issue-roles.yaml` distinguishes delivery work from research, reviews and community feedback. A link to an epic is not a scheduled implementation. Use `disposition` for an approval, deferral, rejection or supersession, `supersededBy` for the successor and optional `reviewedOn` (quoted ISO date) for the last substantive review. The optional age check flags reviews older than 180 days for human triage; it never changes status automatically.

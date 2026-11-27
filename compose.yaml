@@ -1,6 +1,7 @@
 services:
   mongo:
     image: mongo:8.0.38@sha256:479e85ced54ffb8a40dade1dcde2da2a9ae858515b9415e9cc54bfb8f0575d01
+    entrypoint: ["/bin/sh", "/opt/erp4us/start-mongo.sh"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: dev_mongo_admin
       MONGO_INITDB_ROOT_PASSWORD: ${DEV_MONGO_ROOT_PASSWORD:?Run sh scripts/init-dev.sh first}
@@ -8,12 +9,25 @@ services:
     volumes:
       - mongo-data:/data/db
       - ./infrastructure/compose/init-master-data.sh:/docker-entrypoint-initdb.d/init-master-data.sh:ro
+      - ./infrastructure/compose/start-mongo.sh:/opt/erp4us/start-mongo.sh:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand({hello:1}).isWritablePrimary ? 0 : 1)", "mongodb://mongo:27017/admin"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "const h = db.hello(); quit(h.setName === 'erp4us' && h.isWritablePrimary ? 0 : 1)", "mongodb://mongo:27017/admin?directConnection=true"]
       interval: 3s
       timeout: 5s
       retries: 20
+  mongo-init:
+    image: mongo:8.0.38@sha256:479e85ced54ffb8a40dade1dcde2da2a9ae858515b9415e9cc54bfb8f0575d01
+    entrypoint: ["/bin/sh", "/opt/erp4us/init-replica-set.sh"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dev_mongo_admin
+      MONGO_INITDB_ROOT_PASSWORD: ${DEV_MONGO_ROOT_PASSWORD:?Run sh scripts/init-dev.sh first}
+    volumes:
+      - ./infrastructure/compose/init-replica-set.sh:/opt/erp4us/init-replica-set.sh:ro
+    depends_on:
+      mongo:
+        condition: service_started
   master-data:
+    image: ${ERP4US_MASTER_DATA_IMAGE:-${COMPOSE_PROJECT_NAME:-erp4us}-master-data}
     build:
       context: .
       dockerfile: services/master-data/Dockerfile
@@ -21,13 +35,15 @@ services:
       ERP4US_BIND: 0.0.0.0:8080
       ERP4US_IDENTITY_POLICY: /etc/erp4us/identity-policy.json
       ERP4US_ISSUER_JWKS: /etc/erp4us/issuer-jwks.json
-      MASTER_DATA_MONGODB_URI: mongodb://master_data_app:${DEV_MASTER_DATA_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/master_data?serverSelectionTimeoutMS=3000&connectTimeoutMS=3000
+      MASTER_DATA_MONGODB_URI: mongodb://master_data_app:${DEV_MASTER_DATA_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/master_data?replicaSet=erp4us&serverSelectionTimeoutMS=3000&connectTimeoutMS=3000
     volumes:
       - ./.dev-auth/identity-policy.json:/etc/erp4us/identity-policy.json:ro
       - ./.dev-auth/issuer-jwks.json:/etc/erp4us/issuer-jwks.json:ro
     depends_on:
       mongo:
         condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:${ERP4US_PORT:-8080}:8080"
     read_only: true

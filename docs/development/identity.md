@@ -29,6 +29,8 @@ Example `identity-policy.json`:
 
 Send `Authorization: Bearer <access-token>` with the `X-Erp4us-Tenant` and `X-Erp4us-Organization` UUIDs on business requests. Each header selects scope, never grants it. Invalid access tokens return `401`; missing or invalid scope returns `400`; a subject without the exact scope and operation grant receives `403`. For a caller allowed to read the selected scope, IDs outside that scope are indistinguishable from missing IDs (`404`).
 
+Units and partners require their own `master-data.unit.read`, `master-data.unit.register`, `master-data.partner.read`, and `master-data.partner.register` grants. Article grants do not imply access to these resources. The optional Compose Article relay selects only its broker-authorized demo tenant; it leaves other tenants' outbox entries pending. HTTP identity does not grant broker access.
+
 ## Rollout and limits
 
 This replaces the demo token before the first release. Existing MongoDB documents need no migration; to retain local demo article access, bind a subject to the same tenant and organization IDs. Stop the previous container before recreating it with the new config. Use short token lifetimes. To rotate keys, make the new public key available alongside the current one and recreate the service before switching signing keys; remove retired keys after outstanding access tokens expire. A membership change takes effect when the service is recreated with the updated policy. There is no automatic JWKS refresh or Organizations service yet. Do not expose the development Compose stack externally; a real deployment needs trusted TLS ingress and operational review.

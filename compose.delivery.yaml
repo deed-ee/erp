@@ -1,0 +1,94 @@
+x-delivery: &delivery
+  image: ${COMPOSE_PROJECT_NAME:-erp4us}-article-delivery
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  nats:
+    image: nats:2.12.15-alpine@sha256:b270f5e2428354c0335612694d7dd2fb588148e567a5757fdff325ef9c9332e6
+    command: ["-c", "/etc/nats/article-nats.conf"]
+    environment:
+      # NATS parses environment substitutions as config values; force string literals.
+      DEV_NATS_ADMIN_PASSWORD: "\"${DEV_NATS_ADMIN_PASSWORD:?Run sh scripts/init-dev.sh first}\""
+      DEV_NATS_RELAY_PASSWORD: "\"${DEV_NATS_RELAY_PASSWORD:?Run sh scripts/init-dev.sh first}\""
+      DEV_NATS_RECEIPTS_PASSWORD: "\"${DEV_NATS_RECEIPTS_PASSWORD:?Run sh scripts/init-dev.sh first}\""
+      DEV_NATS_REPLAY_PASSWORD: "\"${DEV_NATS_REPLAY_PASSWORD:?Generate a local replay password}\""
+      DEV_NATS_CONFIG_READER_PASSWORD: "\"${DEV_NATS_CONFIG_READER_PASSWORD:?Generate a local config-reader password}\""
+    volumes:
+      - ./infrastructure/compose/article-nats.conf:/etc/nats/article-nats.conf:ro
+      - jetstream-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+  delivery-init:
+    <<: *delivery
+    build:
+      context: .
+      dockerfile: services/article-delivery/Dockerfile
+    command: ["init"]
+    environment:
+      NATS_USER: provisioner
+      NATS_PASSWORD: ${DEV_NATS_ADMIN_PASSWORD:?Run sh scripts/init-dev.sh first}
+    depends_on:
+      nats:
+        condition: service_healthy
+  receipts-db-init:
+    image: mongo:8.0.38@sha256:479e85ced54ffb8a40dade1dcde2da2a9ae858515b9415e9cc54bfb8f0575d01
+    entrypoint: ["/bin/sh", "/opt/erp4us/init-receipts-db.sh"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dev_mongo_admin
+      MONGO_INITDB_ROOT_PASSWORD: ${DEV_MONGO_ROOT_PASSWORD:?Run sh scripts/init-dev.sh first}
+      DEV_RECEIPTS_MONGO_PASSWORD: ${DEV_RECEIPTS_MONGO_PASSWORD:?Run sh scripts/init-dev.sh first}
+    volumes:
+      - ./infrastructure/compose/init-receipts-db.sh:/opt/erp4us/init-receipts-db.sh:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+  article-relay:
+    <<: *delivery
+    command: ["relay"]
+    restart: on-failure
+    environment:
+      NATS_USER: article_relay
+      ARTICLE_RELAY_TENANT: ddcae139-c1e8-47d2-8b48-349cb6f30ce5
+      NATS_PASSWORD: ${DEV_NATS_RELAY_PASSWORD:?Run sh scripts/init-dev.sh first}
+      HEARTBEAT_SECONDS: ${ERP4US_HEARTBEAT_SECONDS:-15}
+      MONGODB_URI: mongodb://master_data_app:${DEV_MASTER_DATA_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/master_data?replicaSet=erp4us&serverSelectionTimeoutMS=3000&w=majority
+    depends_on:
+      master-data:
+        condition: service_started
+      delivery-init:
+        condition: service_completed_successfully
+  article-receipts:
+    <<: *delivery
+    command: ["consumer"]
+    restart: on-failure
+    environment:
+      NATS_USER: article_receipts
+      NATS_PASSWORD: ${DEV_NATS_RECEIPTS_PASSWORD:?Run sh scripts/init-dev.sh first}
+      MONGODB_URI: mongodb://article_receipts_app:${DEV_RECEIPTS_MONGO_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/article_receipts?replicaSet=erp4us&serverSelectionTimeoutMS=3000&w=majority
+    depends_on:
+      receipts-db-init:
+        condition: service_completed_successfully
+      delivery-init:
+        condition: service_completed_successfully
+  article-replay:
+    <<: *delivery
+    profiles: ["operator"]
+    environment:
+      NATS_USER: article_replay
+      NATS_PASSWORD: ${DEV_NATS_REPLAY_PASSWORD:?Generate a local replay password}
+      MONGODB_URI: mongodb://article_receipts_app:${DEV_RECEIPTS_MONGO_PASSWORD:?Run sh scripts/init-dev.sh first}@mongo:27017/article_receipts?replicaSet=erp4us&serverSelectionTimeoutMS=3000&w=majority
+  article-config-reader:
+    <<: *delivery
+    profiles: ["operator"]
+    command: ["get-heartbeat"]
+    environment:
+      NATS_USER: article_config_reader
+      NATS_PASSWORD: ${DEV_NATS_CONFIG_READER_PASSWORD:?Generate a local config-reader password}
+
+volumes:
+  jetstream-data:

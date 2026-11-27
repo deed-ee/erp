@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Confirmed stock line for local Inventory allocation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "orderId", "lineId", "warehouseId", "articleId", "unit", "quantity"],
+  "properties": {
+    "contract": {"const": "confirmed-stock-line.v1"},
+    "orderId": {"type": "string", "format": "uuid"},
+    "lineId": {"type": "string", "format": "uuid"},
+    "warehouseId": {"type": "string", "format": "uuid"},
+    "articleId": {"type": "string", "format": "uuid"},
+    "unit": {"const": "EA"},
+    "quantity": {"type": "integer", "minimum": 1, "maximum": 2147483647}
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "settings": {
+      "type": "object",
+      "required": ["revision", "heartbeatSeconds"],
+      "properties": {
+        "revision": {"type": "integer", "minimum": 0},
+        "heartbeatSeconds": {"type": "integer", "minimum": 0, "maximum": 3600}
+      }
+    },
+    "query": {
+      "$ref": "nats-envelope-v1.json",
+      "not": {"anyOf": [{"required": ["tenantId"]}, {"required": ["organizationId"]}]},
+      "properties": {
+        "messageType": {"const": "v1.config.system.article-delivery.query.heartbeat.get.v1"},
+        "protocolVersion": {"const": "1.0.0"},
+        "schemaVersion": {"const": "1.0.0"},
+        "payload": {"type": "object"}
+      }
+    },
+    "changed": {
+      "$ref": "nats-envelope-v1.json",
+      "not": {"anyOf": [{"required": ["tenantId"]}, {"required": ["organizationId"]}]},
+      "properties": {
+        "messageType": {"const": "v1.config.system.article-delivery.event.heartbeat.changed.v1"},
+        "protocolVersion": {"const": "1.0.0"},
+        "schemaVersion": {"const": "1.0.0"},
+        "sourceService": {"const": "erp4us.article-delivery"},
+        "payload": {
+          "type": "object",
+          "required": ["revision"],
+          "properties": {"revision": {"type": "integer", "minimum": 1}}
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "oneOf": [
+        {"required": ["result"], "properties": {"result": {"$ref": "#/$defs/settings"}}},
+        {"required": ["error"], "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "retryable", "correlationId"],
+            "properties": {
+              "code": {"const": "unavailable"},
+              "retryable": {"const": true},
+              "correlationId": {"$ref": "nats-envelope-v1.json#/$defs/id"}
+            }
+          }
+        }}
+      ]
+    }
+  }
+}

@@ -1,0 +1,526 @@
+- id: PROC-01
+  name: Lead to opportunity
+  trigger: Prospect inquiry
+  actors: Sales rep
+  preconditions: Permission to contact
+  flow:
+  - Qualify need
+  - record opportunity
+  approval: Qualification review
+  outcomeEvent: OpportunityQualified
+  requirements:
+  - BP-001
+  objects:
+  - Lead
+  - contact permission
+  - opportunity
+  result: An identified need has a responsible owner or an explicit decision not to pursue.
+  alternative: Record a referral instead of a new partner.
+  exception: Withdrawn contact permission stops follow-up.
+- id: PROC-02
+  name: Opportunity to quotation
+  trigger: Qualified opportunity
+  actors: Sales rep
+  preconditions: Identified buyer and offering
+  flow:
+  - Select terms
+  - issue dated quote
+  approval: Price exception
+  outcomeEvent: QuotationIssued
+  requirements:
+  - SAL-001
+  objects:
+  - Opportunity
+  - offering
+  - quotation revision
+  result: The prospect can evaluate a dated offer in a named currency.
+  alternative: A service quote uses hours and an agreement.
+  exception: An expired price basis requires a new revision.
+- id: PROC-03
+  name: Quotation to order
+  trigger: Customer accepts quote
+  actors: Sales rep
+  preconditions: Effective quote revision
+  flow:
+  - Confirm snapshot
+  - record order
+  approval: Commercial commitment
+  outcomeEvent: OrderConfirmed
+  requirements:
+  - SAL-001
+  objects:
+  - Quotation
+  - customer acceptance
+  - sales order
+  result: A confirmed order points to the specific accepted terms.
+  alternative: Accept only selected lines under revised terms.
+  exception: A stale acceptance cannot confirm a changed quotation.
+- id: PROC-04
+  name: Order to cash
+  trigger: Confirmed order
+  actors: Sales, dispatch, accountant
+  preconditions: Agreed currency and payment terms
+  flow:
+  - Deliver
+  - invoice
+  - match payment
+  approval: Invoice posting
+  outcomeEvent: PaymentApplied
+  requirements:
+  - SAL-001
+  - FIN-001
+  objects:
+  - Order
+  - delivery acceptance
+  - invoice
+  - payment allocation
+  result: Cash is matched to the correct legal obligation or remains unapplied.
+  alternative: Use time acceptance for a service line.
+  exception: A disputed amount stays open instead of appearing paid.
+- id: PROC-05
+  name: Procure to pay
+  trigger: Approved demand
+  actors: Buyer, receiver, accountant
+  preconditions: Eligible supplier and distinct receiving scope
+  flow:
+  - Issue PO
+  - receive
+  - match supplier invoice
+  - pay
+  approval: Spend and payment release
+  outcomeEvent: SupplierInvoiceMatched
+  requirements:
+  - PUR-001
+  - FIN-001
+  objects:
+  - Purchase order
+  - goods receipt
+  - supplier invoice
+  - payment
+  result: Approved liabilities are settled against received or agreed value.
+  alternative: A service acceptance can replace a physical receipt.
+  exception: An invoice discrepancy is held for review.
+- id: PROC-06
+  name: Purchase requisition to purchase order
+  trigger: Shortage detected
+  actors: Planner and buyer
+  preconditions: Demand not already covered
+  flow:
+  - Propose four
+  - approve
+  - issue PO
+  approval: Buyer approval
+  outcomeEvent: PurchaseOrderIssued
+  requirements:
+  - PUR-001
+  - INT-003
+  objects:
+  - Shortage
+  - requisition
+  - approval
+  - purchase order
+  result: Approved demand becomes one auditable supplier commitment.
+  alternative: Consolidate compatible needs without losing source references.
+  exception: An unauthorized approver cannot commit spend.
+- id: PROC-07
+  name: Purchase order to goods receipt
+  trigger: Delivery arrives
+  actors: Receiver
+  preconditions: Open PO line and allowed warehouse
+  flow:
+  - Record actual quantity
+  - post receipt
+  - inform procurement
+  approval: Receiving authority
+  outcomeEvent: GoodsReceived
+  requirements:
+  - INV-001
+  - UOM-001
+  objects:
+  - Purchase order line
+  - receipt
+  - movement
+  result: Actual received quantity is posted and the remaining PO balance is known.
+  alternative: Accept a partial delivery against a permitted tolerance.
+  exception: Unexpected goods are isolated pending an authorized resolution.
+- id: PROC-08
+  name: Goods receipt to quality release
+  trigger: Inspection required
+  actors: Inspector and warehouse operator
+  preconditions: Receipt linked to lot
+  flow:
+  - Quarantine
+  - inspect
+  - accept or reject
+  approval: Disposition sign-off
+  outcomeEvent: InspectionReleased
+  requirements:
+  - QMS-001
+  objects:
+  - Lot
+  - inspection
+  - disposition
+  - availability
+  result: Stock is either eligible, rejected or still on hold with evidence.
+  alternative: Release a documented sublot where policy allows.
+  exception: Missing inspection evidence cannot release stock.
+- id: PROC-09
+  name: Inventory reservation to shipment
+  trigger: Confirmed physical demand
+  actors: Warehouse operator
+  preconditions: Eligible stock and scope
+  flow:
+  - Reserve
+  - pick
+  - ship
+  - reconcile remaining
+  approval: Dispatch authority
+  outcomeEvent: ShipmentPosted
+  requirements:
+  - INV-001
+  - LOG-001
+  objects:
+  - Sales line
+  - warehouse balance
+  - reservation
+  - shipment
+  result: Promised physical units can be matched to actual dispatch.
+  alternative: For ship-complete terms in SC-05, retain the partial reservation and wait to dispatch until the line is complete.
+  exception: Competing demand cannot make reservable stock negative.
+- id: PROC-10
+  name: Plan to produce
+  trigger: Authorized demand plan
+  actors: Planner and supervisor
+  preconditions: Effective definition and resources
+  flow:
+  - Release run
+  - record actuals
+  - reconcile
+  approval: Run release
+  outcomeEvent: RunCompleted
+  requirements:
+  - MFG-001
+  objects:
+  - Demand
+  - released plan
+  - production run
+  - output lots
+  result: Actual output is reconciled to planned demand with variance visible.
+  alternative: Subcontract a step under the same plan revision.
+  exception: Failed inspection leaves outputs unavailable.
+- id: PROC-11
+  name: Engineer to order
+  trigger: Customer-specific configuration
+  actors: Engineer and project lead
+  preconditions: Approved requirements baseline
+  flow:
+  - Design
+  - release engineering revision
+  - derive production plan
+  - deliver serial
+  approval: Design release
+  outcomeEvent: StructureReleased
+  requirements:
+  - BOM-001
+  - PLM-001
+  objects:
+  - Customer configuration
+  - engineering change
+  - design revision
+  - serial
+  result: The delivered instance retains the design and actual build evidence.
+  alternative: Reuse a released component in a custom assembly.
+  exception: A change after release requires an authorized revision.
+- id: PROC-12
+  name: Make to order
+  trigger: Confirmed configured order
+  actors: Planner
+  preconditions: Customer demand linked to definition
+  flow:
+  - Allocate run
+  - consume
+  - produce for order
+  approval: Run release
+  outcomeEvent: DemandFulfilled
+  requirements:
+  - MFG-001
+  - SAL-001
+  objects:
+  - Order line
+  - definition
+  - production run
+  - allocation
+  result: An order is linked to actual output or a remaining obligation.
+  alternative: Split the run over several authorized lots.
+  exception: Insufficient output cannot mark all demand delivered.
+- id: PROC-13
+  name: Make to stock
+  trigger: Replenishment signal
+  actors: Planner
+  preconditions: Policy permits stock replenishment
+  flow:
+  - Plan quantity
+  - execute
+  - receive available output
+  approval: Production release
+  outcomeEvent: StockReplenished
+  requirements:
+  - MFG-001
+  - QMS-001
+  objects:
+  - Stock target
+  - replenishment plan
+  - receipt
+  result: Eligible finished stock increases without implying a customer order.
+  alternative: Use seasonal rather than fixed replenishment policy.
+  exception: Quarantined output cannot satisfy the target.
+- id: PROC-14
+  name: Recipe to batch
+  trigger: Released batch instruction
+  actors: Operator and inspector
+  preconditions: Effective formula and inputs
+  flow:
+  - Pin definition
+  - record input lots and observations
+  - record outputs
+  approval: Batch disposition
+  outcomeEvent: BatchCompleted
+  requirements:
+  - BOM-001
+  - MFG-001
+  objects:
+  - Formula revision
+  - input lot
+  - output batch
+  - inspection
+  result: An identifiable output retains actual inputs and disposition.
+  alternative: A permitted substitute references its approval.
+  exception: An expired lot cannot be consumed as approved material.
+- id: PROC-15
+  name: Raw material to multiple outputs
+  trigger: Material run starts
+  actors: Operator and grader
+  preconditions: Measured inbound lots
+  flow:
+  - Record consumption
+  - grade outputs
+  - reconcile variance
+  approval: Variance acceptance
+  outcomeEvent: YieldRecorded
+  requirements:
+  - MFG-001
+  - UOM-002
+  objects:
+  - Source lot
+  - measured output
+  - grade
+  - variance
+  result: Recoverable outputs and residual quantities reconcile to origin.
+  alternative: Record several saleable grades and a by-product.
+  exception: Unexplained loss requires disposition rather than a fabricated output.
+- id: PROC-16
+  name: Project to completion
+  trigger: Contract award
+  actors: Project lead and controller
+  preconditions: Scope and budget approved
+  flow:
+  - Plan packages
+  - measure progress
+  - accept
+  - reconcile costs
+  approval: Progress certification
+  outcomeEvent: ProjectAccepted
+  requirements:
+  - PRJ-001
+  - CST-001
+  objects:
+  - Contract
+  - work package
+  - measurement
+  - cost object
+  result: Accepted delivery and remaining contracted work reconcile.
+  alternative: Bill by milestone or approved time rather than quantities.
+  exception: Unaccepted progress cannot become final billable delivery.
+- id: PROC-17
+  name: Service request to resolution
+  trigger: Customer requests work
+  actors: Service coordinator and worker
+  preconditions: Applicable agreement or exception
+  flow:
+  - Assign qualified worker
+  - record time
+  - accept resolution
+  approval: Customer or delegate acceptance
+  outcomeEvent: ServiceAccepted
+  requirements:
+  - SVC-001
+  - HR-001
+  objects:
+  - Agreement
+  - service request
+  - assignment
+  - time entry
+  result: The accepted outcome links to entitlement and billable evidence.
+  alternative: Remote resolution can finish with no spare parts.
+  exception: An expired qualification prevents a restricted assignment.
+- id: PROC-18
+  name: Asset acquisition to retirement
+  trigger: Equipment accepted
+  actors: Asset custodian
+  preconditions: Identified serial and owner
+  flow:
+  - Commission
+  - transfer
+  - maintain
+  - retire
+  approval: Retirement authorization
+  outcomeEvent: AssetRetired
+  requirements:
+  - AST-001
+  - MNT-001
+  objects:
+  - Asset
+  - custody period
+  - service work
+  - retirement record
+  result: Retired equipment remains traceable but is no longer bookable.
+  alternative: Transfer custody without selling the asset.
+  exception: An open repair prevents release into rental availability.
+- id: PROC-19
+  name: Product design to end of life
+  trigger: Design initiated
+  actors: Engineer and service lead
+  preconditions: Stable product identity
+  flow:
+  - Release
+  - build
+  - deliver
+  - maintain
+  - retire
+  approval: Engineering change
+  outcomeEvent: ConfigurationChanged
+  requirements:
+  - BOM-001
+  - PLM-001
+  objects:
+  - Product revision
+  - build record
+  - installed instance
+  - retirement
+  result: Distinct authorized lifecycle views remain available after retirement.
+  alternative: A digital product may retire a version without a serial.
+  exception: A missing source is disclosed rather than inferred from the newest design.
+- id: PROC-20
+  name: Return to refund
+  trigger: Return requested
+  actors: Sales, receiving, finance
+  preconditions: Linked original delivery and terms
+  flow:
+  - Authorize return
+  - inspect
+  - credit approved amount
+  approval: Credit approval
+  outcomeEvent: CreditPosted
+  requirements:
+  - LOG-001
+  - FIN-001
+  objects:
+  - Delivery
+  - return authorization
+  - inspection
+  - credit note
+  result: Physical return and financial settlement each have a recorded disposition.
+  alternative: Issue store credit instead of refund where agreed.
+  exception: A return without matching authorization requires review.
+- id: PROC-21
+  name: Product recall
+  trigger: Source lot flagged
+  actors: Recall lead
+  preconditions: Observed lineage and scoped access
+  flow:
+  - Trace forward
+  - hold affected lots
+  - identify recipients
+  approval: Recall authorization
+  outcomeEvent: RecallOpened
+  requirements:
+  - TRC-001
+  - QMS-001
+  objects:
+  - Source lot
+  - shipment
+  - hold
+  - recall case
+  result: Affected deliveries are identified and recall actions recorded.
+  alternative: A service replacement can be notified by serial.
+  exception: Unknown lineage remains visible as an evidence gap.
+- id: PROC-22
+  name: Record to report
+  trigger: Period end
+  actors: Accountant and controller
+  preconditions: Balanced postings and period scope
+  flow:
+  - Reconcile
+  - adjust by reversal
+  - close
+  - report
+  approval: Closing authority
+  outcomeEvent: PeriodClosed
+  requirements:
+  - FIN-001
+  - ANA-001
+  objects:
+  - Journal
+  - adjustment
+  - period
+  - report
+  result: The closed period can be reproduced from balanced postings.
+  alternative: Apply a permitted next-period adjustment.
+  exception: An unbalanced entry cannot be posted to force reconciliation.
+- id: PROC-23
+  name: Intercompany procurement and sales
+  trigger: One entity orders from another
+  actors: Local buyers, sellers, group controller
+  preconditions: Separate entities and approved exchange basis
+  flow:
+  - Link PO/SO
+  - deliver
+  - post in both books
+  - reconcile/eliminate
+  approval: Local approvals in both entities
+  outcomeEvent: IntercompanyPairReconciled
+  requirements:
+  - ORG-002
+  - FIN-001
+  objects:
+  - Local PO
+  - sales order
+  - invoices
+  - FX basis
+  - elimination pair
+  result: Each legal entity retains its own books and the group sees matched differences.
+  alternative: Record timing differences across periods.
+  exception: An unmatched pair cannot be silently eliminated.
+- id: PROC-24
+  name: Subscription to recurring billing
+  trigger: Billing cutoff reached
+  actors: Subscription manager
+  preconditions: Effective entitlement and usage window
+  flow:
+  - Aggregate usage
+  - apply recurring terms
+  - invoice period
+  approval: Billing release
+  outcomeEvent: PeriodBilled
+  requirements:
+  - SVC-001
+  - INT-003
+  objects:
+  - Subscription
+  - entitlement
+  - usage event
+  - billing period
+  - invoice
+  result: One period charge and authorized usage total are reproducible.
+  alternative: Prorate an effective-dated plan change where agreed.
+  exception: Late or duplicate usage cannot silently change an issued invoice.

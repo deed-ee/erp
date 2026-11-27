@@ -25,6 +25,26 @@
       "type": "array", "uniqueItems": true,
       "items": { "type": "string", "format": "uri-reference" }
     },
+    "messaging": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["direction", "layer", "subject", "protocolSupport", "schemaSupport",
+                     "contract", "transport", "delivery", "idempotency", "permission"],
+        "properties": {
+          "direction": {"enum": ["publish", "consume", "acceptCommand", "offerQuery"]},
+          "layer": {"enum": ["config", "business", "diagnostics"]},
+          "subject": {"type": "string", "minLength": 1},
+          "protocolSupport": {"type": "string", "minLength": 1},
+          "schemaSupport": {"type": "string", "minLength": 1},
+          "contract": {"type": "string", "format": "uri-reference"},
+          "transport": {"enum": ["core", "jetstream"]},
+          "delivery": {"enum": ["best-effort", "request-reply", "at-least-once"]},
+          "idempotency": {"type": "string", "minLength": 1},
+          "permission": {"type": "string", "minLength": 1}
+        }
+      }
+    },
     "health": {
       "type": "object",
       "additionalProperties": false,

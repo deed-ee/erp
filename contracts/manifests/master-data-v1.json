@@ -9,5 +9,17 @@
   "capabilities": ["master-data.article"],
   "openapi": "../openapi/master-data-v1.yaml",
   "entities": ["../entities/article-v1.json"],
-  "health": { "live": "/health/live", "ready": "/health/ready" }
+  "health": { "live": "/health/live", "ready": "/health/ready" },
+  "messaging": [{
+    "direction": "publish",
+    "layer": "business",
+    "subject": "v1.business.{tenantId}.master-data.event.article.registered.v1",
+    "protocolSupport": "=1.0.0",
+    "schemaSupport": "=1.0.0",
+    "contract": "../schemas/nats-article-registered-v1.json",
+    "transport": "jetstream",
+    "delivery": "at-least-once",
+    "idempotency": "Stable message UUID from the transactional outbox; consumers persist effects and inbox identity atomically.",
+    "permission": "Master Data relay may publish the exact contract for explicitly assigned tenants only."
+  }]
 }
