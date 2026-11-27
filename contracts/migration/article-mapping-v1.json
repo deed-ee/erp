@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scoped article mapping for a synthetic legacy order import, version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tenantId", "organizationId", "sourceSystem", "mappingRevision", "mappings"],
+  "properties": {
+    "schemaVersion": {"type": "integer", "const": 1},
+    "tenantId": {"$ref": "order-snapshot-v1.json#/$defs/scopeId"},
+    "organizationId": {"$ref": "order-snapshot-v1.json#/$defs/scopeId"},
+    "sourceSystem": {"$ref": "order-snapshot-v1.json#/$defs/reference"},
+    "mappingRevision": {"$ref": "order-snapshot-v1.json#/$defs/reference"},
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sourceArticleRef", "targetArticleRef", "unit"],
+        "properties": {
+          "sourceArticleRef": {"$ref": "order-snapshot-v1.json#/$defs/reference"},
+          "targetArticleRef": {"$ref": "order-snapshot-v1.json#/$defs/reference"},
+          "unit": {"$ref": "order-snapshot-v1.json#/$defs/line/properties/unit"}
+        }
+      }
+    }
+  }
+}
