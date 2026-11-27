@@ -34,12 +34,25 @@ def grant(scope, permissions):
     return {"tenant_id": scope[0], "organization_id": scope[1], "permissions": permissions}
 
 
+def identity_policy():
+    return {"issuer": ISSUER, "audience": AUDIENCE, "principals": {
+        USERS["production"]: {"actor_id": USERS["production"], "grants": [grant(NOVA, [
+            "manufacturing.plan.read", "master-data.article.read", "master-data.article.register",
+            "master-data.partner.read", "master-data.unit.read", "sales.order.read", "sales.order.draft.create",
+        ])]},
+        USERS["auditor"]: {"actor_id": USERS["auditor"], "grants": [grant(OTHER, ["master-data.article.read"])]},
+        USERS["platform-monitor"]: {"actor_id": USERS["platform-monitor"], "grants": [],
+                                    "platform_permissions": ["platform.health.read"]},
+    }}
+
+
 def prepare():
     if DEMO.exists():
         if not (DEMO / "credentials.json").is_file():
             raise SystemExit("Incomplete preview identity directory; inspect it before retrying")
         if set(json.loads((DEMO / "credentials.json").read_text())) != USERS.keys():
             raise SystemExit("Preview identity seed changed; reset the disposable preview before starting")
+        save(DEMO / "identity-policy.json", identity_policy(), 0o644)
         return
     DEMO.mkdir(mode=0o700)
     for name in ("provider", "realm"):
@@ -78,15 +91,7 @@ def prepare():
                    "credentials": [{"type": "password", "value": credentials[username], "temporary": False}]}
                   for username, subject in USERS.items()],
     }, 0o644)
-    save(DEMO / "identity-policy.json", {"issuer": ISSUER, "audience": AUDIENCE, "principals": {
-        USERS["production"]: {"actor_id": USERS["production"], "grants": [grant(NOVA, [
-            "manufacturing.plan.read", "master-data.article.read", "master-data.article.register",
-            "master-data.partner.read", "master-data.unit.read",
-        ])]},
-        USERS["auditor"]: {"actor_id": USERS["auditor"], "grants": [grant(OTHER, ["master-data.article.read"])]},
-        USERS["platform-monitor"]: {"actor_id": USERS["platform-monitor"], "grants": [],
-                                    "platform_permissions": ["platform.health.read"]},
-    }}, 0o644)
+    save(DEMO / "identity-policy.json", identity_policy(), 0o644)
     save(DEMO / "credentials.json", credentials)
 
 

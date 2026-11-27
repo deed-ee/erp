@@ -1951,6 +1951,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "sales"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "erp4us-identity",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "mongodb",
+ "serde",
+ "serde_json",
+ "time",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

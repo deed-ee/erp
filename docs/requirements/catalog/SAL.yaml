@@ -29,9 +29,12 @@
   issues:
   - 16
   - 27
-  prs: []
-  contracts: []
-  tests: []
+  prs:
+  - 120
+  contracts:
+  - contracts/openapi/sales-v1.yaml
+  tests:
+  - tests/integration/sales_drafts.py
   evidence: []
   questions:
   - Which changes require a new confirmation?

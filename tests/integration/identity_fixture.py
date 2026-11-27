@@ -58,10 +58,12 @@ def initialize():
                 **grant(TENANT, ORGANIZATION, "read", "register"),
                 "permissions": [f"master-data.{resource}.{action}"
                                 for resource in ("article", "unit", "partner")
-                                for action in ("read", "register")] + ["manufacturing.plan.read"],
+                                 for action in ("read", "register")] + [
+                                     "manufacturing.plan.read", "sales.order.read", "sales.order.draft.create"],
             },
             grant(TENANT, OTHER_ORGANIZATION, "read"),
-            grant(OTHER_TENANT, EXTERNAL_ORGANIZATION, "read"),
+            {"tenant_id": OTHER_TENANT, "organization_id": EXTERNAL_ORGANIZATION,
+             "permissions": ["master-data.article.read", "sales.order.read"]},
         ]},
         "synthetic-reader": {"actor_id": "254474cf-c105-473e-9843-38dd023d8a39",
                              "grants": [grant(TENANT, ORGANIZATION, "read")]},

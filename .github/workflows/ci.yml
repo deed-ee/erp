@@ -150,6 +150,15 @@ jobs:
           load: true
           cache-from: type=gha,scope=diagnostics-${{ env.CACHE_NAMESPACE }}
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,ignore-error=true,scope=diagnostics-{0}', env.CACHE_NAMESPACE) || '' }}
+      - name: Build Sales release image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: services/sales/Dockerfile
+          tags: erp4us-ci-sales:latest
+          load: true
+          cache-from: type=gha,scope=sales-${{ env.CACHE_NAMESPACE }}
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,ignore-error=true,scope=sales-{0}', env.CACHE_NAMESPACE) || '' }}
       - name: Seed and exercise the scoped Manufacturing API
         run: |
           compose() { docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml "$@"; }
@@ -164,11 +173,15 @@ jobs:
         run: |
           docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml up --no-build -d diagnostics
           python3 tests/integration/diagnostics.py
+      - name: Exercise scoped Sales order drafts with the live catalog owners
+        run: |
+          docker compose -f compose.yaml -f compose.manufacturing.yaml -f compose.sales.yaml up --no-build -d sales
+          python3 tests/integration/sales_drafts.py
       - name: Scan built service images
         run: |
           sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
-          for service in master-data article-relay manufacturing diagnostics; do
-            container=$(docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml ps -q "$service")
+          for service in master-data article-relay manufacturing diagnostics sales; do
+            container=$(docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml ps -q "$service")
             image=$(docker inspect --format '{{.Config.Image}}' "$container")
             "$RUNNER_TEMP/tools/trivy" image --image-src docker --scanners vuln --severity HIGH,CRITICAL \
               --format json --output "$RUNNER_TEMP/trivy.json" "$image"
@@ -198,6 +211,7 @@ jobs:
           ERP4US_PORT: '8180'
           ERP4US_MANUFACTURING_PORT: '8190'
           ERP4US_DIAGNOSTICS_PORT: '8191'
+          ERP4US_SALES_PORT: '8192'
           ERP4US_IDENTITY_DIR: ./.erp4us-preview
           ERP4US_REAL_OIDC_E2E: '1'
         run: |
@@ -207,10 +221,11 @@ jobs:
           docker tag erp4us-ci-manufacturing erp4us-ci-identity-manufacturing
           docker tag erp4us-ci-diagnostics erp4us-ci-identity-diagnostics
           docker tag erp4us-ci-article-delivery erp4us-ci-identity-article-delivery
-          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml "$@"; }
+          docker tag erp4us-ci-sales erp4us-ci-identity-sales
+          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml "$@"; }
           preview up -d preview-identity
           python3 scripts/preview-identity.py configure
-          preview up --no-build -d master-data manufacturing diagnostics delivery-init
+          preview up --no-build -d master-data manufacturing sales diagnostics delivery-init
           preview wait delivery-init
           preview run --rm manufacturing-seed
           preview run --rm master-data-seed
@@ -222,15 +237,15 @@ jobs:
           path: ~/.npm/_cacache
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
       - if: failure()
-        run: docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml logs --no-color --tail=80
+        run: docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml logs --no-color --tail=80
       - if: always()
-        run: if [ -f .env ]; then docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml down -v; fi
+        run: if [ -f .env ]; then docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml down -v; fi
       - if: always()
         env:
           ERP4US_IDENTITY_DIR: ./.erp4us-preview
         run: |
           if [ -f .erp4us-preview/identity-policy.json ]; then
-            docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml down -v
+            docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml down -v
           fi
   audit:
     needs: impact

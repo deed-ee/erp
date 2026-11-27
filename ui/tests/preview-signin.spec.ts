@@ -42,6 +42,7 @@ test('real OIDC: the other tenant cannot read NovaMotion manufacturing data', as
   await login(page, 'auditor');
   const authorization = (await (await session).allHeaders()).authorization;
   expect(await page.getByRole('link', { name: 'Manufacturing' }).count()).toBe(0);
+  expect(await page.getByRole('link', { name: 'Sales orders' }).count()).toBe(0);
   const result = await page.request.get('/v1/manufacturing/products', { headers: {
     Authorization: authorization,
     'X-Erp4us-Tenant': 'ddcae139-c1e8-47d2-8b48-349cb6f30ce5',
@@ -61,4 +62,24 @@ test('real OIDC: platform monitor sees actual application health', async ({ page
   await expect(page.getByRole('row').filter({ hasText: 'jetstream' }).getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
   await expect(page.getByText('Stored messages', { exact: true })).toBeVisible();
   await expect(page.getByText('Awaiting acknowledgement', { exact: true })).toBeVisible();
+});
+
+test('real OIDC: production user saves and reopens a priced sales draft', async ({ page }) => {
+  test.skip(process.env.ERP4US_REAL_OIDC_E2E !== '1', 'Requires the dedicated Keycloak preview stack');
+  await login(page, 'production');
+  await page.getByRole('link', { name: 'Sales orders' }).click();
+  await expect(page.getByRole('option', { name: /CUS-ATLAS/ })).toHaveCount(1);
+  await page.getByLabel('Customer', { exact: true }).selectOption({ label: 'CUS-ATLAS · Atlas Handling Technologies GmbH' });
+  await expect(page.getByRole('option', { name: /NM-1000/ })).toHaveCount(1);
+  await page.getByLabel('Pieces', { exact: true }).fill('10');
+  const saved = page.waitForResponse(response => response.url().endsWith('/v1/sales/orders')
+    && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  expect((await saved).status()).toBe(201);
+  await expect(page.getByText('Draft saved: EUR 24900.00')).toBeVisible();
+  await page.getByRole('link', { name: 'Manufacturing' }).click();
+  await page.getByRole('link', { name: 'Sales orders' }).click();
+  const match = page.getByRole('row').filter({ hasText: 'Atlas Handling Technologies GmbH' })
+    .filter({ hasText: 'NM-1000' }).filter({ hasText: 'EUR 24900.00' });
+  await expect(match.first()).toContainText('10 EA');
 });

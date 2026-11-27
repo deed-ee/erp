@@ -24,7 +24,7 @@ The synthetic issuer is only for automated fixture tests, not user authenticatio
 
 ## Try the real browser login
 
-On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 8091, 9443 and 4200 free, run:
+On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 8091, 8092, 9443 and 4200 free, run:
 
 ```sh
 sh scripts/demo-start.sh
@@ -41,12 +41,16 @@ Run `ERP4US_REAL_OIDC_E2E=1 npm run test:e2e -- tests/preview-signin.spec.ts` fr
 ERP4US_IDENTITY_DIR=./.erp4us-preview docker compose -p erp4us-preview \
   --env-file .erp4us-preview/compose.env -f compose.yaml -f compose.delivery.yaml \
   -f compose.manufacturing.yaml -f compose.preview-identity.yaml \
-  -f compose.diagnostics.yaml down
+  -f compose.diagnostics.yaml -f compose.sales.yaml down
 ```
 
 The explicit demo seed also creates three fictitious customers (including Atlas Handling) and four suppliers in Master Data. Browse the records under **Master data → Business partners** and filter by role. The directory and optional profile are published in the [Master Data API](../../contracts/openapi/master-data-v1.yaml); existing profile-free records remain valid. Seeding again does not overwrite an existing code in its scope. Addresses are synthetic and the current preview has one address and one delivery address per profile, no external identifier import.
 
 The new image scan checks Keycloak and its Java dependencies. The current pinned upstream image still produces one fixable advisory match tracked in [#121](https://github.com/erp4us-org/erp4us/issues/121). Keep this preview loopback-only with synthetic data; do not waive the gate or treat local functional tests as final approval.
+
+### Save a Sales draft
+
+Sign in as `production`, open **Sales orders**, choose **Atlas Handling Technologies GmbH**, select **NM-1000** revision **A**, and enter **10** pieces. Saving captures the customer profile and product/price snapshot for **EUR 24,900.00**. Reopen Sales to see the persisted draft. The [Sales API](../../contracts/openapi/sales-v1.yaml) uses a scoped command ID for retries and rejects an ID reused with changed inputs. Sales owns its own MongoDB records. It resolves the requested customer and product via their owning APIs, in the verified scope and under the actor's existing read grants. The preview supports one whole-piece line and EUR terms. It does not create a quotation, confirm an order, let the browser supply the unit price, publish a business event, or reserve stock.
 
 ### Check application readiness
 
@@ -59,7 +63,7 @@ If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-previ
 ## Remaining acceptance gates
 
 - Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
-- Scoped draft orders and confirmation, live stock and reservations, shortage drafts, purchasing and partial receipts.
+- Sales confirmation and durable hand-off, live stock and reservations, shortage drafts, purchasing and partial receipts.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
 - Restricted diagnostics collector for actual runtime inventory, heartbeat staleness, and redacted historical/live logs. Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.

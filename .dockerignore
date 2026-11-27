@@ -36,3 +36,7 @@
 !services/diagnostics/Cargo.toml
 !services/diagnostics/src/
 !services/diagnostics/src/**
+!services/sales/
+!services/sales/Cargo.toml
+!services/sales/src/
+!services/sales/src/**

@@ -26,6 +26,9 @@ export class ArticleApi {
   readonly selectedIndex = this.selected.asReadonly();
   readonly canPlan = computed(() => this.grant()?.permissions.includes('manufacturing.plan.read') ?? false);
   readonly canReadPartners = computed(() => this.grant()?.permissions.includes('master-data.partner.read') ?? false);
+  readonly canReadSales = computed(() => this.grant()?.permissions.includes('sales.order.read') ?? false);
+  readonly canCreateSalesDraft = computed(() => this.canReadPartners() && this.canPlan()
+    && (this.grant()?.permissions.includes('sales.order.draft.create') ?? false));
   readonly canReadHealth = computed(() => this.verifiedPlatform().includes('platform.health.read'));
 
   setCredential(value: string) {
