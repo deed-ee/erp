@@ -71,6 +71,8 @@ jobs:
         run: cargo build --locked -p inventory && python3 tests/integration/inventory.py
       - name: Exercise Inventory receipt atomicity and durable recovery on replica sets
         run: python3 tests/integration/inventory_receipt.py
+      - name: Check synthetic receipt identity isolation without starting a provider
+        run: python3 tests/integration/preview_receiving_identity.py
       - name: Exercise Procurement draft creation and lookup on a replica set
         run: cargo build --locked -p procurement && python3 tests/integration/procurement.py
       - name: Exercise the workspace broker test against real NATS

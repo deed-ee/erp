@@ -27,12 +27,15 @@ APPROVERS = {
 }
 BUDGET_PREVIEW = os.getenv("ERP4US_PREVIEW_BUDGET_APPROVALS") == "1"
 ISSUANCE_PREVIEW = os.getenv("ERP4US_PREVIEW_PURCHASE_ISSUANCE") == "1"
+RECEIVING_PREVIEW = os.getenv("ERP4US_PREVIEW_RECEIVING") == "1"
 PURCHASE_READ = "procurement.purchase-order.read"
 PURCHASE_ISSUE = "procurement.purchase-order.issue"
 if BUDGET_PREVIEW:
     USERS.update({name: subject for name, (subject, _) in APPROVERS.items()})
 if BUDGET_PREVIEW and ISSUANCE_PREVIEW:
     USERS["purchase-issuer"] = "12f3837a-0083-4994-9177-1e8c368d5817"
+    if RECEIVING_PREVIEW:
+        USERS["purchase-receiver"] = "cfae7a34-3603-44de-8c78-0e83fb4666e8"
 
 
 def save(path, value, mode=0o600):
@@ -74,10 +77,19 @@ def identity_policy():
             "sales.order.read", "inventory.reservation.read", "inventory.material-plan.read",
             "procurement.proposal.read", PURCHASE_READ, PURCHASE_ISSUE,
         ])]}
+    if "purchase-receiver" in USERS:
+        receiver = USERS["purchase-receiver"]
+        principals[receiver] = {"actor_id": receiver, "grants": [grant(NOVA, [
+            "sales.order.read", "inventory.reservation.read", "inventory.material-plan.read",
+            "procurement.purchase-order.receipt-source.read",
+            "inventory.purchase-receipt.read", "inventory.purchase-receipt.post",
+        ])]}
     return {"issuer": ISSUER, "audience": AUDIENCE, "principals": principals}
 
 
 def prepare():
+    if RECEIVING_PREVIEW and not (BUDGET_PREVIEW and ISSUANCE_PREVIEW):
+        raise SystemExit("The receiving test realm requires both the budget and purchase issuance preview options")
     if ISSUANCE_PREVIEW and not BUDGET_PREVIEW:
         raise SystemExit("The purchase issuance preview requires ERP4US_PREVIEW_BUDGET_APPROVALS=1")
     if DEMO.exists():
