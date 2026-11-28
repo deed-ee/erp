@@ -22,6 +22,110 @@ fn next_command(pieces: &str) -> Command {
     Command::new(SCOPE, id(4), id(5), PURCHASE, id(11), pieces).unwrap()
 }
 
+#[test]
+fn only_exact_replay_or_acknowledgement_of_the_confirmed_head_can_prepare() {
+    let first = command("6").unwrap();
+    let selection = first.selection();
+    let prepare = |ack, pieces| Preparation::new(selection, ack, pieces).unwrap();
+    assert_eq!(
+        prepare_action(prepare(None, "6"), None),
+        Ok(PrepareAction::Start)
+    );
+    assert_eq!(
+        prepare_action(prepare(Some(first.receipt_id), "6"), None),
+        Err(Reject::IntentNotCurrent)
+    );
+    for confirmed in [false, true] {
+        let current = Some((first, None, confirmed));
+        assert_eq!(
+            prepare_action(prepare(None, "6"), current),
+            Ok(PrepareAction::Replay)
+        );
+        assert_eq!(
+            prepare_action(prepare(None, "5"), current),
+            Err(Reject::IntentChanged)
+        );
+        assert_eq!(
+            prepare_action(prepare(Some(id(99)), "6"), current),
+            Err(Reject::IntentNotCurrent)
+        );
+        assert_eq!(
+            prepare_action(prepare(Some(first.receipt_id), "6"), current),
+            if confirmed {
+                Ok(PrepareAction::Start)
+            } else {
+                Err(Reject::IntentNotCurrent)
+            }
+        );
+    }
+    let later = prepare(Some(first.receipt_id), "6");
+    let successor = later.assign(id(10));
+    let now = Some((successor, Some(first.receipt_id), false));
+    assert_eq!(prepare_action(later, now), Ok(PrepareAction::Replay));
+    assert_eq!(
+        prepare_action(prepare(None, "6"), now),
+        Err(Reject::IntentNotCurrent)
+    );
+    assert_eq!(
+        Preparation::new(selection, Some(first.receipt_id), "06"),
+        Err(Reject::InvalidCommand)
+    );
+}
+
+#[test]
+fn confirmation_binds_scope_actor_selection_quantity_and_current_id() {
+    let bound = command("6").unwrap();
+    let head = bound.receipt_id;
+    assert_eq!(check_confirmation(bound, bound, head), Ok(()));
+    for change in [
+        |cmd: &mut Command| cmd.sales.scope.tenant = id(99),
+        |cmd: &mut Command| cmd.sales.scope.organization = id(99),
+        |cmd: &mut Command| cmd.actor = id(99),
+        |cmd: &mut Command| cmd.receipt_id = id(99),
+    ] {
+        let mut foreign = bound;
+        change(&mut foreign);
+        assert_eq!(
+            check_confirmation(foreign, bound, head),
+            Err(Reject::NotFound)
+        );
+    }
+    for change in [
+        |cmd: &mut Command| cmd.sales.order = id(99),
+        |cmd: &mut Command| cmd.sales.line = id(99),
+        |cmd: &mut Command| cmd.purchase.order = id(99),
+        |cmd: &mut Command| cmd.purchase.line = id(99),
+        |cmd: &mut Command| cmd.pieces += 1,
+    ] {
+        let mut changed = bound;
+        change(&mut changed);
+        assert_eq!(
+            check_confirmation(changed, bound, head),
+            Err(Reject::IntentChanged)
+        );
+    }
+    assert_eq!(
+        check_confirmation(bound, bound, id(99)),
+        Err(Reject::IntentNotCurrent)
+    );
+    assert_eq!(
+        Selection::new(
+            Scope {
+                actor: Uuid::nil(),
+                ..SCOPE
+            },
+            id(4),
+            id(5),
+            PURCHASE
+        ),
+        Err(Reject::InvalidCommand)
+    );
+    assert_eq!(
+        Preparation::new(bound.selection(), Some(Uuid::nil()), "6"),
+        Err(Reject::InvalidCommand)
+    );
+}
+
 struct Example {
     cmd: Command,
     plan: PlanRow,

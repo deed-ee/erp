@@ -1,10 +1,11 @@
 //! Test-gated Inventory persistence for the proposed waiting-plan receipt.
 //!
-//! Keep fixed-size line counters separate from the scoped, append-only receipt results:
-//! a million one-piece lots must not grow one Mongo document. Each immutable result
-//! includes its historical allocation and a pending envelope, so there is no third
-//! receipt collection. The Inventory movement ledger remains the physical record;
-//! the received quantity is held in full and never added to free `available`.
+//! A scoped receipt ID is reserved at preparation. A separate fixed-size slot
+//! points to the current receipt for the verified actor and selection. Advancing
+//! the slot does not rewrite the predecessor's immutable result. The Inventory
+//! movement ledger remains the physical record; no part of a lot becomes free stock.
+//! Sales order/line selects the immutable plan in this preview; the assigned
+//! plan and destination are then pinned on the intent itself.
 //!
 //! Future callers must authorize before replay, check it before any owner lookup,
 //! verify the owner tuple with the same actor/scope, and verify the destination. This
@@ -13,8 +14,8 @@
 
 use super::{
     Binding, Command, CurrentRow, Eligibility, IssuedLine, LineState, Organization, OriginalBuyRow,
-    PlanRow, PlanRowKey, PurchaseLine, ReceiptEffect, Reject, SalesLine, StockKey, check_replay,
-    post_new,
+    PlanRow, PlanRowKey, Preparation, PrepareAction, PurchaseLine, ReceiptEffect, Reject,
+    SalesLine, Selection, StockKey, check_confirmation, check_replay, post_new, prepare_action,
 };
 use mongodb::{
     ClientSession, Collection, Database, IndexModel,
@@ -41,10 +42,13 @@ mod records;
 mod tests;
 
 use fact::ActorKind;
-use records::{SCHEMA, purchase_key, receipt_key, row_key, sales_key, stock_key};
+use records::{
+    SCHEMA, purchase_key, receipt_key, receipt_ref, row_key, sales_key, selection_key, stock_key,
+};
 
 const LINES: &str = "purchase_receipt_lines";
 const RECEIPTS: &str = "purchase_receipts";
+const SLOTS: &str = "purchase_receipt_intent_slots";
 const LEDGER: &str = "stock_movements";
 const DB_LIMIT: Duration = Duration::from_secs(5);
 const COMMIT_LIMIT: Duration = Duration::from_secs(2);
@@ -81,15 +85,54 @@ struct Saved {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+struct Intent {
+    command: Command,
+    acknowledged: Option<Uuid>,
+    plan: Uuid,
+    destination: StockKey,
+    confirmed: Option<Box<Saved>>,
+}
+
+impl Intent {
+    fn state(&self) -> (Command, Option<Uuid>, bool) {
+        (self.command, self.acknowledged, self.confirmed.is_some())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Prepare {
+    Created(Intent),
+    Replay(Intent),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 enum Post {
     Created(Saved),
     Replay(Saved),
 }
 
+#[derive(Clone, Copy)]
+enum Write {
+    Prepare(Preparation, Uuid),
+    Confirm(Command, ActorKind),
+}
+
+enum Written {
+    Intent(Prepare),
+    Receipt(Post),
+}
+
+struct CheckedLot {
+    effect: ReceiptEffect,
+    waiting_filter: Document,
+    stock_filter: Document,
+    previous_sequence: Option<i32>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum Failure {
     Rejected(Reject),
-    /// Includes unknown commit outcome. Retry the same command and receipt ID.
+    /// Includes unknown commit outcome. Retry the same preparation or confirmation.
     Unavailable,
 }
 
@@ -140,11 +183,11 @@ struct Store {
 }
 
 impl Store {
-    /// Mongo's `_id` indexes cover the scoped command and scoped plan row. The
-    /// secondary unique index also prevents one purchase tuple binding two rows.
+    /// Mongo's `_id` indexes cover the reserved receipt ID, current actor
+    /// slot and scoped plan row. A purchase tuple cannot bind to two rows.
     async fn open(db: &Database) -> Result<Self, Failure> {
         timeout(DB_LIMIT, async {
-            for name in [LINES, RECEIPTS, LEDGER] {
+            for name in [LINES, RECEIPTS, SLOTS, LEDGER] {
                 match db
                     .create_collection(name)
                     .write_concern(majority_write())
@@ -180,20 +223,142 @@ impl Store {
         )
     }
 
-    /// The command can only be formed after current Inventory authorization.
-    /// This lookup does not depend on the plan, destination, or Procurement.
+    /// Check before any plan, destination or Procurement lookup. Only a
+    /// current prepared receipt returns `None` and permits source verification.
+    /// The caller must already have verified current receiver authorization.
     async fn replay(&self, command: Command) -> Result<Option<Saved>, Failure> {
+        self.read_snapshot(async |session| {
+            Ok(self
+                .confirmation_target(session, command)
+                .await?
+                .confirmed
+                .map(|saved| *saved))
+        })
+        .await
+    }
+
+    async fn reopen(&self, selection: Selection) -> Result<Option<Intent>, Failure> {
+        self.read_snapshot(async |session| self.current(session, selection).await)
+            .await
+    }
+
+    /// Called before looking up any owner source to create a new intent.
+    async fn prepare_replay(&self, request: Preparation) -> Result<Option<Intent>, Failure> {
+        self.read_snapshot(async |session| {
+            let current = self.current(session, request.selection).await?;
+            match prepare_action(request, current.as_ref().map(Intent::state))? {
+                PrepareAction::Start => Ok(None),
+                PrepareAction::Replay => Ok(current),
+            }
+        })
+        .await
+    }
+
+    async fn read_snapshot<T>(
+        &self,
+        read: impl AsyncFnOnce(&mut ClientSession) -> Result<T, Step>,
+    ) -> Result<T, Failure> {
         timeout(DB_LIMIT, async {
-            self.majority_read(RECEIPTS)
-                .find_one(doc! {"_id": receipt_key(command)})
-                .max_time(DB_LIMIT)
+            // Both reads see the same majority-committed snapshot, without
+            // opening a write transaction or needing to resolve a commit.
+            let mut session = self
+                .db
+                .client()
+                .start_session()
+                .snapshot(true)
                 .await
-                .map_err(|_| Failure::Unavailable)?
-                .map(|saved| records::read_saved(command, &saved).map_err(Failure::Rejected))
-                .transpose()
+                .map_err(|_| Failure::Unavailable)?;
+            read(&mut session).await.map_err(|step| match step {
+                Step::Rejected(reject) => Failure::Rejected(reject),
+                Step::Database(_) => Failure::Unavailable,
+            })
         })
         .await
         .map_err(|_| Failure::Unavailable)?
+    }
+
+    async fn session(&self) -> Result<ClientSession, Failure> {
+        self.db
+            .client()
+            .start_session()
+            .await
+            .map_err(|_| Failure::Unavailable)
+    }
+
+    async fn head(
+        &self,
+        session: &mut ClientSession,
+        selection: Selection,
+    ) -> Result<Option<Uuid>, Step> {
+        Ok(self
+            .db
+            .collection::<Document>(SLOTS)
+            .find_one(doc! {"_id": selection_key(selection)})
+            .selection_criteria(primary())
+            .session(session)
+            .await?
+            .map(|document| records::read_head(selection, &document))
+            .transpose()?)
+    }
+
+    async fn intent(
+        &self,
+        session: &mut ClientSession,
+        scope: Organization,
+        actor: Uuid,
+        receipt_id: Uuid,
+    ) -> Result<Option<Intent>, Step> {
+        Ok(self
+            .db
+            .collection::<Document>(RECEIPTS)
+            .find_one(doc! {"_id": receipt_ref(scope, receipt_id), "actorId": actor.to_string()})
+            .selection_criteria(primary())
+            .session(session)
+            .await?
+            .map(|document| records::read_intent(scope, actor, receipt_id, &document))
+            .transpose()?)
+    }
+
+    async fn current(
+        &self,
+        session: &mut ClientSession,
+        selection: Selection,
+    ) -> Result<Option<Intent>, Step> {
+        let Some(head) = self.head(session, selection).await? else {
+            return Ok(None);
+        };
+        let intent = self
+            .intent(session, selection.sales.scope, selection.actor, head)
+            .await?
+            .ok_or(Reject::InvalidState)?;
+        if intent.command.selection() != selection {
+            return Err(Reject::InvalidState.into());
+        }
+        Ok(Some(intent))
+    }
+
+    async fn confirmation_target(
+        &self,
+        session: &mut ClientSession,
+        command: Command,
+    ) -> Result<Intent, Step> {
+        // Query by verified actor and scope before comparing or exposing any
+        // state. A guessed receipt ID owned by someone else is absent.
+        let intent = self
+            .intent(
+                session,
+                command.sales.scope,
+                command.actor,
+                command.receipt_id,
+            )
+            .await?
+            .ok_or(Reject::NotFound)?;
+        let head = self
+            .head(session, intent.command.selection())
+            .await?
+            .ok_or(Reject::InvalidState)?;
+        check_confirmation(command, intent.command, head)?;
+        Ok(intent)
     }
 
     /// Read only an existing allocation for the exact authorized Sales and purchase tuple.
@@ -230,6 +395,49 @@ impl Store {
         destination: &StockKey,
         actor_kind: ActorKind,
     ) -> Result<Post, Failure> {
+        match self
+            .write(Write::Confirm(command, actor_kind), issued, destination)
+            .await?
+        {
+            Written::Receipt(value) => Ok(value),
+            Written::Intent(_) => Err(Failure::Unavailable),
+        }
+    }
+
+    async fn prepare(
+        &self,
+        request: Preparation,
+        issued: &IssuedLine<'_>,
+        destination: &StockKey,
+    ) -> Result<Prepare, Failure> {
+        self.prepare_with_candidate(request, Uuid::new_v4(), issued, destination)
+            .await
+    }
+
+    // Separate the server-assigned candidate from command data. The transport
+    // fixture pins this value to the partner test's expected lot ID.
+    async fn prepare_with_candidate(
+        &self,
+        request: Preparation,
+        candidate: Uuid,
+        issued: &IssuedLine<'_>,
+        destination: &StockKey,
+    ) -> Result<Prepare, Failure> {
+        match self
+            .write(Write::Prepare(request, candidate), issued, destination)
+            .await?
+        {
+            Written::Intent(value) => Ok(value),
+            Written::Receipt(_) => Err(Failure::Unavailable),
+        }
+    }
+
+    async fn write(
+        &self,
+        write: Write,
+        issued: &IssuedLine<'_>,
+        destination: &StockKey,
+    ) -> Result<Written, Failure> {
         let store = self.clone();
         let destination = destination.clone();
         let IssuedLine {
@@ -254,51 +462,35 @@ impl Store {
                 unit: &unit,
                 ordered,
             };
-            store
-                .transact(command, &issued, &destination, actor_kind, deadline)
-                .await
+            store.transact(write, &issued, &destination, deadline).await
         })
         .await
     }
 
     async fn transact(
         &self,
-        command: Command,
+        write: Write,
         issued: &IssuedLine<'_>,
         destination: &StockKey,
-        actor_kind: ActorKind,
         deadline: Instant,
-    ) -> Result<Post, Failure> {
-        let mut session = self
-            .db
-            .client()
-            .start_session()
-            .await
-            .map_err(|_| Failure::Unavailable)?;
-        let message_id = Uuid::new_v4();
+    ) -> Result<Written, Failure> {
+        let mut session = self.session().await?;
         for attempt in 0..MAX_ATTEMPTS {
             if Instant::now() >= deadline {
                 return Err(Failure::Unavailable);
             }
-            session
-                .start_transaction()
-                .read_concern(ReadConcern::snapshot())
-                .selection_criteria(primary())
-                .write_concern(majority_write())
-                .max_commit_time(COMMIT_LIMIT)
-                .await
-                .map_err(|_| Failure::Unavailable)?;
+            begin_snapshot(&mut session).await?;
 
-            let result = self
-                .apply(
-                    &mut session,
-                    command,
-                    issued,
-                    destination,
-                    actor_kind,
-                    message_id,
-                )
-                .await;
+            let result = match write {
+                Write::Prepare(request, candidate) => self
+                    .apply_prepare(&mut session, request, candidate, issued, destination)
+                    .await
+                    .map(Written::Intent),
+                Write::Confirm(command, actor_kind) => self
+                    .apply_confirm(&mut session, command, issued, destination, actor_kind)
+                    .await
+                    .map(Written::Receipt),
+            };
             match result {
                 Ok(post) => {
                     if confirm_commit(&mut session).await? {
@@ -323,23 +515,72 @@ impl Store {
         Err(Failure::Unavailable)
     }
 
-    async fn apply(
+    async fn apply_prepare(
+        &self,
+        session: &mut ClientSession,
+        request: Preparation,
+        candidate: Uuid,
+        issued: &IssuedLine<'_>,
+        destination: &StockKey,
+    ) -> Result<Prepare, Step> {
+        let prior = self.current(session, request.selection).await?;
+        if prepare_action(request, prior.as_ref().map(Intent::state))? == PrepareAction::Replay {
+            return Ok(Prepare::Replay(prior.ok_or(Reject::InvalidState)?));
+        }
+        if prior
+            .as_ref()
+            .is_some_and(|intent| intent.plan != issued.plan)
+        {
+            return Err(Reject::InvalidSource.into());
+        }
+        if candidate.is_nil() {
+            return Err(Reject::InvalidState.into());
+        }
+        let command = request.assign(candidate);
+        // This checks one snapshot, not a reservation: another lot may consume
+        // the remaining room. Only confirmation takes the receipt write guards.
+        let checked = self
+            .check_lot(session, command, issued, destination)
+            .await?;
+        let row = checked.effect.line.binding.row.key;
+        let intent = Intent {
+            command,
+            acknowledged: request.acknowledged,
+            plan: row.plan,
+            destination: row.stock,
+            confirmed: None,
+        };
+        self.db
+            .collection::<Document>(RECEIPTS)
+            .insert_one(records::prepared(&intent))
+            .session(&mut *session)
+            .await?;
+        let slots = self.db.collection::<Document>(SLOTS);
+        let head = records::head(request.selection, command.receipt_id);
+        if let Some(prior) = prior {
+            let changed = slots
+                .replace_one(
+                    doc! {"_id": selection_key(request.selection), "receiptId": prior.command.receipt_id.to_string()},
+                    head,
+                )
+                .session(session)
+                .await?;
+            if changed.modified_count != 1 {
+                return Err(Reject::InvalidState.into());
+            }
+        } else {
+            slots.insert_one(head).session(session).await?;
+        }
+        Ok(Prepare::Created(intent))
+    }
+
+    async fn check_lot(
         &self,
         session: &mut ClientSession,
         command: Command,
         issued: &IssuedLine<'_>,
         destination: &StockKey,
-        actor_kind: ActorKind,
-        message_id: Uuid,
-    ) -> Result<Post, Step> {
-        let receipts = self.db.collection::<Document>(RECEIPTS);
-        if let Some(document) = receipts
-            .find_one(doc! {"_id": receipt_key(command)})
-            .session(&mut *session)
-            .await?
-        {
-            return Ok(Post::Replay(records::read_saved(command, &document)?));
-        }
+    ) -> Result<CheckedLot, Step> {
         if issued.scope != command.sales.scope || issued.purchase != command.purchase {
             return Err(Reject::NotFound.into());
         }
@@ -427,22 +668,65 @@ impl Store {
             exact,
             mapped.then_some(destination),
         )?;
+        Ok(CheckedLot {
+            effect,
+            waiting_filter,
+            stock_filter,
+            previous_sequence: old.map(|(_, allocation)| allocation.sequence),
+        })
+    }
+
+    async fn apply_confirm(
+        &self,
+        session: &mut ClientSession,
+        command: Command,
+        issued: &IssuedLine<'_>,
+        destination: &StockKey,
+        actor_kind: ActorKind,
+    ) -> Result<Post, Step> {
+        let intent = self.confirmation_target(session, command).await?;
+        if let Some(saved) = intent.confirmed {
+            return Ok(Post::Replay(*saved));
+        }
+        if issued.plan != intent.plan || *issued.item != intent.destination.item {
+            return Err(Reject::InvalidSource.into());
+        }
+        if *destination != intent.destination {
+            return Err(Reject::UnverifiedDestination.into());
+        }
+        let CheckedLot {
+            effect,
+            waiting_filter,
+            stock_filter,
+            previous_sequence,
+        } = self
+            .check_lot(session, command, issued, destination)
+            .await?;
+        let message_id = Uuid::new_v4();
         let saved = Saved {
             effect,
             posted_at: DateTime::now(),
             message_id,
         };
         let next = records::line_record(&saved.effect)?;
-        let receipt = records::receipt_record(&saved, &next, fact::encode(&saved, actor_kind)?);
+        let mut receipt = records::receipt_record(&saved, &next, fact::encode(&saved, actor_kind)?);
+        records::mark_confirmed(&intent, &mut receipt);
+
+        let row = &saved.effect.line.binding.row.key;
+        let row_id = row_key(row);
+        let purchase = purchase_key(command.sales.scope, row.plan, command.purchase);
+        let reservations = self.db.collection::<Document>("reservations");
+        let balances = self.db.collection::<Document>("balances");
+        let lines = self.db.collection::<Document>(LINES);
 
         // Real writes (not matched no-ops) guard against deletion/changes after
         // the snapshot. These tokens do not change demand or available stock.
         guard(&reservations, waiting_filter, message_id, session).await?;
         guard(&balances, stock_filter, message_id, session).await?;
-        if let Some((_, previous)) = old {
+        if let Some(sequence) = previous_sequence {
             let changed = lines
                 .update_one(
-                    doc! {"_id": &row, "purchaseKey": &purchase, "allocation.sequence": previous.sequence},
+                    doc! {"_id": row_id, "purchaseKey": purchase, "allocation.sequence": sequence},
                     doc! {"$set": {"allocation": next.get_document("allocation").map_err(|_| Reject::InvalidState)?}},
                 )
                 .session(&mut *session)
@@ -453,7 +737,18 @@ impl Store {
         } else {
             lines.insert_one(next).session(&mut *session).await?;
         }
-        receipts.insert_one(receipt).session(&mut *session).await?;
+        let changed = self
+            .db
+            .collection::<Document>(RECEIPTS)
+            .replace_one(
+                doc! {"_id": receipt_key(command), "actorId": command.actor.to_string(), "state": "prepared"},
+                receipt,
+            )
+            .session(&mut *session)
+            .await?;
+        if changed.modified_count != 1 {
+            return Err(Reject::InvalidState.into());
+        }
         self.db
             .collection::<Document>(LEDGER)
             .insert_one(records::movement(&saved))
@@ -461,6 +756,17 @@ impl Store {
             .await?;
         Ok(Post::Created(saved))
     }
+}
+
+async fn begin_snapshot(session: &mut ClientSession) -> Result<(), Failure> {
+    session
+        .start_transaction()
+        .read_concern(ReadConcern::snapshot())
+        .selection_criteria(primary())
+        .write_concern(majority_write())
+        .max_commit_time(COMMIT_LIMIT)
+        .await
+        .map_err(|_| Failure::Unavailable)
 }
 
 async fn bounded_post<T: Send + 'static>(

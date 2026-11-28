@@ -25,6 +25,45 @@ struct PurchaseLine {
     line: Uuid,
 }
 
+/// The caller must first verify current Inventory scope and receiver permission.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Selection {
+    sales: SalesLine,
+    purchase: PurchaseLine,
+    actor: Uuid,
+}
+
+impl Selection {
+    fn new(scope: Scope, order: Uuid, line: Uuid, purchase: PurchaseLine) -> Result<Self, Reject> {
+        if [
+            scope.tenant,
+            scope.organization,
+            scope.actor,
+            order,
+            line,
+            purchase.order,
+            purchase.line,
+        ]
+        .iter()
+        .any(Uuid::is_nil)
+        {
+            return Err(Reject::InvalidCommand);
+        }
+        Ok(Self {
+            sales: SalesLine {
+                scope: Organization {
+                    tenant: scope.tenant,
+                    organization: scope.organization,
+                },
+                order,
+                line,
+            },
+            purchase,
+            actor: scope.actor,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Command {
     sales: SalesLine,
@@ -45,31 +84,13 @@ impl Command {
         receipt_id: Uuid,
         pieces: &str,
     ) -> Result<Self, Reject> {
-        if [
-            scope.tenant,
-            scope.organization,
-            scope.actor,
-            order,
-            line,
-            purchase.order,
-            purchase.line,
-            receipt_id,
-        ]
-        .iter()
-        .any(Uuid::is_nil)
-        {
+        let selection = Selection::new(scope, order, line, purchase)?;
+        if receipt_id.is_nil() {
             return Err(Reject::InvalidCommand);
         }
         Ok(Self {
-            sales: SalesLine {
-                scope: Organization {
-                    tenant: scope.tenant,
-                    organization: scope.organization,
-                },
-                order,
-                line,
-            },
-            purchase,
+            sales: selection.sales,
+            purchase: selection.purchase,
             receipt_id,
             actor: scope.actor,
             pieces: positive(pieces).ok_or(Reject::InvalidCommand)?,
@@ -79,6 +100,91 @@ impl Command {
     fn replay_key(self) -> (Organization, Uuid) {
         (self.sales.scope, self.receipt_id)
     }
+
+    fn selection(self) -> Selection {
+        Selection {
+            sales: self.sales,
+            purchase: self.purchase,
+            actor: self.actor,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Preparation {
+    selection: Selection,
+    acknowledged: Option<Uuid>,
+    pieces: i32,
+}
+
+impl Preparation {
+    fn new(selection: Selection, acknowledged: Option<Uuid>, pieces: &str) -> Result<Self, Reject> {
+        if acknowledged.as_ref().is_some_and(Uuid::is_nil) {
+            return Err(Reject::InvalidCommand);
+        }
+        Ok(Self {
+            selection,
+            acknowledged,
+            pieces: positive(pieces).ok_or(Reject::InvalidCommand)?,
+        })
+    }
+
+    fn assign(self, receipt_id: Uuid) -> Command {
+        Command {
+            sales: self.selection.sales,
+            purchase: self.selection.purchase,
+            actor: self.selection.actor,
+            receipt_id,
+            pieces: self.pieces,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PrepareAction {
+    Start,
+    Replay,
+}
+
+fn prepare_action(
+    request: Preparation,
+    current: Option<(Command, Option<Uuid>, bool)>,
+) -> Result<PrepareAction, Reject> {
+    let Some((command, prior_ack, confirmed)) = current else {
+        return if request.acknowledged.is_none() {
+            Ok(PrepareAction::Start)
+        } else {
+            Err(Reject::IntentNotCurrent)
+        };
+    };
+    if command.selection() != request.selection {
+        return Err(Reject::InvalidState);
+    }
+    if request.acknowledged == prior_ack {
+        return if request.pieces == command.pieces {
+            Ok(PrepareAction::Replay)
+        } else {
+            Err(Reject::IntentChanged)
+        };
+    }
+    if confirmed && request.acknowledged == Some(command.receipt_id) {
+        Ok(PrepareAction::Start)
+    } else {
+        Err(Reject::IntentNotCurrent)
+    }
+}
+
+fn check_confirmation(requested: Command, bound: Command, current_id: Uuid) -> Result<(), Reject> {
+    if requested.replay_key() != bound.replay_key() || requested.actor != bound.actor {
+        return Err(Reject::NotFound);
+    }
+    if bound.receipt_id != current_id {
+        return Err(Reject::IntentNotCurrent);
+    }
+    if requested != bound {
+        return Err(Reject::IntentChanged);
+    }
+    Ok(())
 }
 
 /// Selected tuple of the authenticated Procurement source. The caller must
@@ -190,6 +296,7 @@ enum Reject {
     PlanIneligible,
     ActorMismatch,
     IntentChanged,
+    IntentNotCurrent,
 }
 
 /// Call after current Inventory authorization, before any new-command lookups,
@@ -214,9 +321,9 @@ fn check_replay(
     Ok(Some(saved))
 }
 
-/// Decide only after the replay lookup found no command. The caller obtains
-/// the live hold, binding and balance in the same guarded transaction that will
-/// commit the effect; absence is not a substitute for an unreadable record.
+/// Check a whole lot against a local snapshot. Preparation discards this
+/// prospective effect. Confirmation repeats the decision under the guards
+/// before committing it; absence is not a substitute for an unreadable record.
 fn post_new(
     command: Command,
     plan: &PlanRow,

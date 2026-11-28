@@ -1,10 +1,11 @@
 use super::{
-    Allocation, Binding, Command, LineState, Organization, OriginalBuyRow, PlanRow, PlanRowKey,
-    PurchaseLine, ReceiptEffect, Reject, SalesLine, Saved, StockKey, check_replay,
+    Allocation, Binding, Command, Intent, LineState, Organization, OriginalBuyRow, PlanRow,
+    PlanRowKey, PurchaseLine, ReceiptEffect, Reject, SalesLine, Saved, Selection, StockKey,
+    check_replay,
 };
 use crate::{
     line_key,
-    netting::{Item, positive},
+    netting::{Item, MAX_PIECES, positive},
     preview::{Warehouse, scoped},
     receipt::{add, subtract},
 };
@@ -52,9 +53,133 @@ pub(super) fn purchase_key(scope: Organization, plan: Uuid, purchase: PurchaseLi
 
 pub(super) fn receipt_key(command: Command) -> Document {
     let (scope, id) = command.replay_key();
+    receipt_ref(scope, id)
+}
+
+pub(super) fn receipt_ref(scope: Organization, id: Uuid) -> Document {
     let mut key = scoped(scope.tenant, scope.organization);
     key.insert("receiptId", id.to_string());
     key
+}
+
+pub(super) fn selection_key(selection: Selection) -> Document {
+    let mut key = sales_key(selection.sales);
+    key.extend(doc! {
+        "actorId": selection.actor.to_string(),
+        "purchaseOrderId": selection.purchase.order.to_string(),
+        "purchaseLineId": selection.purchase.line.to_string(),
+    });
+    key
+}
+
+pub(super) fn head(selection: Selection, receipt_id: Uuid) -> Document {
+    doc! {"_id": selection_key(selection), "schemaVersion": SCHEMA, "receiptId": receipt_id.to_string()}
+}
+
+pub(super) fn read_head(selection: Selection, document: &Document) -> Result<Uuid, Reject> {
+    version(document)?;
+    if document.get_document("_id") != Ok(&selection_key(selection)) {
+        return Err(Reject::InvalidState);
+    }
+    id(document, "receiptId")
+}
+
+fn intent_binding(intent: &Intent, state: &str) -> Document {
+    doc! {
+        "selectionKey": selection_key(intent.command.selection()),
+        "acknowledgedReceiptId": intent.acknowledged.map(|id| id.to_string()),
+        "planId": intent.plan.to_string(),
+        "destination": stock_key(&intent.destination),
+        "state": state,
+    }
+}
+
+pub(super) fn prepared(intent: &Intent) -> Document {
+    let mut document = doc! {
+        "_id": receipt_key(intent.command), "schemaVersion": SCHEMA,
+        "actorId": intent.command.actor.to_string(), "pieces": intent.command.pieces,
+    };
+    document.extend(intent_binding(intent, "prepared"));
+    document
+}
+
+pub(super) fn mark_confirmed(intent: &Intent, document: &mut Document) {
+    document.extend(intent_binding(intent, "confirmed"));
+}
+
+pub(super) fn read_intent(
+    scope: Organization,
+    actor: Uuid,
+    receipt_id: Uuid,
+    document: &Document,
+) -> Result<Intent, Reject> {
+    version(document)?;
+    if document.get_document("_id") != Ok(&receipt_ref(scope, receipt_id))
+        || id(document, "actorId")? != actor
+    {
+        return Err(Reject::InvalidState);
+    }
+    let key = field(document.get_document("selectionKey"))?;
+    let command = Command {
+        sales: SalesLine {
+            scope,
+            order: id(key, "orderId")?,
+            line: id(key, "lineId")?,
+        },
+        purchase: PurchaseLine {
+            order: id(key, "purchaseOrderId")?,
+            line: id(key, "purchaseLineId")?,
+        },
+        receipt_id,
+        actor,
+        pieces: field(document.get_i32("pieces"))?,
+    };
+    if !((1..=MAX_PIECES).contains(&command.pieces) && *key == selection_key(command.selection())) {
+        return Err(Reject::InvalidState);
+    }
+    let acknowledged = match document.get("acknowledgedReceiptId") {
+        Some(Bson::Null) => None,
+        Some(_) => Some(id(document, "acknowledgedReceiptId")?),
+        None => return Err(Reject::InvalidState),
+    };
+    if acknowledged == Some(receipt_id) {
+        return Err(Reject::InvalidState);
+    }
+    let plan = id(document, "planId")?;
+    let stock = field(document.get_document("destination"))?;
+    let destination = StockKey {
+        scope,
+        warehouse: id(stock, "warehouseId")?,
+        item: parse_item(stock, "catalogSku", "productRevision")?,
+    };
+    if *stock != stock_key(&destination) {
+        return Err(Reject::InvalidState);
+    }
+    let confirmed = match field(document.get_str("state"))? {
+        "prepared"
+            if ["lineAtPosting", "heldPieces", "postedAt", "outbox"]
+                .iter()
+                .all(|key| !document.contains_key(key)) =>
+        {
+            None
+        }
+        "confirmed" => {
+            let saved = read_saved(command, document).map_err(|_| Reject::InvalidState)?;
+            let row = &saved.effect.line.binding.row.key;
+            if row.plan != plan || row.stock != destination {
+                return Err(Reject::InvalidState);
+            }
+            Some(Box::new(saved))
+        }
+        _ => return Err(Reject::InvalidState),
+    };
+    Ok(Intent {
+        command,
+        acknowledged,
+        plan,
+        destination,
+        confirmed,
+    })
 }
 
 fn field<T>(value: Result<T, impl std::fmt::Debug>) -> Result<T, Reject> {
@@ -69,16 +194,20 @@ fn id(record: &Document, name: &str) -> Result<Uuid, Reject> {
         .ok_or(Reject::InvalidState)
 }
 
-fn item(record: &Document) -> Result<Item, Reject> {
+fn parse_item(record: &Document, sku_field: &str, revision_field: &str) -> Result<Item, Reject> {
     let item = Item {
-        sku: field(record.get_str("sku"))?.into(),
-        revision: match record.get("revision") {
+        sku: field(record.get_str(sku_field))?.into(),
+        revision: match record.get(revision_field) {
             Some(Bson::Null) => None,
             Some(Bson::String(revision)) => Some(revision.clone()),
             _ => return Err(Reject::InvalidState),
         },
     };
     item.valid().then_some(item).ok_or(Reject::InvalidState)
+}
+
+fn item(record: &Document) -> Result<Item, Reject> {
+    parse_item(record, "sku", "revision")
 }
 
 fn pieces(record: &Document, name: &str) -> Result<i32, Reject> {
