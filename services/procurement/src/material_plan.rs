@@ -76,7 +76,7 @@ pub(super) fn revision(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
 }
 
-fn pieces(value: &str) -> bool {
+pub(super) fn pieces(value: &str) -> bool {
     (1..=7).contains(&value.len())
         && !value.starts_with('0')
         && value.bytes().all(|b| b.is_ascii_digit())

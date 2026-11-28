@@ -9,6 +9,8 @@ mod partners;
 mod purchase_batch;
 mod purchase_store;
 mod query;
+#[cfg(test)]
+mod receipt_wire;
 mod store;
 mod terms;
 mod terms_store;

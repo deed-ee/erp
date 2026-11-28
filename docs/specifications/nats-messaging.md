@@ -22,7 +22,7 @@ The [JSON envelope](../../contracts/schemas/nats-envelope-v1.json) is the source
 | `Content-Type` | Required literal `application/json`; no media type parameters in v1. |
 | `traceparent` | Optional W3C v00, lowercase hex and nonzero trace/span IDs; matches envelope. |
 | `tracestate` | Optional W3C trace state, only with `traceparent`; identical to envelope, max 512 bytes and 32 entries, no repeated keys. |
-| `Nats-Msg-Id` | Required for JetStream sends: message UUID normally, `replay-<positive-original-stream-sequence>-<uuid>` for operator replay. Deduplication only, never authorization. |
+| `Nats-Msg-Id` | Required for JetStream sends: message UUID normally, `replay-<positive-original-stream-sequence>-<original-message-uuid>` for operator replay. Deduplication only, never authorization. |
 
 Reject missing required fields, multiple values of a known header, inconsistencies and unsupported versions before business handling. Consumers quarantine permanent invalid durable messages before terminating delivery; never copy sensitive bodies to logs. Unknown additive fields are allowed but never authorize behavior. JSON Schema validates shape, not cross-field equality or broker authorization. Trace metadata is for propagation; no exporter or instrumentation backend is required.
 
