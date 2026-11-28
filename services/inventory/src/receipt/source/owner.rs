@@ -152,6 +152,7 @@ async fn read_owner(response: Response<Body>) -> Result<Bytes, StatusCode> {
     }
 }
 
+#[cfg(test)]
 #[path = "../../../../../tests/integration/receipt_identity.rs"]
 mod receipt_identity;
 

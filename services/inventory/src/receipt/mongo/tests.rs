@@ -1041,7 +1041,7 @@ async fn mongo_recovers_the_same_lot_until_deliberately_advancing_the_current_in
 #[ignore = "requires INVENTORY_RECEIPT_TEST_MONGO_URI for a dedicated disposable replica set"]
 async fn mongo_application_replays_before_contacting_the_owner() {
     use crate::receipt::{
-        application::{self, Line, Receiving},
+        application::{self, Line, Owner, Receiving},
         http,
         source::{fixture_auth, fixture_headers},
     };
@@ -1153,7 +1153,7 @@ async fn mongo_application_replays_before_contacting_the_owner() {
         }),
     );
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let peer = listener.local_addr().unwrap();
+    let peer = Owner::Loopback(listener.local_addr().unwrap());
     let mut tasks = JoinSet::new();
     tasks.spawn(async { axum::serve(listener, app).await });
 

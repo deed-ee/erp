@@ -236,7 +236,9 @@ struct PlanRow {
 #[derive(Clone, Copy)]
 enum Eligibility {
     Waiting,
+    #[cfg(test)]
     Closed,
+    #[cfg(test)]
     Released,
     Incompatible,
 }
@@ -441,11 +443,18 @@ fn subtract(left: i32, right: i32) -> Option<i32> {
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
 mod application;
-#[cfg(test)]
 mod http;
-#[cfg(test)]
 mod mongo;
-#[cfg(test)]
 mod source;
+
+#[cfg(feature = "preview-receiving-proof")]
+pub(super) async fn proof_router(
+    db: &mongodb::Database,
+    auth: erp4us_identity::Auth,
+) -> std::io::Result<axum::Router> {
+    let store = mongo::Store::open(db)
+        .await
+        .map_err(|_| std::io::Error::other("Unable to initialize the receiving proof store"))?;
+    Ok(http::router(store, auth, application::Owner::Preview))
+}

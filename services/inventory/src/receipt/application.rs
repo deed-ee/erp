@@ -1,5 +1,5 @@
 //! Connect authorized preview receiving to its owner and persistence.
-//! Test-gated; no public receipt routes or actor grants are provisioned here.
+//! Compiled for tests or the explicit synthetic proof build only.
 
 use super::{
     Command, Preparation, PurchaseLine, Reject, Selection, StockKey,
@@ -8,7 +8,6 @@ use super::{
 };
 use axum::http::{HeaderMap, StatusCode};
 use erp4us_identity::Auth;
-use tokio::net::ToSocketAddrs;
 use uuid::Uuid;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -29,6 +28,30 @@ pub(super) struct Line {
     pub order: Uuid,
     pub line: Uuid,
     pub purchase: PurchaseLine,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum Owner {
+    #[cfg(feature = "preview-receiving-proof")]
+    Preview,
+    #[cfg(test)]
+    Loopback(std::net::SocketAddr),
+}
+
+impl Owner {
+    async fn fetch(
+        self,
+        receiver: &Receiver,
+        plan: Uuid,
+        purchase: PurchaseLine,
+    ) -> Result<Selected, StatusCode> {
+        match self {
+            #[cfg(feature = "preview-receiving-proof")]
+            Self::Preview => receiver.fetch(("procurement", 8094), plan, purchase).await,
+            #[cfg(test)]
+            Self::Loopback(peer) => receiver.fetch(peer, plan, purchase).await,
+        }
+    }
 }
 
 pub(super) struct Receiving<'a> {
@@ -65,7 +88,7 @@ impl<'a> Receiving<'a> {
         line: Line,
         acknowledged: Option<Uuid>,
         pieces: &str,
-        peer: impl ToSocketAddrs,
+        peer: Owner,
     ) -> Result<Prepare, Failure> {
         let selection = self.selection(line)?;
         let request =
@@ -85,7 +108,7 @@ impl<'a> Receiving<'a> {
         line: Line,
         receipt: Uuid,
         pieces: &str,
-        peer: impl ToSocketAddrs,
+        peer: Owner,
     ) -> Result<Post, Failure> {
         let command = Command::new(
             self.receiver.scope(),
@@ -109,12 +132,11 @@ impl<'a> Receiving<'a> {
     async fn source(
         &self,
         selection: Selection,
-        peer: impl ToSocketAddrs,
+        peer: Owner,
     ) -> Result<(Selected, StockKey), Failure> {
         let (plan, warehouse) = self.store.plan_destination(selection.sales).await?;
-        let source = self
-            .receiver
-            .fetch(peer, plan, selection.purchase)
+        let source = peer
+            .fetch(&self.receiver, plan, selection.purchase)
             .await
             .map_err(Failure::Owner)?;
         let destination = StockKey {

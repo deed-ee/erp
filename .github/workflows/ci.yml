@@ -67,6 +67,8 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: Check the explicitly opt-in receiving proof binary
+        run: cargo clippy --locked -p inventory --all-targets --features preview-receiving-proof -- -D warnings
       - name: Exercise Inventory reservation and replay on a replica set
         run: cargo build --locked -p inventory && python3 tests/integration/inventory.py
       - name: Exercise Inventory receipt atomicity and durable recovery on replica sets

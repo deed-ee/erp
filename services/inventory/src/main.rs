@@ -18,7 +18,7 @@ mod material_plan;
 mod netting;
 mod preview;
 mod query;
-#[cfg(test)]
+#[cfg(any(test, feature = "preview-receiving-proof"))]
 mod receipt;
 
 #[derive(Deserialize)]

@@ -39,6 +39,7 @@ use uuid::Uuid;
 
 mod fact;
 mod records;
+#[cfg(test)]
 mod tests;
 
 pub(super) use fact::ActorKind;
@@ -185,7 +186,7 @@ pub(super) struct Store {
 impl Store {
     /// Mongo's `_id` indexes cover the reserved receipt ID, current actor
     /// slot and scoped plan row. A purchase tuple cannot bind to two rows.
-    async fn open(db: &Database) -> Result<Self, Failure> {
+    pub(super) async fn open(db: &Database) -> Result<Self, Failure> {
         timeout(DB_LIMIT, async {
             for name in [LINES, RECEIPTS, SLOTS, LEDGER] {
                 match db
@@ -384,6 +385,7 @@ impl Store {
     }
 
     /// Read only an existing allocation for the exact authorized Sales and purchase tuple.
+    #[cfg(test)]
     async fn allocation(
         &self,
         sales: SalesLine,

@@ -98,57 +98,95 @@ async fn lookup(
         .ok_or(StatusCode::SERVICE_UNAVAILABLE)
 }
 
+fn proof_setting(value: Result<&str, &env::VarError>) -> io::Result<bool> {
+    match value {
+        Err(env::VarError::NotPresent) | Ok("0") => Ok(false),
+        Ok("1") if cfg!(feature = "preview-receiving-proof") => Ok(true),
+        _ => Err(io::Error::other(
+            "Receiving proof requires the dedicated proof build and explicit opt-in",
+        )),
+    }
+}
+
 pub(super) async fn serve() -> io::Result<()> {
+    let receiving_proof = proof_setting(env::var("ERP4US_INVENTORY_RECEIVING_PROOF").as_deref())?;
     let auth = Auth::load(
         &preview::required("ERP4US_IDENTITY_POLICY")?,
         &preview::required("ERP4US_ISSUER_JWKS")?,
     )?;
     let db = preview::open().await?;
+    #[cfg(feature = "preview-receiving-proof")]
+    let proof = if receiving_proof {
+        Some(crate::receipt::proof_router(&db, auth.clone()).await?)
+    } else {
+        None
+    };
+    #[cfg(not(feature = "preview-receiving-proof"))]
+    let _ = receiving_proof;
     let ready = db.clone();
     let bind = env::var("ERP4US_BIND").unwrap_or_else(|_| "127.0.0.1:8093".into());
     let listener = tokio::net::TcpListener::bind(bind).await?;
-    axum::serve(
-        listener,
-        Router::new()
-            .route("/health/live", get(|| async { StatusCode::NO_CONTENT }))
-            .route(
-                "/health/ready",
-                get(move || async move {
-                    if ready.run_command(doc! {"ping": 1}).await.is_ok() {
-                        StatusCode::NO_CONTENT
-                    } else {
-                        StatusCode::SERVICE_UNAVAILABLE
-                    }
-                }),
-            )
-            .route(
-                "/v1/inventory/reservations/{order_id}/{line_id}",
-                get(lookup),
-            )
-            .route(
-                "/v1/inventory/reservations/{order_id}/{line_id}/material-plan",
-                get(material_plan::get).post(material_plan::create),
-            )
-            .route(
-                "/v1/inventory/reservations/{order_id}/{line_id}/material-plan/procurement-handoff",
-                get(material_plan::handoff::get).post(material_plan::handoff::send),
-            )
-            .layer(DefaultBodyLimit::max(1024))
-            .layer(middleware::from_fn(
-                |request: Request, next: Next| async move {
-                    let mut response: Response = next.run(request).await;
+    let router = Router::new()
+        .route("/health/live", get(|| async { StatusCode::NO_CONTENT }))
+        .route(
+            "/health/ready",
+            get(move || async move {
+                if ready.run_command(doc! {"ping": 1}).await.is_ok() {
+                    StatusCode::NO_CONTENT
+                } else {
+                    StatusCode::SERVICE_UNAVAILABLE
+                }
+            }),
+        )
+        .route(
+            "/v1/inventory/reservations/{order_id}/{line_id}",
+            get(lookup),
+        )
+        .route(
+            "/v1/inventory/reservations/{order_id}/{line_id}/material-plan",
+            get(material_plan::get).post(material_plan::create),
+        )
+        .route(
+            "/v1/inventory/reservations/{order_id}/{line_id}/material-plan/procurement-handoff",
+            get(material_plan::handoff::get).post(material_plan::handoff::send),
+        )
+        .layer(DefaultBodyLimit::max(1024))
+        .layer(middleware::from_fn(
+            |request: Request, next: Next| async move {
+                let mut response: Response = next.run(request).await;
+                response
+                    .headers_mut()
+                    .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                if response.status() == StatusCode::UNAUTHORIZED {
                     response
                         .headers_mut()
-                        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-                    if response.status() == StatusCode::UNAUTHORIZED {
-                        response
-                            .headers_mut()
-                            .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
-                    }
-                    response
-                },
-            ))
-            .with_state(Inventory { db, auth }),
-    )
-    .await
+                        .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+                }
+                response
+            },
+        ))
+        .with_state(Inventory { db, auth });
+    #[cfg(feature = "preview-receiving-proof")]
+    let router = match proof {
+        Some(proof) => router.merge(proof),
+        None => router,
+    };
+    axum::serve(listener, router).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_never_enables_receiving_and_only_the_proof_build_accepts_opt_in() {
+        assert!(!proof_setting(Err(&env::VarError::NotPresent)).unwrap());
+        assert!(!proof_setting(Ok("0")).unwrap());
+        assert!(proof_setting(Ok("true")).is_err());
+        if cfg!(feature = "preview-receiving-proof") {
+            assert!(proof_setting(Ok("1")).unwrap());
+        } else {
+            assert!(proof_setting(Ok("1")).is_err());
+        }
+    }
 }

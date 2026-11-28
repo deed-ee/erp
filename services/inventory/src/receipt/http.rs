@@ -1,8 +1,8 @@
-//! Test-only HTTP routes for the Inventory receiving contract.
+//! HTTP routes for tests and the explicit synthetic receiving proof.
 
 use super::{
     Binding, Organization, PurchaseLine, Reject, SalesLine,
-    application::{Failure, Line, Receiving},
+    application::{Failure, Line, Owner, Receiving},
     mongo::{self, Allocation, Intent, Post, Prepare, Saved, Store},
     source::verified_scope,
 };
@@ -16,7 +16,6 @@ use axum::{
 };
 use erp4us_identity::Auth;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::net::SocketAddr;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use uuid::Uuid;
 
@@ -29,10 +28,10 @@ const UNAVAILABLE: StatusCode = StatusCode::SERVICE_UNAVAILABLE;
 struct Api {
     store: Store,
     auth: Auth,
-    peer: SocketAddr,
+    peer: Owner,
 }
 
-pub(super) fn router(store: Store, auth: Auth, peer: SocketAddr) -> Router {
+pub(super) fn router(store: Store, auth: Auth, peer: Owner) -> Router {
     Router::new()
         .route(RECEIPTS, get(allocation).post(confirm))
         .route(INTENT, get(reopen).post(prepare))
