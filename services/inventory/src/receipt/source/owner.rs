@@ -29,26 +29,35 @@ pub(in crate::receipt) struct Receiver {
     bearer: HeaderValue,
 }
 
+pub(in crate::receipt) fn verified_scope(
+    auth: &Auth,
+    incoming: &HeaderMap,
+    permission: &str,
+) -> Result<Scope, StatusCode> {
+    let identity = crate::query::authorize(auth, incoming, permission)?;
+    for (header, id) in [
+        (TENANT_HEADER, identity.tenant),
+        (ORGANIZATION_HEADER, identity.organization),
+    ] {
+        if id.is_nil()
+            || incoming.get(header).and_then(|value| value.to_str().ok())
+                != Some(id.to_string().as_str())
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if identity.actor.is_nil() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(identity)
+}
+
 impl Receiver {
     pub(in crate::receipt) fn verify(
         auth: &Auth,
         incoming: &HeaderMap,
     ) -> Result<Self, StatusCode> {
-        let identity = crate::query::authorize(auth, incoming, POST_PERMISSION)?;
-        for (header, id) in [
-            (TENANT_HEADER, identity.tenant),
-            (ORGANIZATION_HEADER, identity.organization),
-        ] {
-            if id.is_nil()
-                || incoming.get(header).and_then(|value| value.to_str().ok())
-                    != Some(id.to_string().as_str())
-            {
-                return Err(StatusCode::BAD_REQUEST);
-            }
-        }
-        if identity.actor.is_nil() {
-            return Err(StatusCode::FORBIDDEN);
-        }
+        let identity = verified_scope(auth, incoming, POST_PERMISSION)?;
         let mut bearer = incoming
             .get(header::AUTHORIZATION)
             .ok_or(StatusCode::UNAUTHORIZED)?

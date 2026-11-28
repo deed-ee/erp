@@ -57,16 +57,16 @@ const MAX_POSTS: usize = 16;
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Allocation {
-    sequence: i32,
-    allocated: i32,
-    open: i32,
-    held: i32,
-    shortage: i32,
+pub(super) struct Allocation {
+    pub(super) sequence: i32,
+    pub(super) allocated: i32,
+    pub(super) open: i32,
+    pub(super) held: i32,
+    pub(super) shortage: i32,
 }
 
 impl Allocation {
-    fn from_effect(effect: &ReceiptEffect) -> Self {
+    pub(super) fn from_effect(effect: &ReceiptEffect) -> Self {
         Self {
             sequence: effect.line.sequence,
             allocated: effect.line.allocated,
@@ -79,18 +79,18 @@ impl Allocation {
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Saved {
-    effect: ReceiptEffect,
-    posted_at: DateTime,
+    pub(super) effect: ReceiptEffect,
+    pub(super) posted_at: DateTime,
     message_id: Uuid,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Intent {
-    command: Command,
+    pub(super) command: Command,
     acknowledged: Option<Uuid>,
     plan: Uuid,
     destination: StockKey,
-    confirmed: Option<Box<Saved>>,
+    pub(super) confirmed: Option<Box<Saved>>,
 }
 
 impl Intent {
@@ -390,6 +390,17 @@ impl Store {
         plan: Uuid,
         purchase: PurchaseLine,
     ) -> Result<Option<Allocation>, Failure> {
+        self.allocation_snapshot(sales, plan, purchase)
+            .await
+            .map(|snapshot| snapshot.map(|(_, allocation)| allocation))
+    }
+
+    pub(super) async fn allocation_snapshot(
+        &self,
+        sales: SalesLine,
+        plan: Uuid,
+        purchase: PurchaseLine,
+    ) -> Result<Option<(Binding, Allocation)>, Failure> {
         timeout(DB_LIMIT, async {
             let Some(document) = self
                 .majority_read(LINES)
@@ -403,8 +414,14 @@ impl Store {
             else {
                 return Ok(None);
             };
-            let (_, allocation) = records::read_line(&document).map_err(Failure::Rejected)?;
-            Ok(Some(allocation))
+            let (line, allocation) = records::read_line(&document).map_err(Failure::Rejected)?;
+            if line.binding.row.key.sales != sales
+                || line.binding.row.key.plan != plan
+                || line.binding.purchase != purchase
+            {
+                return Err(Failure::Rejected(Reject::InvalidState));
+            }
+            Ok(Some((line.binding, allocation)))
         })
         .await
         .map_err(|_| Failure::Unavailable)?

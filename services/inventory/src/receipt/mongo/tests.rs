@@ -1042,11 +1042,75 @@ async fn mongo_recovers_the_same_lot_until_deliberately_advancing_the_current_in
 async fn mongo_application_replays_before_contacting_the_owner() {
     use crate::receipt::{
         application::{self, Line, Receiving},
+        http,
         source::{fixture_auth, fixture_headers},
     };
-    use axum::{Json, Router, http::HeaderMap, http::StatusCode, routing::get};
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use axum::{
+        Json, Router,
+        body::Bytes,
+        http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header},
+        routing::get,
+    };
+    use http_body_util::{BodyExt, Full, Limited};
+    use hyper_util::rt::TokioIo;
+    use std::{
+        net::SocketAddr,
+        sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
     use tokio::{net::TcpListener, task::JoinSet};
+
+    async fn call(
+        address: SocketAddr,
+        method: Method,
+        path: &str,
+        headers: HeaderMap,
+        body: Option<Value>,
+    ) -> (StatusCode, HeaderMap, Value) {
+        timeout(Duration::from_secs(10), async {
+            let mut request = Request::builder()
+                .method(method)
+                .uri(path)
+                .body(Full::new(Bytes::from(body.map_or_else(Vec::new, |data| {
+                    serde_json::to_vec(&data).unwrap()
+                }))))
+                .unwrap();
+            *request.headers_mut() = headers;
+            for (name, value) in [
+                (header::HOST, "inventory"),
+                (header::CONTENT_TYPE, "application/json"),
+                (header::CONNECTION, "close"),
+            ] {
+                request
+                    .headers_mut()
+                    .insert(name, HeaderValue::from_static(value));
+            }
+            let (mut sender, driver) = hyper::client::conn::http1::handshake(TokioIo::new(
+                tokio::net::TcpStream::connect(address).await.unwrap(),
+            ))
+            .await
+            .unwrap();
+            let mut tasks = JoinSet::new();
+            tasks.spawn(driver);
+            let (parts, body) = sender.send_request(request).await.unwrap().into_parts();
+            let bytes = Limited::new(body, 16 * 1024)
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes();
+            let body = if bytes.is_empty() {
+                Value::Null
+            } else {
+                serde_json::from_slice(&bytes).unwrap()
+            };
+            assert_eq!(
+                parts.headers.get(header::CACHE_CONTROL).unwrap(),
+                "no-store",
+            );
+            (parts.status, parts.headers, body)
+        })
+        .await
+        .unwrap()
+    }
 
     const POST: &str = "inventory.purchase-receipt.post";
     const SOURCE: &str = "procurement.purchase-order.receipt-source.read";
@@ -1172,6 +1236,110 @@ async fn mongo_application_replays_before_contacting_the_owner() {
             .unwrap(),
         1,
     );
+
+    let routes = http::router(
+        recovered.clone(),
+        fixture_auth(SCOPE, None, &[POST, "inventory.purchase-receipt.read"]),
+        peer,
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tasks.spawn(async { axum::serve(listener, routes).await });
+    let receipt_path = format!(
+        "/v1/inventory/reservations/{ORDER}/{LINE}/material-plan/purchase-orders/{}/lines/{}/receipts",
+        PURCHASE.order, PURCHASE.line
+    );
+    let intent_path = format!("{receipt_path}/intent");
+    let (status, headers, body) =
+        call(address, Method::GET, &intent_path, HeaderMap::new(), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(headers.get(header::WWW_AUTHENTICATE).unwrap(), "Bearer");
+    assert_eq!(body, Value::Null);
+    let (status, _, body) = call(
+        address,
+        Method::GET,
+        &intent_path,
+        fixture_headers(SCOPE),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["state"], "confirmed");
+    assert_eq!(
+        body["receipt"]["receipt_id"],
+        intent.command.receipt_id.to_string()
+    );
+    assert_eq!(
+        body["receipt"]["allocation_after"]["plan_held_pieces"],
+        "14"
+    );
+    let (_, _, allocation) = call(
+        address,
+        Method::GET,
+        &receipt_path,
+        fixture_headers(SCOPE),
+        None,
+    )
+    .await;
+    assert_eq!(allocation, body["receipt"]["allocation_after"]);
+    let (status, _, replayed) = call(
+        address,
+        Method::POST,
+        &receipt_path,
+        fixture_headers(SCOPE),
+        Some(json!({"receipt_id": intent.command.receipt_id, "pieces": "6"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(replayed, body["receipt"]);
+    assert_eq!(calls.load(Ordering::Relaxed), 3);
+    let (status, _, _) = call(
+        address,
+        Method::POST,
+        &intent_path,
+        fixture_headers(SCOPE),
+        Some(json!({"pieces": "6"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _, _) = call(
+        address,
+        Method::POST,
+        &intent_path,
+        fixture_headers(SCOPE),
+        Some(
+            json!({"pieces": "6", "acknowledged_receipt_id": intent.command.receipt_id,
+                    "warehouse_id": WAREHOUSE}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(calls.load(Ordering::Relaxed), 3);
+    online.store(true, Ordering::Relaxed);
+    let (status, _, prepared) = call(
+        address,
+        Method::POST,
+        &intent_path,
+        fixture_headers(SCOPE),
+        Some(json!({"pieces": "6", "acknowledged_receipt_id": intent.command.receipt_id})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(prepared["state"], "prepared");
+    assert_ne!(prepared["receipt_id"], body["receipt"]["receipt_id"]);
+    let (status, _, posted) = call(
+        address,
+        Method::POST,
+        &receipt_path,
+        fixture_headers(SCOPE),
+        Some(json!({"receipt_id": prepared["receipt_id"], "pieces": prepared["pieces"]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(posted["allocation_after"]["through_receipt_sequence"], 2);
+    assert_eq!(posted["allocation_after"]["plan_held_pieces"], "20");
+    assert_eq!(posted["allocation_after"]["line_open_pieces"], "0");
+    assert_eq!(calls.load(Ordering::Relaxed), 5);
     tasks.shutdown().await;
     if drop_database {
         db.drop().await.unwrap();

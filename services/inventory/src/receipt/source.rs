@@ -7,9 +7,9 @@ use erp4us_identity::Scope;
 use serde::{Deserialize, Deserializer, de};
 use uuid::Uuid;
 
-pub(super) use owner::Receiver;
 #[cfg(test)]
 pub(super) use owner::tests::{fixture_auth, fixture_headers};
+pub(super) use owner::{Receiver, verified_scope};
 mod owner;
 
 const MAX_LINES: usize = 32;

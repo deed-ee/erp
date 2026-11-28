@@ -444,6 +444,8 @@ mod tests;
 #[cfg(test)]
 mod application;
 #[cfg(test)]
+mod http;
+#[cfg(test)]
 mod mongo;
 #[cfg(test)]
 mod source;
