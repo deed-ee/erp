@@ -158,12 +158,21 @@ mod jetstream {
     use super::*;
 
     const STREAM: &str = "ERP4US_BUSINESS_EVENTS_V1";
-    const CONSUMER: &str = "article-receipts";
+    const ARTICLE_RECEIPTS: &str = "article-receipts";
+    const INVENTORY_SALES: &str = "inventory-sales-v1";
+    const PROCUREMENT_MATERIAL_PLANS: &str = "procurement-material-plans-v1";
 
     #[derive(Default, Serialize)]
     pub(super) struct Counters {
         stream: Option<StreamCounters>,
         consumer: Option<ConsumerCounters>,
+        pipeline_consumers: PipelineConsumers,
+    }
+
+    #[derive(Default, Serialize)]
+    struct PipelineConsumers {
+        inventory_sales: Option<ConsumerCounters>,
+        procurement_material_plans: Option<ConsumerCounters>,
     }
 
     #[derive(Serialize)]
@@ -182,16 +191,25 @@ mod jetstream {
     pub(super) async fn observe(broker: &Connection) -> (Observation, Counters) {
         let (readiness, counters) = if broker.state() == BrokerState::Connected {
             let context = broker.jetstream(PROBE_TIMEOUT);
-            let (readiness, stream, consumer) = tokio::join!(
+            let (readiness, stream, receipts, inventory_sales, procurement_material_plans) = tokio::join!(
                 account(&context),
                 timeout(PROBE_TIMEOUT, stream(&context)),
-                timeout(PROBE_TIMEOUT, consumer(&context))
+                timeout(PROBE_TIMEOUT, consumer(&context, ARTICLE_RECEIPTS)),
+                timeout(PROBE_TIMEOUT, consumer(&context, INVENTORY_SALES)),
+                timeout(
+                    PROBE_TIMEOUT,
+                    consumer(&context, PROCUREMENT_MATERIAL_PLANS)
+                )
             );
             (
                 readiness,
                 Counters {
                     stream: stream.ok().flatten(),
-                    consumer: consumer.ok().flatten(),
+                    consumer: receipts.ok().flatten(),
+                    pipeline_consumers: PipelineConsumers {
+                        inventory_sales: inventory_sales.ok().flatten(),
+                        procurement_material_plans: procurement_material_plans.ok().flatten(),
+                    },
                 },
             )
         } else {
@@ -230,14 +248,49 @@ mod jetstream {
         })
     }
 
-    async fn consumer(context: &JetStream) -> Option<ConsumerCounters> {
+    async fn consumer(context: &JetStream, name: &str) -> Option<ConsumerCounters> {
         let stream = context.operations().get_stream_no_info(STREAM).await.ok()?;
-        let info = stream.consumer_info(CONSUMER).await.ok()?;
+        let info = stream.consumer_info(name).await.ok()?;
         Some(ConsumerCounters {
             pending: info.num_pending,
             ack_pending: info.num_ack_pending,
             redelivered: info.num_redelivered,
         })
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn pipeline_counts_leave_legacy_values_intact_and_distinguish_zero_from_absence() {
+        let counters = Counters {
+            stream: Some(StreamCounters {
+                messages: 12,
+                bytes: 1024,
+            }),
+            consumer: Some(ConsumerCounters {
+                pending: 1,
+                ack_pending: 2,
+                redelivered: 3,
+            }),
+            pipeline_consumers: PipelineConsumers {
+                inventory_sales: Some(ConsumerCounters {
+                    pending: 0,
+                    ack_pending: 4,
+                    redelivered: 5,
+                }),
+                procurement_material_plans: None,
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(counters).unwrap(),
+            serde_json::json!({
+                "stream": {"messages": 12, "bytes": 1024},
+                "consumer": {"pending": 1, "ack_pending": 2, "redelivered": 3},
+                "pipeline_consumers": {
+                    "inventory_sales": {"pending": 0, "ack_pending": 4, "redelivered": 5},
+                    "procurement_material_plans": null
+                }
+            })
+        );
     }
 }
 
@@ -290,7 +343,7 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
-    fn health_response_adds_heartbeat_without_changing_existing_fields() {
+    fn health_response_serializes_unavailable_measurements_as_null() {
         let report = Report {
             observed_at_unix_ms: 42,
             application_checks: [
@@ -319,7 +372,10 @@ mod tests {
                     {"service": "manufacturing", "readiness": "unready"},
                     {"service": "jetstream", "readiness": "unreachable"}
                 ],
-                "jetstream": {"stream": null, "consumer": null},
+                "jetstream": {
+                    "stream": null, "consumer": null,
+                    "pipeline_consumers": {"inventory_sales": null, "procurement_material_plans": null}
+                },
                 "article_relay_heartbeat": {
                     "state": "unavailable", "interval_seconds": null, "instance_id": null, "age_seconds": null
                 }

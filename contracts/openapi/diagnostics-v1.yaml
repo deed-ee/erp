@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: erp4us platform application diagnostics
-  version: 1.1.0
+  version: 1.2.0
 security:
   - AccessToken: []
 paths:
@@ -46,6 +46,20 @@ paths:
                           pending: { type: integer, minimum: 0 }
                           ack_pending: { type: integer, minimum: 0 }
                           redelivered: { type: integer, minimum: 0 }
+                      pipeline_consumers:
+                        description: >
+                          Platform-wide observations of two fixed durable consumers on ERP4US_BUSINESS_EVENTS_V1.
+                          Each consumer is measured independently and is null when missing or not observable.
+                        type: object
+                        additionalProperties: false
+                        required: [inventory_sales, procurement_material_plans]
+                        properties:
+                          inventory_sales:
+                            description: inventory-sales-v1.
+                            $ref: '#/components/schemas/PipelineConsumerCounters'
+                          procurement_material_plans:
+                            description: procurement-material-plans-v1.
+                            $ref: '#/components/schemas/PipelineConsumerCounters'
                   article_relay_heartbeat:
                     $ref: '#/components/schemas/ArticleRelayHeartbeat'
         '401': { description: No verified access token }
@@ -53,6 +67,14 @@ paths:
         '503': { description: 'Reporting service unavailable or concurrent probe limit reached' }
 components:
   schemas:
+    PipelineConsumerCounters:
+      type: [object, 'null']
+      additionalProperties: false
+      required: [pending, ack_pending, redelivered]
+      properties:
+        pending: { type: integer, minimum: 0, description: Messages awaiting delivery. }
+        ack_pending: { type: integer, minimum: 0, description: Messages awaiting acknowledgement. }
+        redelivered: { type: integer, minimum: 0, description: Messages currently counted as redelivered by JetStream. }
     ArticleRelayHeartbeat:
       description: >
         Ephemeral Core NATS presence for the most recently observed instance of the preview's single

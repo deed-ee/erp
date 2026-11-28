@@ -7,12 +7,22 @@ import { Feedback, PageHeading } from './ui';
 
 type Readiness = 'ready' | 'unready' | 'unreachable';
 type HeartbeatState = 'waiting' | 'fresh' | 'stale' | 'disabled' | 'unavailable';
+interface ConsumerCounters {
+  pending: number;
+  ack_pending: number;
+  redelivered: number;
+}
+const PIPELINE_CONSUMERS = [
+  { key: 'inventory_sales', durable: 'inventory-sales-v1', label: 'jetstreamInventorySales' },
+  { key: 'procurement_material_plans', durable: 'procurement-material-plans-v1', label: 'jetstreamProcurementMaterialPlans' },
+] as const;
 interface Report {
   observed_at_unix_ms: number;
   application_checks: {service: string; readiness: Readiness}[];
   jetstream: {
     stream: {messages: number; bytes: number} | null;
-    consumer: {pending: number; ack_pending: number; redelivered: number} | null;
+    consumer: ConsumerCounters | null;
+    pipeline_consumers?: Record<typeof PIPELINE_CONSUMERS[number]['key'], ConsumerCounters | null>;
   };
   article_relay_heartbeat?: {
     state: HeartbeatState;
@@ -54,6 +64,15 @@ interface Report {
             <dt>{{ t()('jetstreamAckPending') }}</dt><dd>{{ consumer.ack_pending }}</dd>
             <dt>{{ t()('jetstreamRedelivered') }}</dt><dd>{{ consumer.redelivered }}</dd></dl>
           } @else { <p>{{ t()('jetstreamNotObserved') }}</p> }
+          @for (pipeline of pipelineConsumers; track pipeline.key) {
+            <h4>{{ t()(pipeline.label) }}</h4>
+            <p><code>{{ pipeline.durable }}</code></p>
+            @if (latest.jetstream.pipeline_consumers?.[pipeline.key]; as consumer) {
+              <dl><dt>{{ t()('jetstreamPending') }}</dt><dd>{{ consumer.pending }}</dd>
+              <dt>{{ t()('jetstreamAckPending') }}</dt><dd>{{ consumer.ack_pending }}</dd>
+              <dt>{{ t()('jetstreamRedelivered') }}</dt><dd>{{ consumer.redelivered }}</dd></dl>
+            } @else { <p>{{ t()('jetstreamNotObserved') }}</p> }
+          }
           <h3>{{ t()('relayHeartbeat') }}</h3>
           <p>{{ t()('relayHeartbeatIntro') }}</p>
           <p>{{ heartbeatStatus(latest.article_relay_heartbeat?.state ?? 'unavailable') }}</p>
@@ -80,6 +99,7 @@ export class ApplicationDiagnostics {
   readonly api = inject(ArticleApi);
   private readonly preferences = inject(Preferences);
   readonly t = this.preferences.t;
+  readonly pipelineConsumers = PIPELINE_CONSUMERS;
   readonly report = signal<Report | null>(null);
   readonly message = signal<Message | null>(null);
 
