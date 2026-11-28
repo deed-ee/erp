@@ -9,6 +9,7 @@ services:
       ERP4US_IDENTITY_POLICY: /etc/erp4us/identity-policy.json
       ERP4US_ISSUER_JWKS: /etc/erp4us/issuer-jwks.json
       NATS_URL: nats://nats:4222
+      # Fixed JetStream metadata reads and Article Relay heartbeat/interval observation only.
       NATS_PASSWORD: ${DEV_NATS_DIAGNOSTICS_PASSWORD:?Generate a local diagnostics password}
     volumes:
       - type: bind

@@ -571,13 +571,16 @@ dependencies = [
  "axum",
  "erp4us-identity",
  "erp4us-messaging",
+ "futures-util",
  "http-body-util",
  "hyper",
  "hyper-util",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

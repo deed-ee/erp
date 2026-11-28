@@ -1,4 +1,6 @@
 //! Read-only application health, deliberately independent of the host runtime.
+mod heartbeat;
+
 use axum::{
     Json, Router,
     extract::State,
@@ -32,6 +34,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 struct Diagnostics {
     auth: Auth,
     broker: Connection,
+    heartbeat: heartbeat::Observer,
     probes: Arc<Semaphore>,
 }
 
@@ -79,6 +82,7 @@ struct Report {
     observed_at_unix_ms: u64,
     application_checks: [Observation; 3],
     jetstream: jetstream::Counters,
+    article_relay_heartbeat: heartbeat::Report,
 }
 
 async fn status(target: Target) -> Option<StatusCode> {
@@ -115,7 +119,7 @@ async fn observe(target: Target) -> Observation {
 async fn health(State(state): State<Diagnostics>, headers: HeaderMap) -> Response {
     let response = match state.auth.authorize_platform(&headers, PERMISSION) {
         Ok(()) => match state.probes.try_acquire() {
-            Ok(_permit) => report(&state.broker).await,
+            Ok(_permit) => report(&state).await,
             Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         },
         Err(Denial::Unauthenticated) => (
@@ -128,11 +132,11 @@ async fn health(State(state): State<Diagnostics>, headers: HeaderMap) -> Respons
     ([(header::CACHE_CONTROL, "no-store")], response).into_response()
 }
 
-async fn report(broker: &Connection) -> Response {
+async fn report(state: &Diagnostics) -> Response {
     let (master_data, manufacturing, (jetstream_health, jetstream)) = tokio::join!(
         observe(MASTER_DATA),
         observe(MANUFACTURING),
-        jetstream::observe(broker)
+        jetstream::observe(&state.broker)
     );
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -143,6 +147,7 @@ async fn report(broker: &Connection) -> Response {
             observed_at_unix_ms,
             application_checks: [master_data, manufacturing, jetstream_health],
             jetstream,
+            article_relay_heartbeat: state.heartbeat.report(&state.broker),
         })
         .into_response(),
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
@@ -247,7 +252,7 @@ async fn main() -> io::Result<()> {
         &required("ERP4US_IDENTITY_POLICY")?,
         &required("ERP4US_ISSUER_JWKS")?,
     )?;
-    let broker = Connection::connect(
+    let (broker, heartbeat) = heartbeat::Observer::connect(
         &required("NATS_URL")?,
         ConnectOptions::with_user_and_password(
             "platform_diagnostics".into(),
@@ -271,6 +276,7 @@ async fn main() -> io::Result<()> {
             .with_state(Diagnostics {
                 auth,
                 broker,
+                heartbeat,
                 probes: Arc::new(Semaphore::new(4)),
             }),
     )
@@ -280,7 +286,46 @@ async fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn health_response_adds_heartbeat_without_changing_existing_fields() {
+        let report = Report {
+            observed_at_unix_ms: 42,
+            application_checks: [
+                Observation {
+                    service: "master-data",
+                    readiness: Readiness::Ready,
+                },
+                Observation {
+                    service: "manufacturing",
+                    readiness: Readiness::Unready,
+                },
+                Observation {
+                    service: "jetstream",
+                    readiness: Readiness::Unreachable,
+                },
+            ],
+            jetstream: jetstream::Counters::default(),
+            article_relay_heartbeat: heartbeat::Report::default(),
+        };
+        assert_eq!(
+            serde_json::to_value(report).unwrap(),
+            json!({
+                "observed_at_unix_ms": 42,
+                "application_checks": [
+                    {"service": "master-data", "readiness": "ready"},
+                    {"service": "manufacturing", "readiness": "unready"},
+                    {"service": "jetstream", "readiness": "unreachable"}
+                ],
+                "jetstream": {"stream": null, "consumer": null},
+                "article_relay_heartbeat": {
+                    "state": "unavailable", "interval_seconds": null, "instance_id": null, "age_seconds": null
+                }
+            })
+        );
+    }
 
     #[tokio::test]
     async fn distinguishes_error_responses_from_disconnected_services() {

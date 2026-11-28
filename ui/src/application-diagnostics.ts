@@ -6,12 +6,19 @@ import { Preferences } from './preferences';
 import { Feedback, PageHeading } from './ui';
 
 type Readiness = 'ready' | 'unready' | 'unreachable';
+type HeartbeatState = 'waiting' | 'fresh' | 'stale' | 'disabled' | 'unavailable';
 interface Report {
   observed_at_unix_ms: number;
   application_checks: {service: string; readiness: Readiness}[];
   jetstream: {
     stream: {messages: number; bytes: number} | null;
     consumer: {pending: number; ack_pending: number; redelivered: number} | null;
+  };
+  article_relay_heartbeat?: {
+    state: HeartbeatState;
+    interval_seconds: number | null;
+    instance_id: string | null;
+    age_seconds: number | null;
   };
 }
 
@@ -47,6 +54,22 @@ interface Report {
             <dt>{{ t()('jetstreamAckPending') }}</dt><dd>{{ consumer.ack_pending }}</dd>
             <dt>{{ t()('jetstreamRedelivered') }}</dt><dd>{{ consumer.redelivered }}</dd></dl>
           } @else { <p>{{ t()('jetstreamNotObserved') }}</p> }
+          <h3>{{ t()('relayHeartbeat') }}</h3>
+          <p>{{ t()('relayHeartbeatIntro') }}</p>
+          <p>{{ heartbeatStatus(latest.article_relay_heartbeat?.state ?? 'unavailable') }}</p>
+          @if (latest.article_relay_heartbeat; as heartbeat) {
+            @if (heartbeat.interval_seconds !== null) {
+              <dl>
+                <dt>{{ t()('relayHeartbeatInterval') }}</dt><dd>{{ heartbeat.interval_seconds }}</dd>
+                @if (heartbeat.instance_id !== null) {
+                  <dt>{{ t()('relayHeartbeatInstance') }}</dt><dd>{{ heartbeat.instance_id }}</dd>
+                }
+                @if (heartbeat.age_seconds !== null) {
+                  <dt>{{ t()('relayHeartbeatAge') }}</dt><dd>{{ heartbeat.age_seconds }}</dd>
+                }
+              </dl>
+            }
+          }
         }
       </section>
     }
@@ -81,6 +104,14 @@ export class ApplicationDiagnostics {
 
   status(state: Readiness) {
     const translation: Record<Readiness, Message> = { ready: 'healthReady', unready: 'healthUnready', unreachable: 'healthUnreachable' };
+    return this.t()(translation[state]);
+  }
+
+  heartbeatStatus(state: HeartbeatState) {
+    const translation: Record<HeartbeatState, Message> = {
+      waiting: 'relayHeartbeatWaiting', fresh: 'relayHeartbeatFresh', stale: 'relayHeartbeatStale',
+      disabled: 'relayHeartbeatDisabled', unavailable: 'relayHeartbeatUnavailable',
+    };
     return this.t()(translation[state]);
   }
 
