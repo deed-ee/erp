@@ -60,11 +60,11 @@ def initialize():
                                 for resource in ("article", "unit", "partner")
                                  for action in ("read", "register")] + [
                                      "manufacturing.plan.read", "sales.order.read", "sales.order.draft.create",
-                                     "sales.order.confirm"],
+                                     "sales.order.confirm", "inventory.reservation.read"],
             },
             grant(TENANT, OTHER_ORGANIZATION, "read"),
             {"tenant_id": OTHER_TENANT, "organization_id": EXTERNAL_ORGANIZATION,
-             "permissions": ["master-data.article.read", "sales.order.read"]},
+             "permissions": ["master-data.article.read", "sales.order.read", "inventory.reservation.read"]},
         ]},
         "synthetic-reader": {"actor_id": "254474cf-c105-473e-9843-38dd023d8a39",
                               "grants": [grant(TENANT, ORGANIZATION, "read")]},

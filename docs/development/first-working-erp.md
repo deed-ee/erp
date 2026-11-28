@@ -24,7 +24,7 @@ The synthetic issuer is only for automated fixture tests, not user authenticatio
 
 ## Try the real browser login
 
-On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 8091, 8092, 9443 and 4200 free, run:
+On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 8091, 8092, 8093, 9443 and 4200 free, run:
 
 ```sh
 sh scripts/demo-start.sh
@@ -41,7 +41,8 @@ Run `ERP4US_REAL_OIDC_E2E=1 npm run test:e2e -- tests/preview-signin.spec.ts` fr
 ERP4US_IDENTITY_DIR=./.erp4us-preview docker compose -p erp4us-preview \
   --env-file .erp4us-preview/compose.env -f compose.yaml -f compose.delivery.yaml \
   -f compose.manufacturing.yaml -f compose.preview-identity.yaml \
-  -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml down
+  -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml \
+  -f compose.inventory.yaml down
 ```
 
 The explicit demo seed also creates three fictitious customers (including Atlas Handling) and four suppliers in Master Data. Browse the records under **Master data → Business partners** and filter by role. The directory and optional profile are published in the [Master Data API](../../contracts/openapi/master-data-v1.yaml); existing profile-free records remain valid. Seeding again does not overwrite an existing code in its scope. Addresses are synthetic and the current preview has one address and one delivery address per profile, no external identifier import.
@@ -50,7 +51,9 @@ The new image scan checks Keycloak and its Java dependencies. The current pinned
 
 ### Save and confirm a Sales order
 
-Sign in as `production`, open **Sales orders**, choose **Atlas Handling Technologies GmbH**, select **NM-1000** revision **A**, and enter **10** pieces. Saving captures the customer profile and product/price snapshot for **EUR 24,900.00**. In its row, select **Review confirmation** and **Confirm order**, then reopen Sales to see the persisted status. Sales owns its own MongoDB records and resolves the customer and product through their scoped owning APIs. The [Sales API](../../contracts/openapi/sales-v1.yaml) uses distinct authorization and revision-aware command retries for confirmation. It commits the original terms and a [pending Sales event](../../contracts/schemas/nats-sales-order-confirmed-v1.json) in the same document update even if JetStream is down. A scoped relay sends the event after recovery. The preview supports one whole-piece line and EUR terms. It does not create a quotation or reserve stock, and the browser cannot supply the unit price.
+Sign in as `production`, open **Sales orders**, choose **Atlas Handling Technologies GmbH**, select **NM-1000** revision **A**, and enter **10** pieces. Saving captures the customer profile and product/price snapshot for **EUR 24,900.00**. In its row, select **Review confirmation** and **Confirm order**, then reopen Sales to see the persisted status. Sales owns its own MongoDB records and resolves the customer and product through their scoped owning APIs. The [Sales API](../../contracts/openapi/sales-v1.yaml) uses distinct authorization and revision-aware command retries for confirmation. It commits the original terms and a [pending Sales event](../../contracts/schemas/nats-sales-order-confirmed-v1.json) in the same document update even if JetStream is down. A scoped relay sends the event after recovery. The preview supports one whole-piece line and EUR terms, not quotations. Sales itself does not reserve stock, and the browser cannot supply the unit price.
+
+Once confirmed, open **Check reservation** from the order row. Inventory receives the event asynchronously and records **0 EA reserved, 10 EA outstanding** for `NM-1000`: that is the actual result in the seeded finished-goods warehouse, not gross material demand. A separate example, `NM-2000` × 10 on a fresh seed, reserves **6 EA** and leaves **4 EA** outstanding; a second competing order cannot consume those six again. The initialization command is idempotent and does not replenish used stock. See the [Inventory API](../../contracts/openapi/inventory-v1.yaml). There is no purchase approval, material planning or shipping authority in this read view.
 
 ### Check application readiness
 
@@ -63,7 +66,7 @@ If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-previ
 ## Remaining acceptance gates
 
 - Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
-- Replay-safe Inventory consumption of the confirmed Sales event, live stock and reservations, shortage drafts, purchasing and partial receipts.
+- Use outstanding finished demand and pinned BOMs for net planning and component reservations; add durable shortage handoff, purchasing and partial receipts. Finished-goods reservation alone does not buy components.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
 - Restricted diagnostics collector for actual runtime inventory, heartbeat staleness, and redacted historical/live logs. Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.

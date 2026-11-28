@@ -12,7 +12,7 @@ interface Product { sku: string; revision: string; name: string; price_eur: stri
 interface Order {
   id: string; customer: Customer; status: 'draft' | 'confirmed'; revision: number; currency: string; total: string;
   confirmed_at?: string; confirmation_event_id?: string;
-  line: {sku: string; product_revision: string; pieces: string; unit_price: string; unit: string};
+  line: {id: string; sku: string; product_revision: string; pieces: string; unit_price: string; unit: string};
 }
 interface Page<T> { items: T[]; next_after: string | null }
 
@@ -82,19 +82,22 @@ async function fetchJson<T>(path: string, headers: Record<string, string>, signa
             <thead><tr><th scope="col">{{ t()('customer') }}</th><th scope="col">{{ t()('planningProduct') }}</th>
             <th scope="col">{{ t()('planningPieces') }}</th><th scope="col">{{ t()('salesOrderTotal') }}</th>
             <th scope="col">{{ t()('salesOrderStatus') }}</th>
-            @if (api.canConfirmSales()) { <th scope="col">{{ t()('salesActions') }}</th> }</tr></thead>
+            @if (api.canConfirmSales() || api.canReadReservation()) { <th scope="col">{{ t()('salesActions') }}</th> }</tr></thead>
             <tbody>
               @for (order of orders().items; track order.id) {
                 <tr><th scope="row">{{ order.customer.name }} <small>{{ order.id }}</small></th>
                 <td>{{ order.line.sku }} ({{ order.line.product_revision }})</td>
                 <td>{{ order.line.pieces }} {{ order.line.unit }}</td><td>{{ order.currency }} {{ order.total }}</td>
                 <td>{{ t()(order.status === 'confirmed' ? 'salesStatusConfirmed' : 'salesStatusDraft') }}</td>
-                @if (api.canConfirmSales()) {
+                @if (api.canConfirmSales() || api.canReadReservation()) {
                   <td>
-                    @if (order.status === 'draft') {
+                    @if (order.status === 'draft' && api.canConfirmSales()) {
                       <button type="button" (click)="review(order)" [disabled]="confirmationPending()">
                         <svg lucideClipboardCheck aria-hidden="true"></svg>{{ t()('salesReviewConfirmation') }}
                       </button>
+                    }
+                    @if (order.status === 'confirmed' && api.canReadReservation()) {
+                      <a [routerLink]="['/sales/orders', order.id, 'reservations', order.line.id]">{{ t()('reservationLink') }}</a>
                     }
                   </td>
                 }</tr>

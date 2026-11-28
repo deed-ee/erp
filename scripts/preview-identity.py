@@ -39,7 +39,7 @@ def identity_policy():
         USERS["production"]: {"actor_id": USERS["production"], "grants": [grant(NOVA, [
             "manufacturing.plan.read", "master-data.article.read", "master-data.article.register",
             "master-data.partner.read", "master-data.unit.read", "sales.order.read", "sales.order.draft.create",
-            "sales.order.confirm",
+            "sales.order.confirm", "inventory.reservation.read",
         ])]},
         USERS["auditor"]: {"actor_id": USERS["auditor"], "grants": [grant(OTHER, ["master-data.article.read"])]},
         USERS["platform-monitor"]: {"actor_id": USERS["platform-monitor"], "grants": [],

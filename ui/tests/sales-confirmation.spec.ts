@@ -29,6 +29,10 @@ test('fixture: review and confirm a saved order in the authorized scope', async 
   await page.getByRole('button', {name: 'Confirm order'}).click();
   await expect(row.getByRole('cell', {name: 'Confirmed', exact: true})).toBeVisible();
   await expect(row).toContainText('EUR 24900.00');
+  await row.getByRole('link', {name: 'Check reservation'}).click();
+  await expect(page.getByRole('heading', {name: 'NM-1000 · A'})).toBeVisible();
+  await expect(page.getByText('0 EA', {exact: true})).toBeVisible();
+  await expect(page.getByText('10 EA', {exact: true})).toHaveCount(2);
   await page.getByLabel('Company and organization').selectOption({index: 2});
-  await expect(row).toHaveCount(0);
+  await expect(page.getByRole('heading', {name: 'NM-1000 · A'})).toHaveCount(0);
 });

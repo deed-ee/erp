@@ -1,0 +1,59 @@
+openapi: 3.1.0
+info:
+  title: erp4us Inventory reservations
+  version: 1.0.0
+  description: Read the Inventory-owned outcome of a confirmed Sales line. An outstanding quantity is not a purchase commitment or authorization to ship.
+security:
+  - AccessToken: []
+paths:
+  /v1/inventory/reservations/{order_id}/{line_id}:
+    get:
+      operationId: getOrderLineReservation
+      description: Requires inventory.reservation.read in the verified organization. A line can take time to appear after Sales confirmation.
+      parameters:
+        - in: header
+          name: X-Erp4us-Tenant
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: X-Erp4us-Organization
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: order_id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: line_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Persisted reservation or outstanding demand in the authorized scope
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '400': { description: Invalid scope or line reference }
+        '401': { description: Missing or invalid bearer token }
+        '403': { description: Missing reservation read grant }
+        '404': { description: No reservation for this line in the authorized scope }
+        '503': { description: Inventory storage unavailable }
+components:
+  securitySchemes:
+    AccessToken: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Quantity: { type: string, pattern: '^(?:0|[1-9][0-9]{0,2}|1000)(?![\s\S])' }
+    Reservation:
+      type: object
+      required: [order_id, line_id, warehouse_id, sku, product_revision, unit, requested, reserved, outstanding, source_event_id]
+      properties:
+        order_id: { type: string, format: uuid }
+        line_id: { type: string, format: uuid }
+        warehouse_id: { type: string, format: uuid }
+        sku: { type: string }
+        product_revision: { type: string }
+        unit: { const: EA }
+        requested: { $ref: '#/components/schemas/Quantity' }
+        reserved: { $ref: '#/components/schemas/Quantity' }
+        outstanding: { $ref: '#/components/schemas/Quantity' }
+        source_event_id: { type: string, format: uuid }

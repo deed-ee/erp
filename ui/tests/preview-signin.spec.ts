@@ -85,7 +85,7 @@ test('real OIDC: production user saves, confirms and reopens a priced sales orde
     .filter({ hasText: 'NM-1000' }).filter({ hasText: 'EUR 24900.00' });
   await expect(match).toContainText('10 EA');
   await match.getByRole('button', { name: 'Review confirmation' }).click();
-  await expect(page.getByText('Confirmation commits the saved commercial terms. It does not yet reserve stock.')).toBeVisible();
+  await expect(page.getByText('Confirmation commits the saved commercial terms.', { exact: false })).toBeVisible();
   const committed = page.waitForResponse(response => response.url().endsWith(`/v1/sales/orders/${id}/confirmation`));
   await page.getByRole('button', { name: 'Confirm order' }).click();
   expect((await committed).status()).toBe(200);
@@ -93,4 +93,8 @@ test('real OIDC: production user saves, confirms and reopens a priced sales orde
   await page.getByRole('link', { name: 'Manufacturing' }).click();
   await page.getByRole('link', { name: 'Sales orders' }).click();
   await expect(match.getByRole('cell', { name: 'Confirmed', exact: true })).toBeVisible();
+  await match.getByRole('link', { name: 'Check reservation' }).click();
+  await expect(page.getByRole('heading', { name: 'NM-1000 · A' })).toBeVisible();
+  await expect(page.getByText('0 EA', { exact: true })).toBeVisible();
+  await expect(page.getByText('10 EA', { exact: true })).toHaveCount(2);
 });

@@ -11,6 +11,7 @@ import { SignInCallback } from './sign-in-callback';
 import { Partners } from './partners';
 import { ApplicationDiagnostics } from './application-diagnostics';
 import { SalesOrders } from './sales-orders';
+import { OrderReservation } from './order-reservation';
 
 const registration: ShellRegistration = {
   modules: [
@@ -49,6 +50,7 @@ const routes: Routes = [
   { path: 'partners', component: Partners, data: {module: 'master-data'} },
   { path: 'manufacturing', component: Manufacturing, data: { module: 'manufacturing' } },
   { path: 'sales/orders', component: SalesOrders, data: { module: 'sales' } },
+  { path: 'sales/orders/:orderId/reservations/:lineId', component: OrderReservation, data: { module: 'sales' } },
   { path: 'administration', component: ApplicationDiagnostics, data: { module: 'administration' } },
   { path: '**', redirectTo: '' }
 ];

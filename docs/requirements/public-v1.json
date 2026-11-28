@@ -698,9 +698,12 @@
         91,
         93
       ],
-      "prs": [],
+      "prs": [
+        120
+      ],
       "tests": [
-        "tests/integration/inventory.py"
+        "tests/integration/inventory.py",
+        "tests/integration/sales_inventory.py"
       ],
       "evidence": []
     },
