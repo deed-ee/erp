@@ -221,6 +221,26 @@ struct IssuedLine {
     line_total: Cents,
 }
 
+// The receipt source is deliberately not the commercial batch. Keep this
+// projection unexposed while receiver authorization is under review.
+#[cfg(test)]
+#[derive(Debug, Serialize)]
+struct ReceiptSource {
+    plan_id: Uuid,
+    lines: Vec<ReceiptSourceLine>,
+}
+
+#[cfg(test)]
+#[derive(Debug, Serialize)]
+struct ReceiptSourceLine {
+    purchase_order_id: Uuid,
+    purchase_line_id: Uuid,
+    sku: String,
+    revision: Option<String>,
+    unit: &'static str,
+    ordered_pieces: String,
+}
+
 impl Batch {
     /// Call only for a new issuance after verifying scope, issuer separation and all
     /// stages against the same policy, saved terms, and whole EUR total. The caller
@@ -379,6 +399,51 @@ impl Batch {
         }
         Ok(self)
     }
+
+    #[cfg(test)]
+    fn receipt_source(&self) -> Result<ReceiptSource, IssueFailure> {
+        if self.plan_id.is_nil() || self.batch_id.is_nil() {
+            return Err(IssueFailure::Unavailable);
+        }
+
+        let mut lines = Vec::new();
+        let mut ids = HashSet::from([self.batch_id]);
+        let mut items = HashSet::new();
+        for order in &self.orders {
+            if order.order_id.is_nil() || !ids.insert(order.order_id) || order.lines.is_empty() {
+                return Err(IssueFailure::Unavailable);
+            }
+            for line in &order.lines {
+                let (item, pin) = line.row.key();
+                if lines.len() == MAX_LINES
+                    || line.line_id.is_nil()
+                    || !ids.insert(line.line_id)
+                    || !sku(item)
+                    || pin.is_some_and(|value| !revision(value))
+                    || !items.insert((item, pin))
+                {
+                    return Err(IssueFailure::Unavailable);
+                }
+                let pieces = line.row.whole_pieces().ok_or(IssueFailure::Unavailable)?;
+                lines.push(ReceiptSourceLine {
+                    purchase_order_id: order.order_id,
+                    purchase_line_id: line.line_id,
+                    sku: item.into(),
+                    revision: pin.map(str::to_owned),
+                    unit: "EA",
+                    ordered_pieces: pieces.to_string(),
+                });
+            }
+        }
+        if lines.is_empty() {
+            return Err(IssueFailure::Unavailable);
+        }
+        lines.sort_unstable_by_key(|line| (line.purchase_order_id, line.purchase_line_id));
+        Ok(ReceiptSource {
+            plan_id: self.plan_id,
+            lines,
+        })
+    }
 }
 
 impl TryFrom<Batch> for IssuedBatch {
@@ -530,6 +595,71 @@ pub(super) mod tests {
             )
             .unwrap();
         (scope, draft, saved, policy, intent, [first, second])
+    }
+
+    #[test]
+    fn receipt_source_exposes_sorted_pinned_quantities_without_commercial_or_actor_data() {
+        let (draft, terms, _) = fixture(true);
+        let mut ids = (100..110).rev().map(Uuid::from_u128);
+        let issued = Batch::form(&draft, &terms, ORIGIN, APPROVED, || ids.next().unwrap()).unwrap();
+        let source = issued.receipt_source().unwrap();
+        assert_eq!(source.lines.len(), 5);
+        assert!(source.lines.windows(2).all(|pair| {
+            (pair[0].purchase_order_id, pair[0].purchase_line_id)
+                < (pair[1].purchase_order_id, pair[1].purchase_line_id)
+        }));
+        let expected: Vec<_> = source
+            .lines
+            .iter()
+            .map(|line| {
+                let order = issued
+                    .orders
+                    .iter()
+                    .find(|order| order.order_id == line.purchase_order_id)
+                    .unwrap();
+                let original = order
+                    .lines
+                    .iter()
+                    .find(|row| row.line_id == line.purchase_line_id)
+                    .unwrap();
+                let (item, revision) = original.row.key();
+                json!({
+                    "purchase_order_id": order.order_id, "purchase_line_id": original.line_id,
+                    "sku": item, "revision": revision, "unit": "EA",
+                    "ordered_pieces": original.row.whole_pieces().unwrap().to_string(),
+                })
+            })
+            .collect();
+        assert_eq!(
+            serde_json::to_value(&source).unwrap(),
+            json!({"plan_id": draft.plan.plan_id, "lines": expected})
+        );
+        assert_eq!(
+            source
+                .lines
+                .iter()
+                .find(|line| line.sku == "NM-ENDPLATE")
+                .map(|line| line.ordered_pieces.as_str()),
+            Some("12")
+        );
+    }
+
+    #[test]
+    fn receipt_source_fails_closed_on_missing_or_ambiguous_issued_lines() {
+        let (draft, terms, _) = fixture(true);
+        let mut ids = ids();
+        let mut issued =
+            Batch::form(&draft, &terms, ORIGIN, APPROVED, || ids.next().unwrap()).unwrap();
+        issued.orders[1].lines[0].line_id = issued.orders[0].lines[0].line_id;
+        assert_eq!(
+            issued.receipt_source().unwrap_err(),
+            IssueFailure::Unavailable
+        );
+        issued.orders.clear();
+        assert_eq!(
+            issued.receipt_source().unwrap_err(),
+            IssueFailure::Unavailable
+        );
     }
 
     #[test]

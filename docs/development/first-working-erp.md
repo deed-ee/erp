@@ -103,7 +103,7 @@ If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-previ
 ## Remaining acceptance gates
 
 - Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
-- Post [partial receipts](../rfc/preview-purchase-issuance.md#inventory-owns-receipt-and-allocation) against issued purchase lines under distinct receiving authority, then allocate to the waiting plan and reconcile received/open quantities. The draft itself buys nothing.
+- Post [partial receipts](../rfc/preview-purchase-issuance.md#inventory-owns-receipt-and-allocation-proposed) against issued purchase lines under distinct receiving authority, then allocate to the waiting plan and reconcile received/open quantities. The draft itself buys nothing.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
 - A [reviewed runtime inventory and redacted log boundary](https://github.com/erp4us-org/erp4us/issues/122#issuecomment-7236971940). Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.
