@@ -10,11 +10,19 @@ use axum::{
     http::{HeaderMap, HeaderValue, Request, Response, StatusCode, header},
 };
 use erp4us_identity::{Auth, ORGANIZATION_HEADER, Scope, TENANT_HEADER};
-use http_body_util::{BodyExt, Limited};
+use http_body_util::{BodyExt, Empty, Limited};
+use hyper_util::rt::TokioIo;
+use std::time::Duration;
+use tokio::{
+    net::{TcpStream, ToSocketAddrs},
+    task::JoinSet,
+    time::timeout,
+};
 use uuid::Uuid;
 
 const POST_PERMISSION: &str = "inventory.purchase-receipt.post";
 const UNAVAILABLE: StatusCode = StatusCode::SERVICE_UNAVAILABLE;
+const OWNER_TIMEOUT: Duration = Duration::from_secs(3);
 
 struct Receiver {
     identity: Scope,
@@ -62,6 +70,39 @@ impl Receiver {
         .map_err(|_| UNAVAILABLE)
     }
 
+    /// The future runtime caller must pass the fixed Compose peer selected by
+    /// the operator, never an origin from the request. There is no redirect.
+    async fn fetch(
+        &self,
+        peer: impl ToSocketAddrs,
+        plan: Uuid,
+        purchase: PurchaseLine,
+    ) -> Result<Selected, StatusCode> {
+        let mut request = self.request(plan)?.map(|()| Empty::<Bytes>::new());
+        request
+            .headers_mut()
+            .insert(header::HOST, HeaderValue::from_static("procurement"));
+        request
+            .headers_mut()
+            .insert(header::CONNECTION, HeaderValue::from_static("close"));
+        timeout(OWNER_TIMEOUT, async {
+            let stream = TcpStream::connect(peer).await.map_err(|_| UNAVAILABLE)?;
+            let (mut sender, connection) =
+                hyper::client::conn::http1::handshake(TokioIo::new(stream))
+                    .await
+                    .map_err(|_| UNAVAILABLE)?;
+            let mut connection_task = JoinSet::new();
+            connection_task.spawn(connection);
+            let response = sender
+                .send_request(request)
+                .await
+                .map_err(|_| UNAVAILABLE)?;
+            self.response(plan, purchase, response.map(Body::new)).await
+        })
+        .await
+        .map_err(|_| UNAVAILABLE)?
+    }
+
     async fn response(
         &self,
         plan: Uuid,
@@ -101,8 +142,10 @@ mod receipt_identity;
 #[cfg(test)]
 mod tests {
     use super::{receipt_identity::*, *};
+    use axum::{Json, Router, routing::get};
     use serde_json::json;
     use std::fs;
+    use tokio::net::TcpListener;
 
     const TENANT: Uuid = Uuid::from_u128(101);
     const ORG: Uuid = Uuid::from_u128(102);
@@ -214,17 +257,20 @@ mod tests {
             .unwrap()
     }
 
-    #[tokio::test]
-    async fn accepts_a_bounded_exact_source_and_fails_closed_on_owner_errors() {
-        let auth = owner_auth(AUDIENCE, &[POST_PERMISSION]);
-        let receiver = Receiver::verify(&auth, &headers()).unwrap();
-        let document = json!({
+    fn source_document() -> serde_json::Value {
+        json!({
             "plan_id": PLAN, "lines": [{
                 "purchase_order_id": PAIR.order, "purchase_line_id": PAIR.line,
                 "sku": "NM-ENDPLATE", "revision": null, "unit": "EA", "ordered_pieces": "12"
             }]
-        });
-        let data = serde_json::to_vec(&document).unwrap();
+        })
+    }
+
+    #[tokio::test]
+    async fn accepts_a_bounded_exact_source_and_fails_closed_on_owner_errors() {
+        let auth = owner_auth(AUDIENCE, &[POST_PERMISSION]);
+        let receiver = Receiver::verify(&auth, &headers()).unwrap();
+        let data = serde_json::to_vec(&source_document()).unwrap();
         let selected = receiver
             .response(
                 PLAN,
@@ -283,5 +329,50 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[tokio::test]
+    async fn exchanges_only_the_receipt_source_over_http_and_fails_closed_on_disconnect() {
+        let inventory = owner_auth(AUDIENCE, &[POST_PERMISSION]);
+        let procurement = owner_auth(AUDIENCE, &[SOURCE_PERMISSION]);
+        let receiver = Receiver::verify(&inventory, &headers()).unwrap();
+        let expected = receiver.identity;
+        let app = Router::new().route(
+            &format!("/v1/procurement/proposals/by-plan/{PLAN}/purchase-orders/receipt-source"),
+            get(move |headers: HeaderMap| async move {
+                let actor = crate::query::authorize(&procurement, &headers, SOURCE_PERMISSION)?;
+                if actor.actor != expected.actor
+                    || actor.tenant != expected.tenant
+                    || actor.organization != expected.organization
+                    || headers.get(header::HOST) != Some(&HeaderValue::from_static("procurement"))
+                {
+                    return Err(StatusCode::FORBIDDEN);
+                }
+                Ok(Json(source_document()))
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut tasks = JoinSet::new();
+        tasks.spawn(async { axum::serve(listener, app).await });
+        let source = receiver.fetch(address, PLAN, PAIR).await.unwrap();
+        assert_eq!(source.as_issued().actor, ACTOR);
+        assert_eq!(source.as_issued().purchase, PAIR);
+        assert_eq!(source.as_issued().ordered, 12);
+        tasks.shutdown().await;
+
+        // The fixture accepts one connection but disconnects before replying.
+        let disconnected = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = disconnected.local_addr().unwrap();
+        let owner = async {
+            drop(
+                timeout(OWNER_TIMEOUT, disconnected.accept())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            )
+        };
+        let (result, ()) = tokio::join!(receiver.fetch(address, PLAN, PAIR), owner);
+        assert_eq!(result.unwrap_err(), UNAVAILABLE);
     }
 }
