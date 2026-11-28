@@ -1,11 +1,13 @@
 //! Validate the proposed non-commercial Procurement receipt source.
-//! This test-gated boundary does not implement identity forwarding or an HTTP call.
+//! This test-gated boundary does not register a runtime route or a receiver grant.
 
 use super::{IssuedLine, Organization, PurchaseLine, Reject};
 use crate::netting::{Item, positive};
 use erp4us_identity::Scope;
 use serde::{Deserialize, Deserializer, de};
 use uuid::Uuid;
+
+mod owner;
 
 const MAX_LINES: usize = 32;
 const MAX_SOURCE_BYTES: usize = 16 * 1024;
