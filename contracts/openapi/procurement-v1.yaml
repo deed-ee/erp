@@ -165,6 +165,56 @@ paths:
         '409':
           description: 'Reviewed terms or policy changed, stage is not the next eligible stage, or command ID was used with different intent'
         '503': { description: 'No applicable policy, storage unavailable, or write outcome uncertain' }
+  /v1/procurement/proposals/by-plan/{plan_id}/purchase-orders:
+    x-preview-proposed: true
+    parameters:
+      - in: header
+        name: X-Erp4us-Tenant
+        required: true
+        schema: { $ref: '#/components/schemas/CanonicalId' }
+      - in: header
+        name: X-Erp4us-Organization
+        required: true
+        schema: { $ref: '#/components/schemas/CanonicalId' }
+      - in: path
+        name: plan_id
+        required: true
+        schema: { $ref: '#/components/schemas/CanonicalId' }
+    get:
+      operationId: getPreviewPurchaseOrderBatch
+      description: Requires procurement.purchase-order.read in the verified scope. Returns the durable local batch independently of the current budget policy.
+      responses:
+        '200': { $ref: '#/components/responses/IssuedPurchaseBatch' }
+        '400': { description: Invalid scope or plan reference }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing scoped purchase order read grant }
+        '404': { description: No issued batch in the authorized scope }
+        '503': { description: Storage unavailable }
+    post:
+      operationId: issuePreviewPurchaseOrderBatch
+      description: >
+        Explicitly records a local purchase batch. Requires procurement.purchase-order.issue and
+        procurement.purchase-order.read in the verified scope. The terms preparer cannot issue.
+        Revalidates the current exact terms and configured policy and requires every approval stage
+        for the complete draft total before grouping by verified supplier. At most one immutable
+        batch per scoped plan. The same authorized actor and identical command replay the original
+        batch; changed intent or another issue attempt conflicts. This does not transmit to a supplier,
+        reserve a budget balance, receive goods, or post inventory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssuePurchaseOrders' }
+      responses:
+        '201': { $ref: '#/components/responses/IssuedPurchaseBatch' }
+        '200': { $ref: '#/components/responses/IssuedPurchaseBatch' }
+        '400': { description: 'Invalid scope, plan reference or command' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing scoped issue/read grant or issuer is the terms preparer }
+        '404': { description: No saved terms for the plan in the authorized scope }
+        '409':
+          description: 'Incomplete approvals, stale terms or policy, changed command intent, or plan already issued'
+        '503': { description: 'No applicable policy, storage unavailable, or commit outcome uncertain' }
 components:
   securitySchemes:
     AccessToken: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -180,6 +230,15 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/BudgetApproval' }
+    IssuedPurchaseBatch:
+      description: Persisted local purchase order batch and original exact commercial snapshots
+      headers:
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/IssuedPurchaseBatch' }
   schemas:
     Id:
       type: string
@@ -327,3 +386,67 @@ components:
             properties:
               key: { $ref: '#/components/schemas/ApprovalStageKey' }
               state: { type: string, enum: [pending, approved] }
+    IssuePurchaseOrders:
+      type: object
+      additionalProperties: false
+      required: [command_id, terms_revision, policy_id, policy_revision]
+      properties:
+        command_id: { $ref: '#/components/schemas/CanonicalId' }
+        terms_revision: { $ref: '#/components/schemas/PositiveRevision' }
+        policy_id: { $ref: '#/components/schemas/CanonicalId' }
+        policy_revision: { $ref: '#/components/schemas/PositiveRevision' }
+    IssuedPurchaseLine:
+      type: object
+      additionalProperties: false
+      required: [purchase_line_id, sku, revision, unit, pieces, unit_price, line_total]
+      properties:
+        purchase_line_id: { $ref: '#/components/schemas/Id' }
+        sku: { $ref: '#/components/schemas/Sku' }
+        revision: { $ref: '#/components/schemas/OptionalRevision' }
+        unit: { type: string, const: EA }
+        pieces: { $ref: '#/components/schemas/Pieces' }
+        unit_price: { $ref: '#/components/schemas/UnitPrice' }
+        line_total: { $ref: '#/components/schemas/Amount' }
+    IssuedPurchaseOrder:
+      type: object
+      additionalProperties: false
+      required: [purchase_order_id, supplier, total, lines]
+      properties:
+        purchase_order_id: { $ref: '#/components/schemas/Id' }
+        supplier:
+          type: object
+          additionalProperties: false
+          required: [id, code, name]
+          properties:
+            id: { $ref: '#/components/schemas/Id' }
+            code: { type: string, pattern: '^[A-Z0-9-]{1,32}(?![\s\S])' }
+            name: { type: string, minLength: 1, maxLength: 120 }
+        total: { $ref: '#/components/schemas/Amount' }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items: { $ref: '#/components/schemas/IssuedPurchaseLine' }
+    IssuedPurchaseBatch:
+      type: object
+      additionalProperties: false
+      required: [batch_id, plan_id, proposal_id, order_id, line_id, terms_revision, policy_id, policy_revision, state, currency, total, issued_at, purchase_orders]
+      properties:
+        batch_id: { $ref: '#/components/schemas/Id' }
+        plan_id: { $ref: '#/components/schemas/Id' }
+        proposal_id: { $ref: '#/components/schemas/Id' }
+        order_id: { $ref: '#/components/schemas/Id', description: Original confirmed Sales order. }
+        line_id: { $ref: '#/components/schemas/Id', description: Original confirmed Sales line. }
+        terms_revision: { $ref: '#/components/schemas/PositiveRevision' }
+        policy_id: { $ref: '#/components/schemas/Id' }
+        policy_revision: { $ref: '#/components/schemas/PositiveRevision' }
+        state: { type: string, const: issued }
+        currency: { type: string, const: EUR }
+        total: { $ref: '#/components/schemas/Amount' }
+        issued_at: { type: string, format: date-time }
+        purchase_orders:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: Unique per supplier ID. Child totals sum exactly to the approved entire draft.
+          items: { $ref: '#/components/schemas/IssuedPurchaseOrder' }
