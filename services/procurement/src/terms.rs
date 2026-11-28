@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt};
 use uuid::Uuid;
 
 const MAX_UNIT_CENTS: u64 = 999_999_999; // Same EUR unit price cap as Sales.
-const MAX_LINES: usize = 32;
+pub(super) const MAX_LINES: usize = 32;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Failure {
@@ -18,9 +18,11 @@ pub(super) enum Failure {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct Cents(u64);
+pub(super) struct Cents(u64);
 
 impl Cents {
+    pub(super) const ZERO: Self = Self(0);
+
     fn parse(value: &str) -> Option<Self> {
         let (euros, cents) = value.split_once('.')?;
         if euros.is_empty()
@@ -41,15 +43,19 @@ impl Cents {
             .map(Self)
     }
 
-    fn checked_mul(self, pieces: u64) -> Result<Self, Failure> {
+    pub(super) fn checked_mul(self, pieces: u64) -> Result<Self, Failure> {
         self.0.checked_mul(pieces).map(Self).ok_or(Failure::Invalid)
     }
 
-    fn checked_add(self, other: Self) -> Result<Self, Failure> {
+    pub(super) fn checked_add(self, other: Self) -> Result<Self, Failure> {
         self.0
             .checked_add(other.0)
             .map(Self)
             .ok_or(Failure::Invalid)
+    }
+
+    pub(super) fn as_u64(self) -> u64 {
+        self.0
     }
 }
 
@@ -120,7 +126,7 @@ pub(super) struct Supplier {
 }
 
 #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
-enum Currency {
+pub(super) enum Currency {
     #[serde(rename = "EUR")]
     Eur,
 }
@@ -152,7 +158,26 @@ impl Terms {
         let currency = match self.currency {
             Currency::Eur => "EUR",
         };
-        (currency, self.total.0, self.total.to_string())
+        (currency, self.total.as_u64(), self.total.to_string())
+    }
+
+    #[cfg(test)]
+    pub(super) fn issuance_lines(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (&BuyRow, &Supplier, Cents, Cents)> {
+        self.lines.iter().map(|line| {
+            (
+                &line.original,
+                &line.supplier,
+                line.unit_price.0,
+                line.line_total,
+            )
+        })
+    }
+
+    #[cfg(test)]
+    pub(super) fn total(&self) -> Cents {
+        self.total
     }
 }
 
@@ -167,6 +192,15 @@ pub(super) struct Saved {
     saved_at: DateTime,
     schema_version: i32,
     pub terms: Terms,
+}
+
+impl Saved {
+    #[cfg(test)]
+    pub(super) fn has_valid_revision(&self) -> bool {
+        self.schema_version == 1
+            && self.expected_revision >= 0
+            && self.expected_revision.checked_add(1) == Some(self.terms.revision)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -267,7 +301,7 @@ impl BoundCommand<'_> {
         actor_id: Uuid,
     ) -> Result<Saved, Failure> {
         let mut lines = Vec::with_capacity(self.lines.len());
-        let mut total = Cents(0);
+        let mut total = Cents::ZERO;
         for (row, choice, pieces) in self.lines {
             let supplier = suppliers
                 .get(&choice.supplier_id)
