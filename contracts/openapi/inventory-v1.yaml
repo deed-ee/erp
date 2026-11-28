@@ -38,9 +38,61 @@ paths:
         '403': { description: Missing reservation read grant }
         '404': { description: No reservation for this line in the authorized scope }
         '503': { description: Inventory storage unavailable }
+  /v1/inventory/reservations/{order_id}/{line_id}/material-plan:
+    parameters:
+      - in: header
+        name: X-Erp4us-Tenant
+        required: true
+        schema: { type: string, format: uuid }
+      - in: header
+        name: X-Erp4us-Organization
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: order_id
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: line_id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getMaterialPlan
+      description: Requires inventory.material-plan.read in the verified organization.
+      responses:
+        '200': { $ref: '#/components/responses/MaterialPlan' }
+        '400': { description: Invalid scope or line reference }
+        '401': { description: Missing or invalid bearer token }
+        '403': { description: Missing material-plan read grant }
+        '404': { description: No material plan for this line in the authorized scope }
+        '503': { description: Inventory storage unavailable }
+    post:
+      operationId: createMaterialPlan
+      description: >
+        Requires inventory.material-plan.create and manufacturing.plan.read.
+        No request body: Inventory uses its recorded outstanding demand, warehouse, and pinned product revision.
+        Resolves the structure through Manufacturing, reserves available components and stores one immutable plan
+        per line in one Inventory transaction. Identical requests return that plan without allocating again.
+        Production and purchase quantities are recommendations, not orders or purchase approval.
+      responses:
+        '201': { $ref: '#/components/responses/MaterialPlan' }
+        '200': { $ref: '#/components/responses/MaterialPlan' }
+        '400': { description: Invalid scope or line reference }
+        '401': { description: Missing or invalid bearer token }
+        '403': { description: Missing required scope grant }
+        '404': { description: No corresponding reservation in the authorized scope }
+        '409': { description: 'No demand remains to plan, the reservation changed, or the pinned structure is unavailable for planning' }
+        '413': { description: No request body is accepted and its size exceeded the bounded request limit }
+        '503': { description: 'Inventory or Manufacturing unavailable, or configured component stock could not be verified' }
 components:
   securitySchemes:
     AccessToken: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    MaterialPlan:
+      description: Stored plan and allocated quantities
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/MaterialPlan' }
   schemas:
     Quantity: { type: string, pattern: '^(?:0|[1-9][0-9]{0,2}|1000)(?![\s\S])' }
     Reservation:
@@ -57,3 +109,37 @@ components:
         reserved: { $ref: '#/components/schemas/Quantity' }
         outstanding: { $ref: '#/components/schemas/Quantity' }
         source_event_id: { type: string, format: uuid }
+    PlanQuantity: { type: string, pattern: '^(?:0|[1-9][0-9]{0,5}|1000000)(?![\s\S])' }
+    MaterialPlan:
+      type: object
+      required: [id, order_id, line_id, warehouse_id, source_event_id, sku, product_revision, pieces, unit, created_at, production, materials]
+      properties:
+        id: { type: string, format: uuid }
+        order_id: { type: string, format: uuid }
+        line_id: { type: string, format: uuid }
+        warehouse_id: { type: string, format: uuid }
+        source_event_id: { type: string, format: uuid }
+        sku: { type: string }
+        product_revision: { type: string }
+        pieces: { type: string, pattern: '^(?:[1-9][0-9]{0,2}|1000)(?![\s\S])' }
+        unit: { const: EA }
+        created_at: { type: string, format: date-time }
+        production:
+          description: Root and nested assemblies. Uncovered pieces are recommended for manufacture.
+          type: array
+          maxItems: 257
+          items: { $ref: '#/components/schemas/PlanRow' }
+        materials:
+          description: Leaf materials. Uncovered pieces are recommended for purchase.
+          type: array
+          maxItems: 256
+          items: { $ref: '#/components/schemas/PlanRow' }
+    PlanRow:
+      type: object
+      required: [sku, revision, requested, reserved, uncovered]
+      properties:
+        sku: { type: string }
+        revision: { type: [string, 'null'] }
+        requested: { $ref: '#/components/schemas/PlanQuantity' }
+        reserved: { $ref: '#/components/schemas/PlanQuantity' }
+        uncovered: { $ref: '#/components/schemas/PlanQuantity' }

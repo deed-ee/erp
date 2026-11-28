@@ -197,6 +197,7 @@ jobs:
           compose run --rm -T inventory-seed
           compose up --no-build -d inventory-worker
           python3 tests/integration/sales_inventory.py
+          python3 tests/integration/material_plan.py
       - name: Scan built service images
         run: |
           sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"

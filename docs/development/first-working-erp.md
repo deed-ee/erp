@@ -53,7 +53,13 @@ The new image scan checks Keycloak and its Java dependencies. The current pinned
 
 Sign in as `production`, open **Sales orders**, choose **Atlas Handling Technologies GmbH**, select **NM-1000** revision **A**, and enter **10** pieces. Saving captures the customer profile and product/price snapshot for **EUR 24,900.00**. In its row, select **Review confirmation** and **Confirm order**, then reopen Sales to see the persisted status. Sales owns its own MongoDB records and resolves the customer and product through their scoped owning APIs. The [Sales API](../../contracts/openapi/sales-v1.yaml) uses distinct authorization and revision-aware command retries for confirmation. It commits the original terms and a [pending Sales event](../../contracts/schemas/nats-sales-order-confirmed-v1.json) in the same document update even if JetStream is down. A scoped relay sends the event after recovery. The preview supports one whole-piece line and EUR terms, not quotations. Sales itself does not reserve stock, and the browser cannot supply the unit price.
 
-Once confirmed, open **Check reservation** from the order row. Inventory receives the event asynchronously and records **0 EA reserved, 10 EA outstanding** for `NM-1000`: that is the actual result in the seeded finished-goods warehouse, not gross material demand. A separate example, `NM-2000` × 10 on a fresh seed, reserves **6 EA** and leaves **4 EA** outstanding; a second competing order cannot consume those six again. The initialization command is idempotent and does not replenish used stock. See the [Inventory API](../../contracts/openapi/inventory-v1.yaml). There is no purchase approval, material planning or shipping authority in this read view.
+Once confirmed, open **Check reservation** from the order row. Inventory receives the event asynchronously and records **0 EA reserved, 10 EA outstanding** for `NM-1000`: that is the actual result in the seeded finished-goods warehouse, not gross material demand. A separate example, `NM-2000` × 10 on a fresh seed, reserves **6 EA** and leaves **4 EA** outstanding; a second competing order cannot consume those six again. The initialization command is idempotent and does not replenish used stock. See the [Inventory API](../../contracts/openapi/inventory-v1.yaml).
+
+### Plan and reserve components
+
+For the confirmed `NM-1000` line, open **Check reservation** and select **Plan and reserve materials**. This writes a plan. Inventory takes its own ten outstanding pieces and fetches the pinned Manufacturing structure under the actor's existing grants. It reserves eligible stock and saves the plan atomically. It expands only the unfilled portion of subassemblies; expected receipts do not count as stock. A retry or revisit displays the same plan without a second allocation.
+
+On a fresh NovaMotion seed, the plan recommends making ten `NM-1100`, ten `NM-1200` and ten `NM-1000`, and buying **12 end plates, 6 motors, 10 spindles, 8 rails and 10 sensors**. The other materials come from physical opening stock. This is a linked, persisted material plan, not purchase approval, an issued purchase order, a production order or shipping authority. A later order in the same warehouse sees less available stock. Do not rerun the seed expecting to recover stock; releasing/replanning material allocations is not yet exposed.
 
 ### Check application readiness
 
@@ -66,7 +72,7 @@ If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-previ
 ## Remaining acceptance gates
 
 - Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
-- Use outstanding finished demand and pinned BOMs for net planning and component reservations; add durable shortage handoff, purchasing and partial receipts. Finished-goods reservation alone does not buy components.
+- Publish a durable shortage handoff from the saved plan and create Procurement-owned proposals, then add purchasing and partial receipts. The stored plan itself buys nothing.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
 - Restricted diagnostics collector for actual runtime inventory, heartbeat staleness, and redacted historical/live logs. Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.

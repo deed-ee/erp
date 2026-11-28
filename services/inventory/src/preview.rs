@@ -2,7 +2,7 @@ use crate::{allocate, consumer::ConfirmedOrder, line_key};
 use erp4us_messaging::Envelope;
 use mongodb::{
     Client, Collection, Database,
-    bson::{DateTime, Document, doc},
+    bson::{Bson, DateTime, Document, doc},
     error::Error,
 };
 use std::{env, io};
@@ -54,12 +54,12 @@ impl Warehouse {
         })
     }
 
-    fn stock_key(&self, sku: &str, revision: &str) -> Document {
+    pub(super) fn stock_key(&self, sku: &str, revision: Option<&str>) -> Document {
         let mut scope = scoped(self.tenant, self.organization);
         scope.extend(doc! {
             "warehouseId": self.id.to_string(),
             "catalogSku": sku,
-            "productRevision": revision,
+            "productRevision": revision.map_or(Bson::Null, |value| Bson::String(value.into())),
             "unit": "EA",
         });
         scope
@@ -70,10 +70,26 @@ pub(super) async fn seed() -> io::Result<()> {
     let warehouse = Warehouse::load()?;
     let db = open().await?;
     // Only the explicitly seeded catalog/warehouse pairs are eligible. The
-    // NovaMotion order itself starts without finished stock; the second product
-    // is a counterexample that proves partial allocation against real stock.
-    for (sku, opening) in [("NM-1000", 0), ("NM-2000", 6)] {
-        seed_balance(&db, warehouse.stock_key(sku, "A"), opening)
+    // NovaMotion starts with no finished modules or subassemblies. A separate
+    // stocked product exercises partial finished-goods allocation.
+    // Material opening stock is physical on-hand, not outstanding receipts.
+    for (sku, revision, opening) in [
+        ("NM-1000", Some("A"), 0),
+        ("NM-2000", Some("A"), 6),
+        ("NM-1100", Some("A"), 0),
+        ("NM-1200", Some("A"), 0),
+        ("NM-PROFILE", None, 20),
+        ("NM-ENDPLATE", None, 8),
+        ("NM-SCREW", None, 120),
+        ("NM-MOTOR", None, 4),
+        ("NM-COUPLING", None, 10),
+        ("NM-SPINDLE", None, 0),
+        ("NM-RAIL", None, 12),
+        ("NM-SENSOR", None, 10),
+        ("NM-CABLE", None, 10),
+        ("NM-PACK", None, 10),
+    ] {
+        seed_balance(&db, warehouse.stock_key(sku, revision), opening)
             .await
             .map_err(|_| io::Error::other("Inventory preview seed unavailable"))?;
     }
@@ -112,7 +128,7 @@ pub(super) async fn reserve_confirmed(
         .ok_or_else(|| Error::custom(Rule::InvalidQuantity))?;
     let scope = scoped(warehouse.tenant, warehouse.organization);
     let line = line_key(&scope, payload.order_id, payload.line_id);
-    let stock = warehouse.stock_key(&payload.sku, &payload.product_revision);
+    let stock = warehouse.stock_key(&payload.sku, Some(&payload.product_revision));
     let mut inbox_key = scope;
     inbox_key.insert("messageId", event.message_id.to_string());
     let intent = doc! { "line": &line, "stock": &stock, "requested": requested };

@@ -97,4 +97,15 @@ test('real OIDC: production user saves, confirms and reopens a priced sales orde
   await expect(page.getByRole('heading', { name: 'NM-1000 · A' })).toBeVisible();
   await expect(page.getByText('0 EA', { exact: true })).toBeVisible();
   await expect(page.getByText('10 EA', { exact: true })).toHaveCount(2);
+  await page.getByRole('button', { name: 'Plan and reserve materials' }).click();
+  const materials = page.getByRole('table', { name: 'Material requirements' });
+  for (const [sku, pieces] of Object.entries({
+    'NM-ENDPLATE': 12, 'NM-MOTOR': 6, 'NM-SPINDLE': 10, 'NM-RAIL': 8, 'NM-SENSOR': 10,
+  })) {
+    await expect(materials.getByRole('row').filter({ hasText: sku }).getByRole('cell').last()).toHaveText(`${pieces} EA`);
+  }
+  const production = page.getByRole('table', { name: 'Production requirements' });
+  for (const sku of ['NM-1000', 'NM-1100', 'NM-1200']) {
+    await expect(production.getByRole('row').filter({ hasText: sku }).getByRole('cell').last()).toHaveText('10 EA');
+  }
 });

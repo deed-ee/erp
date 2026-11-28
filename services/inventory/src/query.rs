@@ -1,13 +1,13 @@
-use crate::{line_key, preview};
+use crate::{line_key, material_plan, preview};
 use axum::{
     Json, Router,
-    extract::{Path, Request, State},
+    extract::{DefaultBodyLimit, Path, Request, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     middleware::{self, Next},
     response::Response,
     routing::get,
 };
-use erp4us_identity::{Auth, Denial};
+use erp4us_identity::{Auth, Denial, Scope};
 use mongodb::{
     Database,
     bson::{Document, doc},
@@ -17,9 +17,22 @@ use std::{env, io};
 use uuid::Uuid;
 
 #[derive(Clone)]
-struct Inventory {
-    db: Database,
-    auth: Auth,
+pub(super) struct Inventory {
+    pub db: Database,
+    pub auth: Auth,
+}
+
+pub(super) fn authorize(
+    auth: &Auth,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<Scope, StatusCode> {
+    auth.authorize(headers, permission)
+        .map_err(|error| match error {
+            Denial::Unauthenticated => StatusCode::UNAUTHORIZED,
+            Denial::InvalidScope => StatusCode::BAD_REQUEST,
+            Denial::Forbidden => StatusCode::FORBIDDEN,
+        })
 }
 
 #[derive(Serialize)]
@@ -66,14 +79,7 @@ async fn lookup(
     headers: HeaderMap,
     Path((order, line)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Reservation>, StatusCode> {
-    let scope = state
-        .auth
-        .authorize(&headers, "inventory.reservation.read")
-        .map_err(|error| match error {
-            Denial::Unauthenticated => StatusCode::UNAUTHORIZED,
-            Denial::InvalidScope => StatusCode::BAD_REQUEST,
-            Denial::Forbidden => StatusCode::FORBIDDEN,
-        })?;
+    let scope = authorize(&state.auth, &headers, "inventory.reservation.read")?;
     if order.is_nil() || line.is_nil() {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -119,6 +125,11 @@ pub(super) async fn serve() -> io::Result<()> {
                 "/v1/inventory/reservations/{order_id}/{line_id}",
                 get(lookup),
             )
+            .route(
+                "/v1/inventory/reservations/{order_id}/{line_id}/material-plan",
+                get(material_plan::get).post(material_plan::create),
+            )
+            .layer(DefaultBodyLimit::max(1024))
             .layer(middleware::from_fn(
                 |request: Request, next: Next| async move {
                     let mut response: Response = next.run(request).await;

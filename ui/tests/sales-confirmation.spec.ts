@@ -33,6 +33,17 @@ test('fixture: review and confirm a saved order in the authorized scope', async 
   await expect(page.getByRole('heading', {name: 'NM-1000 · A'})).toBeVisible();
   await expect(page.getByText('0 EA', {exact: true})).toBeVisible();
   await expect(page.getByText('10 EA', {exact: true})).toHaveCount(2);
+  const committedPlan = page.waitForResponse(response => response.url().endsWith('/material-plan')
+    && response.request().method() === 'POST');
+  await page.getByRole('button', {name: 'Plan and reserve materials'}).click();
+  const result = await committedPlan;
+  expect(result.status()).toBe(201);
+  const data: {materials: {sku: string; uncovered: string}[]} = await result.json();
+  const endPlates = data.materials.find(item => item.sku === 'NM-ENDPLATE');
+  const rowForEndPlates = page.getByRole('row').filter({hasText: 'NM-ENDPLATE'});
+  await expect(rowForEndPlates.getByRole('cell', {name: '20 EA', exact: true}).first()).toBeVisible();
+  await expect(rowForEndPlates.getByRole('cell').last()).toHaveText(`${endPlates?.uncovered} EA`);
   await page.getByLabel('Company and organization').selectOption({index: 2});
   await expect(page.getByRole('heading', {name: 'NM-1000 · A'})).toHaveCount(0);
+  await expect(rowForEndPlates).toHaveCount(0);
 });

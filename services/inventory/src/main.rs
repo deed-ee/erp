@@ -14,6 +14,8 @@ use uuid::Uuid;
 
 mod cancellation;
 mod consumer;
+mod material_plan;
+mod netting;
 mod preview;
 mod query;
 
