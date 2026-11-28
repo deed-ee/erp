@@ -101,7 +101,7 @@ jobs:
     needs: impact
     if: ${{ !cancelled() && (needs.impact.result != 'success' || needs.impact.outputs.compose != 'false') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       COMPOSE_PROJECT_NAME: erp4us-ci
       ERP4US_HEARTBEAT_SECONDS: "2"
@@ -263,6 +263,8 @@ jobs:
           npm run build
           npx playwright install --with-deps chromium
           npm run test:e2e
+      - name: Build the loopback identity image from pinned source
+        run: docker compose -f compose.preview-identity.yaml build preview-identity
       - name: Verify real preview login and the synthetic receipt owners
         env:
           ERP4US_PORT: '8180'
@@ -299,7 +301,7 @@ jobs:
                 | all(.[]; $services[.].image == "erp4us-ci-identity-inventory"))
           ' >/dev/null
           docker image inspect erp4us-ci-inventory-receiving-proof:latest erp4us-ci-identity-inventory:latest >/dev/null
-          preview up -d preview-identity
+          preview up --no-build --pull never -d preview-identity
           python3 scripts/preview-identity.py configure
           preview up --no-build -d --wait nats
           # A foreground one-shot returns the initializer's exit status even if
@@ -311,6 +313,12 @@ jobs:
           preview run --rm -T inventory-seed
           preview up --no-build -d inventory-worker inventory-plan-relay procurement-worker
           npm --prefix ui run test:e2e -- tests/preview-signin.spec.ts
+      - name: Scan the exact identity image used by the real OIDC checks
+        run: |
+          container=$(docker ps -q --filter label=com.docker.compose.project=erp4us-ci-identity --filter label=com.docker.compose.service=preview-identity)
+          test -n "$container"
+          image=$(docker inspect --format '{{.Image}}' "$container")
+          sh scripts/scan-preview-identity.sh "$image" "$RUNNER_TEMP/preview-identity-used"
       - name: Save trusted npm download cache
         if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0

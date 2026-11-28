@@ -31,7 +31,7 @@ compose() {
         -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml \
         -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml "$@"
 }
-compose up -d preview-identity
+compose up --build -d preview-identity
 python3 scripts/preview-identity.py configure
 compose up --build -d master-data manufacturing sales sales-relay diagnostics article-relay article-receipts inventory procurement
 compose run --rm inventory-seed

@@ -6,7 +6,7 @@ Master Data is an OAuth resource server. It verifies RS256 access tokens against
 
 The integration boundary is OIDC/OAuth, not Keycloak. The optional loopback preview uses Keycloak as the reference provider so the browser tests exercise real sign-in. An installation can use another compatible provider after verifying its tokens, subject bindings, scopes and key rotation. Entra ID is one candidate, not a verified integration: the issued access-token format and audience must meet the verifier's contract. An LDAP directory can instead sit behind an OIDC provider that supports LDAP federation; erp4us does not bind to LDAP or infer business permissions from directory membership.
 
-The [preview image scan](../../.github/workflows/preview-identity-image.yml) covers the pinned reference image, not the OIDC protocol. It is independent of the backend domain and database proofs and must remain in place while that image is shipped.
+The [preview image scan](../../.github/workflows/preview-identity-image.yml) covers the locally built reference image, not the OIDC protocol. It is independent of the backend domain and database proofs. Application CI also scans the image ID used by its real OIDC tests.
 
 ## Use a self-hosted OIDC provider
 
@@ -47,4 +47,6 @@ For [#121](https://github.com/erp4us-org/erp4us/issues/121), an unpublished amd6
 
 The retested local OCI image ID is `sha256:1a54f8c56f89bc7c41a6e143f34e35be8eadcd1a88e91066f5d0b36f421c75a7`. The unchanged Trivy 0.76.2 gate reported no fixable high or critical finding. The Guava finding was absent; five high findings without a vendor fix remained visible. The CycloneDX SBOM SHA-256 is `678dd07f5207b10828aa6b7e01505d8ea1367321fe4c117f819741237dc9f391`.
 
-The exact scanned image imported a clean realm in a disposable loopback project and passed two real OIDC Playwright cases: authorized NovaMotion planning and rejection of a different tenant's access. This is not arm64 or full receipt-flow qualification of the candidate. The test project was stopped and the original preview containers and volumes were preserved. The default image pin and CI scan remain unchanged pending review of how to build and consume the replacement; the local image ID is not a published registry digest.
+The exact scanned image imported a clean realm in a disposable loopback project and passed two real OIDC Playwright cases: authorized NovaMotion planning and rejection of a different tenant's access. This is amd64 evidence for that image, not full receipt-flow or arm64 qualification. The test project was stopped and the original preview containers and volumes were preserved. The local image ID is not a published registry digest.
+
+The maintainer approved using this source and dependency override as a temporary replacement for the synthetic preview and CI. [`compose.preview-identity.yaml`](../../compose.preview-identity.yaml) uses the [small build context](../../infrastructure/preview-identity/) and a local-only image tag. Both CI jobs build from the pinned inputs; the application job scans the exact image ID used in Playwright. Neither job pushes an image. An official fixed digest can replace the temporary recipe only after passing the same image and real OIDC checks. Keep the preview loopback-only; this is not a production artifact or support commitment for other platforms.

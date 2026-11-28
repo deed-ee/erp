@@ -1,6 +1,9 @@
 services:
   preview-identity:
-    image: quay.io/keycloak/keycloak:26.8.2@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
+    image: erp4us-preview-keycloak:26.8.2-guava33.8.0
+    pull_policy: never
+    build:
+      context: ./infrastructure/preview-identity
     command:
       - start-dev
       - --import-realm

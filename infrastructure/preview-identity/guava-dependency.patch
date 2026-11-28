@@ -1,0 +1,15 @@
+diff --git a/pom.xml b/pom.xml
+index da0d5bc5..4e787790 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -341,4 +341,10 @@
+         <dependencies>
++            <!-- Temporary preview qualification: Guava release with both security fixes. -->
++            <dependency>
++                <groupId>com.google.guava</groupId>
++                <artifactId>guava</artifactId>
++                <version>33.8.0-jre</version>
++            </dependency>
+             <dependency>
+                 <groupId>org.infinispan</groupId>
+                 <artifactId>infinispan-bom</artifactId>
