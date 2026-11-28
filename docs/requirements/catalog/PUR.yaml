@@ -43,6 +43,7 @@
   - tests/integration/procurement_handoff.py
   - tests/integration/procurement_terms.py
   - tests/integration/procurement_approval.py
+  - tests/integration/procurement_issuance.py
   evidence: []
   questions:
   - Which amount limits and role assignments apply per organization, and when must different people approve different stages?

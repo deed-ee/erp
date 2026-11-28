@@ -79,6 +79,19 @@ sh scripts/demo-start.sh
 
 This file is test data, not a real spending policy. The opt-in seeds a `department-approver` and a separate `budget-approver` in a fresh preview realm. It does not modify an existing realm in place: keep using a previous fixture without opt-in if its data must be preserved. Never discard preview volumes just to change a policy. In the saved Atlas proposal, sign in separately with each reviewer and choose the next **Approve stage** after reviewing the exact terms. One approval is not enough for the **EUR 1,882.40** example. A different terms or policy revision cannot reuse the completed stages; deploy policy changes with a new revision. Neither completion nor absence of a policy issues a purchase order or reserves a budget balance.
 
+### Issue and reopen a local purchase order
+
+To opt in to issuance as well as budget approval, start a fresh disposable preview with:
+
+```sh
+ERP4US_PREVIEW_BUDGET_APPROVALS=1 \
+ERP4US_PREVIEW_PURCHASE_ISSUANCE=1 \
+ERP4US_PROCUREMENT_BUDGET_POLICY_FILE=./contracts/examples/procurement/budget-policy-v1.json \
+sh scripts/demo-start.sh
+```
+
+This adds the separate `purchase-issuer` user. It will not replace an existing realm with different accounts. After both reviewers approve the exact order terms, sign in as `purchase-issuer`, reopen the Sales order and its reservation, and choose **Review purchase issuance** then **Issue local purchase orders**. With the five lines all using `SUP-VECTORDRIVE`, Procurement records one child order with five lines for **EUR 1,882.40**. Reopening the same plan as issuer or `production` shows the same order; the buyer can read but not issue it, and the recorded terms cannot be edited. A repeated original command returns the same IDs. An issued record does not contact a supplier, reserve a budget balance or change stock. Receiving and allocating goods are separate, not yet implemented steps.
+
 ### Check application readiness
 
 Sign in with the separate `platform-monitor` account and open **Administration**. The [diagnostics adapter](../adr/0007-preview-application-observation.md) probes Master Data, Manufacturing and JetStream. A responding service can still be unready; a stopped service produces **Not responding**, not a fabricated container status. The screen refreshes about every six seconds. Tenant roles do not implicitly grant platform access.
@@ -90,7 +103,7 @@ If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-previ
 ## Remaining acceptance gates
 
 - Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
-- [Decide the preview approval and partial receipt policy](https://github.com/erp4us-org/erp4us/issues/23#issuecomment-7236963509). Authorize purchase terms and issue purchase orders from Procurement-owned drafts; post partial receipts against issued lines and allocate them to the waiting plan. The draft itself buys nothing.
+- Post [partial receipts](../rfc/preview-purchase-issuance.md#inventory-owns-receipt-and-allocation) against issued purchase lines under distinct receiving authority, then allocate to the waiting plan and reconcile received/open quantities. The draft itself buys nothing.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
 - A [reviewed runtime inventory and redacted log boundary](https://github.com/erp4us-org/erp4us/issues/122#issuecomment-7236971940). Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.

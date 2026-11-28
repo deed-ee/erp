@@ -207,11 +207,11 @@ jobs:
           compose run --rm -T inventory-seed
           compose up --no-build -d inventory-worker
           python3 tests/integration/sales_inventory.py
-      - name: Prove material plans, exact Procurement drafts and staged budget approvals
+      - name: Prove material plans and explicitly issue an approved local purchase
         run: |
           docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml -f compose.procurement-approvals.yaml \
             up --no-build -d inventory-plan-relay procurement procurement-worker
-          ERP4US_PROCUREMENT_E2E=1 ERP4US_PURCHASE_TERMS_E2E=1 ERP4US_PIPELINE_DIAGNOSTICS_E2E=1 ERP4US_BUDGET_APPROVAL_E2E=1 \
+          ERP4US_PROCUREMENT_E2E=1 ERP4US_PURCHASE_TERMS_E2E=1 ERP4US_PIPELINE_DIAGNOSTICS_E2E=1 ERP4US_BUDGET_APPROVAL_E2E=1 ERP4US_PURCHASE_ISSUANCE_E2E=1 \
             python3 tests/integration/material_plan.py
       - name: Scan built service images
         run: |
@@ -259,6 +259,8 @@ jobs:
           ERP4US_PURCHASE_TERMS_E2E: '1'
           ERP4US_PREVIEW_BUDGET_APPROVALS: '1'
           ERP4US_BUDGET_APPROVAL_E2E: '1'
+          ERP4US_PREVIEW_PURCHASE_ISSUANCE: '1'
+          ERP4US_PURCHASE_ISSUANCE_E2E: '1'
         run: |
           python3 scripts/preview-identity.py prepare
           jq -r 'to_entries[].value | "::add-mask::" + .' .erp4us-preview/credentials.json

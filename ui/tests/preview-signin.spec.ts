@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 test.use({ ignoreHTTPSErrors: true }); // Only for the locally generated preview certificate.
 
-async function login(page: Page, user: 'production' | 'auditor' | 'platform-monitor' | 'department-approver' | 'budget-approver') {
+async function login(page: Page, user: 'production' | 'auditor' | 'platform-monitor' | 'department-approver' | 'budget-approver' | 'purchase-issuer') {
   const passwords: Record<string, string> = JSON.parse(readFileSync('../.erp4us-preview/credentials.json', 'utf8'));
   await page.goto('/local-access');
   await page.getByRole('button', { name: 'Sign in with Keycloak' }).click();
@@ -69,9 +69,10 @@ test('real OIDC: platform monitor sees actual application health', async ({ page
   await expect(page.getByText('Seconds since last receipt', { exact: true })).toBeVisible();
 });
 
-test('real OIDC: production user saves, confirms and reopens a priced sales order', async ({ page, browser }) => {
+test('real OIDC: production user saves and confirms a priced order; an authorized issuer records its approved purchase', async ({ page, browser }) => {
   test.skip(process.env.ERP4US_REAL_OIDC_E2E !== '1', 'Requires the dedicated Keycloak preview stack');
-  if (process.env.ERP4US_BUDGET_APPROVAL_E2E === '1') test.setTimeout(70000);
+  const issuance = process.env.ERP4US_PURCHASE_ISSUANCE_E2E === '1';
+  if (process.env.ERP4US_BUDGET_APPROVAL_E2E === '1') test.setTimeout(issuance ? 100000 : 70000);
   await login(page, 'production');
   await page.getByRole('link', { name: 'Sales orders' }).click();
   await expect(page.getByRole('option', { name: /CUS-ATLAS/ })).toHaveCount(1);
@@ -170,4 +171,47 @@ test('real OIDC: production user saves, confirms and reopens a priced sales orde
     await expect(page.getByText('All required stages are approved. No order has been issued.')).toBeVisible();
   }
   await expect(page.getByRole('button', { name: /place|approve/i })).toHaveCount(0);
+  if (issuance) {
+    const batchPath = /\/v1\/procurement\/proposals\/by-plan\/[^/]+\/purchase-orders$/;
+    const reviewName = 'Review purchase issuance';
+    const confirmationName = 'Issue local purchase orders';
+    const heading = 'Issued purchase orders';
+    await expect(page.getByRole('button', { name: reviewName })).toHaveCount(0);
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    let purchaseOrderId: string;
+    try {
+      const issuer = await context.newPage();
+      await login(issuer, 'purchase-issuer');
+      await issuer.getByRole('link', { name: 'Sales orders' }).click();
+      const unissued = issuer.waitForResponse(response => batchPath.test(response.url()) && response.request().method() === 'GET');
+      await issuer.getByRole('row').filter({ hasText: id }).getByRole('link', { name: 'Check reservation' }).click();
+      expect((await unissued).status()).toBe(404); // Neither approval issued anything.
+      await expect(issuer.getByRole('button', { name: 'Save draft purchase terms' })).toHaveCount(0);
+      await expect(issuer.getByRole('button', { name: /Approve stage/ })).toHaveCount(0);
+      await expect(issuer.getByRole('button', { name: confirmationName })).toHaveCount(0);
+      await issuer.getByRole('button', { name: reviewName }).click();
+      const recorded = issuer.waitForResponse(response => batchPath.test(response.url()) && response.request().method() === 'POST');
+      await issuer.getByRole('button', { name: confirmationName }).click();
+      const response = await recorded;
+      expect(response.status()).toBe(201);
+      const result = await response.json();
+      expect(result).toMatchObject({ order_id: id, state: 'issued', total: '1882.40', currency: 'EUR' });
+      expect(result.purchase_orders).toHaveLength(1);
+      expect(result.purchase_orders[0].lines).toHaveLength(5);
+      expect(result.purchase_orders[0].lines).toContainEqual(expect.objectContaining({ sku: 'NM-ENDPLATE', pieces: '12' }));
+      purchaseOrderId = result.purchase_orders[0].purchase_order_id;
+      await expect(issuer.getByRole('heading', { name: heading })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+    await page.getByRole('main').getByRole('link', { name: 'Sales orders', exact: true }).click();
+    const retrieved = page.waitForResponse(response => batchPath.test(response.url()) && response.request().method() === 'GET');
+    await match.getByRole('link', { name: 'Check reservation' }).click();
+    const response = await retrieved;
+    expect(response.status()).toBe(200);
+    expect((await response.json()).purchase_orders[0].purchase_order_id).toBe(purchaseOrderId);
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    await expect(page.getByRole('button', { name: reviewName })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save draft purchase terms' })).toHaveCount(0);
+  }
 });

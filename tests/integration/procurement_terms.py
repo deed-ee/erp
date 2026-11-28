@@ -120,3 +120,8 @@ def exercise(proposal):
 
         check_revision_race(proposal, latest)
     print("Draft terms exact cents, owner checks, revision conflicts and outage-safe replay passed")
+    if os.getenv("ERP4US_PURCHASE_ISSUANCE_E2E") == "1":
+        from procurement_issuance import exercise as exercise_issuance
+
+        assert approval_command is not None, "Issuance integration proof requires the budget-stage fixture"
+        exercise_issuance(proposal, created, command)

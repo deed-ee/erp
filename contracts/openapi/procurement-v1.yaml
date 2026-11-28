@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: erp4us Procurement drafts
   version: 1.0.0
-  description: Read shortage proposals, save non-binding terms and record configured budget approval stages. This API does not issue purchase orders, commit spend, contact suppliers, reserve budget balances or receive goods.
+  description: Read shortage proposals, save non-binding terms, record configured budget approval stages and explicitly issue local purchase records. This API does not contact suppliers, reserve budget balances or receive goods.
 security:
   - AccessToken: []
 paths:
@@ -87,7 +87,8 @@ paths:
         and plan. An authorized retry with the same command ID, expected revision and
         terms returns the original saved revision without consulting Master Data; input
         order is not significant. Retry a 503 with the same command if its outcome is
-        unknown. A new edit must use a new command ID and the current terms revision.
+         unknown. A new edit must use a new command ID and the current terms revision.
+         Once the plan is issued no new terms can be saved, but original authorized replays still work.
       requestBody:
         required: true
         content:
@@ -109,7 +110,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { description: Missing required scoped grant in Procurement or Master Data }
         '404': { description: No proposal for that plan in the authorized scope }
-        '409': { description: 'Stale or exhausted terms revision, or changed intent under an already saved command ID' }
+        '409': { description: 'Plan already issued, stale or exhausted terms revision, or changed intent under an already saved command ID' }
         '503': { description: 'Procurement storage or supplier verification unavailable, or write outcome uncertain' }
   /v1/procurement/proposals/by-plan/{plan_id}/approval:
     parameters:
@@ -166,7 +167,6 @@ paths:
           description: 'Reviewed terms or policy changed, stage is not the next eligible stage, or command ID was used with different intent'
         '503': { description: 'No applicable policy, storage unavailable, or write outcome uncertain' }
   /v1/procurement/proposals/by-plan/{plan_id}/purchase-orders:
-    x-preview-proposed: true
     parameters:
       - in: header
         name: X-Erp4us-Tenant
@@ -206,9 +206,17 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/IssuePurchaseOrders' }
       responses:
-        '201': { $ref: '#/components/responses/IssuedPurchaseBatch' }
+        '201':
+          description: First successful issue
+          headers:
+            Cache-Control:
+              required: true
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IssuedPurchaseBatch' }
         '200': { $ref: '#/components/responses/IssuedPurchaseBatch' }
-        '400': { description: 'Invalid scope, plan reference or command' }
+        '400': { description: 'Invalid scope, plan reference, malformed or oversized command' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { description: Missing scoped issue/read grant or issuer is the terms preparer }
         '404': { description: No saved terms for the plan in the authorized scope }

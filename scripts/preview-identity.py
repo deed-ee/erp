@@ -25,8 +25,14 @@ APPROVERS = {
     "department-approver": ("f54dff7f-ac9b-4551-b7f1-c60b58dcb360", "department"),
     "budget-approver": ("0c875371-a771-4f09-b781-e040d251ab2a", "budget"),
 }
-if os.getenv("ERP4US_PREVIEW_BUDGET_APPROVALS") == "1":
+BUDGET_PREVIEW = os.getenv("ERP4US_PREVIEW_BUDGET_APPROVALS") == "1"
+ISSUANCE_PREVIEW = os.getenv("ERP4US_PREVIEW_PURCHASE_ISSUANCE") == "1"
+PURCHASE_READ = "procurement.purchase-order.read"
+PURCHASE_ISSUE = "procurement.purchase-order.issue"
+if BUDGET_PREVIEW:
     USERS.update({name: subject for name, (subject, _) in APPROVERS.items()})
+if BUDGET_PREVIEW and ISSUANCE_PREVIEW:
+    USERS["purchase-issuer"] = "12f3837a-0083-4994-9177-1e8c368d5817"
 
 
 def save(path, value, mode=0o600):
@@ -60,15 +66,25 @@ def identity_policy():
                 "sales.order.read", "inventory.reservation.read", "inventory.material-plan.read",
                 "procurement.proposal.read", f"procurement.approval.{stage}",
             ])]}
+    if "purchase-issuer" in USERS:
+        buyer = principals[USERS["production"]]["grants"][0]
+        buyer["permissions"].append(PURCHASE_READ)
+        issuer = USERS["purchase-issuer"]
+        principals[issuer] = {"actor_id": issuer, "grants": [grant(NOVA, [
+            "sales.order.read", "inventory.reservation.read", "inventory.material-plan.read",
+            "procurement.proposal.read", PURCHASE_READ, PURCHASE_ISSUE,
+        ])]}
     return {"issuer": ISSUER, "audience": AUDIENCE, "principals": principals}
 
 
 def prepare():
+    if ISSUANCE_PREVIEW and not BUDGET_PREVIEW:
+        raise SystemExit("The purchase issuance preview requires ERP4US_PREVIEW_BUDGET_APPROVALS=1")
     if DEMO.exists():
         if not (DEMO / "credentials.json").is_file():
             raise SystemExit("Incomplete preview identity directory; inspect it before retrying")
         if set(json.loads((DEMO / "credentials.json").read_text())) != USERS.keys():
-            raise SystemExit("Preview identity seed changed; reset the disposable preview before starting")
+            raise SystemExit("Preview accounts differ; use the original options to preserve the existing preview")
         save(DEMO / "identity-policy.json", identity_policy(), 0o644)
         return
     DEMO.mkdir(mode=0o700)

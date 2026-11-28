@@ -1,15 +1,19 @@
 """Verify budget-stage decisions against exact saved NovaMotion terms."""
 from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from uuid import uuid4
 
 from identity_fixture import ORGANIZATION, OTHER_ORGANIZATION, TENANT, token
 from procurement_handoff import PROCUREMENT, manage
+from procurement_issuance import check_unissued
 from smoke import request, wait_until_ready
 
 
 def exercise(proposal, terms):
-    path = f"/v1/procurement/proposals/by-plan/{proposal['plan_id']}/approval"
+    base = f"/v1/procurement/proposals/by-plan/{proposal['plan_id']}"
+    path = f"{base}/approval"
+    check_issuance = os.getenv("ERP4US_PURCHASE_ISSUANCE_E2E") == "1"
     department = token(subject="synthetic-department-approver")
     budget = token(subject="synthetic-budget-approver")
 
@@ -23,6 +27,8 @@ def exercise(proposal, terms):
             pending["total"], pending["state"]) == (
         proposal["proposal_id"], proposal["plan_id"], terms["revision"], "EUR", "1882.40", "pending")
     assert pending["stages"] == [{"key": stage, "state": "pending"} for stage in ("department", "budget")]
+    if check_issuance:
+        check_unissued(base, pending)
     assert approval(bearer=None)[0] == 401
     assert approval(bearer=budget, scope=(TENANT, OTHER_ORGANIZATION))[0] == 404
 
@@ -45,6 +51,8 @@ def exercise(proposal, terms):
     one_stage = replies[0][2]
     assert replies[1][2] == one_stage and one_stage["state"] == "pending"
     assert one_stage["stages"] == [{"key": "department", "state": "approved"}, {"key": "budget", "state": "pending"}]
+    if check_issuance:
+        check_unissued(base, one_stage)
     assert approval(second, bearer=department)[0] == 403            # Has grant, but not the distinct actor.
     assert approval({**second, "command_id": first["command_id"]}, bearer=department)[0] == 409
 
@@ -52,10 +60,12 @@ def exercise(proposal, terms):
     assert status == 201 and approved["state"] == "approved"
     assert approved["stages"] == [{"key": stage, "state": "approved"} for stage in ("department", "budget")]
     assert set(approved) == set(pending)
+    if check_issuance:
+        check_unissued(base, approved)
     manage("restart", "procurement")
     wait_until_ready(PROCUREMENT)
     assert approval()[2] == approved and approval(first, bearer=department)[2] == one_stage
-    status, _, unchanged = request(path.removesuffix("/approval"), origin=PROCUREMENT, scope=(TENANT, ORGANIZATION))
+    status, _, unchanged = request(base, origin=PROCUREMENT, scope=(TENANT, ORGANIZATION))
     assert status == 200 and unchanged == proposal and unchanged["status"] == "draft"
     print("Both configured budget stages required; exact revision, role separation, restart and replay passed")
     return first

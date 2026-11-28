@@ -1465,7 +1465,8 @@
         "tests/integration/procurement.py",
         "tests/integration/procurement_handoff.py",
         "tests/integration/procurement_terms.py",
-        "tests/integration/procurement_approval.py"
+        "tests/integration/procurement_approval.py",
+        "tests/integration/procurement_issuance.py"
       ],
       "evidence": []
     },

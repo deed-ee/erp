@@ -19,6 +19,8 @@ ORGANIZATION = "3e793fb5-75a7-45f6-8f66-45a58fcec674"
 OTHER_ORGANIZATION = "8af68084-19d6-4e31-8203-f9f4708b9bee"
 EXTERNAL_ORGANIZATION = "2886c61e-85d8-4688-813a-b59c6641f9f8"
 ACTOR = "242a290f-4bbc-438e-aefe-e3697a8bcd16"
+PURCHASE_READ = "procurement.purchase-order.read"
+PURCHASE_ISSUE = "procurement.purchase-order.issue"
 
 
 def b64(data):
@@ -63,7 +65,7 @@ def initialize():
                                      "sales.order.confirm", "inventory.reservation.read",
                                      "inventory.material-plan.read", "inventory.material-plan.create",
                                      "inventory.material-plan.send", "procurement.proposal.read",
-                                     "procurement.proposal.terms.write"],
+                                      "procurement.proposal.terms.write", PURCHASE_READ],
             },
             grant(TENANT, OTHER_ORGANIZATION, "read"),
             {"tenant_id": OTHER_TENANT, "organization_id": EXTERNAL_ORGANIZATION,
@@ -111,11 +113,20 @@ def initialize():
             ],
         },
         "synthetic-dual-role-buyer": {
-            # Subject alias for the original actor: even with the stage grant
-            # the person who prepared this exact revision cannot approve it.
+            # Subject alias for the original actor: grants do not let a
+            # preparer approve or issue their own terms.
             "actor_id": ACTOR,
             "grants": [{"tenant_id": TENANT, "organization_id": ORGANIZATION,
-                        "permissions": ["procurement.proposal.read", "procurement.approval.department"]}],
+                        "permissions": ["procurement.proposal.read", "procurement.approval.department",
+                                        PURCHASE_READ, PURCHASE_ISSUE]}],
+        },
+        "synthetic-purchase-issuer": {
+            "actor_id": "12f3837a-0083-4994-9177-1e8c368d5817",
+            "grants": [
+                {"tenant_id": tenant, "organization_id": org, "permissions": [PURCHASE_READ, PURCHASE_ISSUE]}
+                for tenant, org in ((TENANT, ORGANIZATION), (TENANT, OTHER_ORGANIZATION),
+                                    (OTHER_TENANT, EXTERNAL_ORGANIZATION))
+            ],
         },
         "synthetic-platform": {"actor_id": "263494cf-c105-473e-9843-38dd023d8a39",
                                "grants": [], "platform_permissions": ["platform.health.read"]},
