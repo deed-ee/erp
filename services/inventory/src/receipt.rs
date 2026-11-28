@@ -333,3 +333,6 @@ fn subtract(left: i32, right: i32) -> Option<i32> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod mongo;
