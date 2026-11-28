@@ -116,6 +116,7 @@ jobs:
         with: { persist-credentials: false }
       - run: rustup component add llvm-tools-preview
       - name: Measure Rust unit and wire test coverage
+        shell: bash
         run: |
           sh scripts/quality/install-tool.sh cargo-llvm-cov "$RUNNER_TEMP/quality-tools"
           export PATH="$RUNNER_TEMP/quality-tools:$PATH"
