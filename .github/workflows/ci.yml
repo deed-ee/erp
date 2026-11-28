@@ -81,6 +81,8 @@ jobs:
         run: |
           sh scripts/init-dev.sh
           sh tests/integration/messaging.sh
+      - name: Verify receipt delivery, out-of-order observation and replay on disposable dependencies
+        run: python3 tests/integration/receipt_transport.py
   contracts:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

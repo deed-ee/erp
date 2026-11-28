@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use uuid::Uuid;
 
+pub(super) const SOURCE: &str = "erp4us.inventory";
+
 /// Must come from verified actor context, not the receipt request.
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -16,7 +18,7 @@ pub(in crate::receipt) enum ActorKind {
     Agent,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Posted {
     receipt_id: Uuid,
@@ -74,20 +76,40 @@ impl Contract for Posted {
     }
 }
 
-pub(super) fn encode(saved: &Saved, kind: ActorKind) -> Result<String, Reject> {
-    let effect = &saved.effect;
-    let command = effect.command;
-    let row = &effect.line.binding.row.key;
-    let message_id = saved.message_id;
-    if message_id == command.receipt_id {
-        return Err(Reject::InvalidState);
+impl Posted {
+    pub(super) fn from_receipt(saved: &Saved) -> Self {
+        let effect = &saved.effect;
+        let command = effect.command;
+        let row = &effect.line.binding.row.key;
+        Self {
+            receipt_id: command.receipt_id,
+            plan_id: row.plan,
+            purchase_order_id: command.purchase.order,
+            purchase_line_id: command.purchase.line,
+            sku: row.stock.item.sku.clone(),
+            revision: row.stock.item.revision.clone(),
+            unit: "EA".into(),
+            pieces: command.pieces.to_string(),
+            receipt_sequence: effect.line.sequence,
+        }
     }
-    let timestamp = OffsetDateTime::from_unix_timestamp_nanos(
+}
+
+pub(super) fn timestamp(saved: &Saved) -> Result<String, Reject> {
+    OffsetDateTime::from_unix_timestamp_nanos(
         i128::from(saved.posted_at.timestamp_millis()) * 1_000_000,
     )
     .ok()
     .and_then(|time| time.format(&Rfc3339).ok())
-    .ok_or(Reject::InvalidState)?;
+    .ok_or(Reject::InvalidState)
+}
+
+pub(super) fn encode(saved: &Saved, kind: ActorKind) -> Result<String, Reject> {
+    let command = saved.effect.command;
+    let message_id = saved.message_id;
+    if message_id == command.receipt_id {
+        return Err(Reject::InvalidState);
+    }
     let kind = match kind {
         ActorKind::User => "user",
         ActorKind::Service => "service",
@@ -102,8 +124,8 @@ pub(super) fn encode(saved: &Saved, kind: ActorKind) -> Result<String, Reject> {
         schema_version: Version::new(1, 0, 0),
         service_version: Version::parse(env!("CARGO_PKG_VERSION"))
             .map_err(|_| Reject::InvalidState)?,
-        timestamp,
-        source_service: "erp4us.inventory".into(),
+        timestamp: timestamp(saved)?,
+        source_service: SOURCE.into(),
         tenant_id: Some(command.sales.scope.tenant),
         organization_id: Some(command.sales.scope.organization),
         actor: Some(Actor {
@@ -114,17 +136,7 @@ pub(super) fn encode(saved: &Saved, kind: ActorKind) -> Result<String, Reject> {
         causation_id: None,
         traceparent: None,
         tracestate: None,
-        payload: Posted {
-            receipt_id: command.receipt_id,
-            plan_id: row.plan,
-            purchase_order_id: command.purchase.order,
-            purchase_line_id: command.purchase.line,
-            sku: row.stock.item.sku.clone(),
-            revision: row.stock.item.revision.clone(),
-            unit: "EA".into(),
-            pieces: command.pieces.to_string(),
-            receipt_sequence: effect.line.sequence,
-        },
+        payload: Posted::from_receipt(saved),
     };
     event.validate().map_err(|_| Reject::InvalidState)?;
     serde_json::to_string(&event)

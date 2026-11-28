@@ -202,6 +202,49 @@ fn saved_fixture() -> Saved {
 }
 
 #[test]
+fn receipt_outbox_refuses_mismatched_body_and_scope_before_publication() {
+    let saved = saved_fixture();
+    let command = saved.effect.command;
+    let scope = command.sales.scope;
+    let mut row = records::receipt_record(
+        &saved,
+        &records::line_record(&saved.effect).unwrap(),
+        fact::encode(&saved, ActorKind::User).unwrap(),
+    );
+    records::mark_confirmed(
+        &Intent {
+            command,
+            acknowledged: None,
+            plan: PLAN,
+            destination: saved.effect.line.binding.row.key.stock.clone(),
+            confirmed: None,
+        },
+        &mut row,
+    );
+    let event = outbox::decode(scope, command.receipt_id, &row).unwrap();
+    assert_eq!(event.message_id, saved.message_id);
+    assert_eq!(event.payload, fact::Posted::from_receipt(&saved));
+    let foreign = Organization {
+        organization: Uuid::from_u128(41),
+        ..scope
+    };
+    assert_eq!(
+        outbox::decode(foreign, command.receipt_id, &row).unwrap_err(),
+        outbox::Failure::InvalidFact,
+    );
+    let box_record = row.get_document_mut("outbox").unwrap();
+    let body = box_record.get_str("envelope").unwrap();
+    let mut tampered: Value = serde_json::from_str(body).unwrap();
+    tampered["payload"]["pieces"] = json!("7");
+    let changed: Envelope<fact::Posted> = serde_json::from_value(tampered).unwrap();
+    box_record.insert("envelope", serde_json::to_string(&changed).unwrap());
+    assert_eq!(
+        outbox::decode(scope, command.receipt_id, &row).unwrap_err(),
+        outbox::Failure::InvalidFact,
+    );
+}
+
+#[test]
 fn bsons_round_trip_original_intent_time_and_scoped_binding() {
     let saved = saved_fixture();
     let command = saved.effect.command;
@@ -1349,7 +1392,7 @@ async fn mongo_application_replays_before_contacting_the_owner() {
 #[tokio::test]
 #[ignore = "requires disposable loopback Mongo replica set and empty JetStream; run before Procurement transport test"]
 async fn receipt_transport_publish_committed_inventory_outbox() {
-    let (db, jetstream) = transport::connect("inventory").await;
+    let (db, jetstream, drop_database) = transport::connect("inventory").await;
     let ops = jetstream.operations();
     assert_eq!(
         ops.query_account().await.unwrap().streams,
@@ -1403,10 +1446,27 @@ async fn receipt_transport_publish_committed_inventory_outbox() {
         assert_eq!(event.message_id, saved.message_id);
         // JetStream::publish must send the same body, not a reconstructed fixture.
         assert_eq!(serde_json::to_string(&event).unwrap(), body);
-        committed.push(event);
+        committed.push((command, event));
         acknowledged = Some(command.receipt_id);
     }
-    db.drop().await.unwrap();
+    let scope = first.sales.scope;
+    assert_eq!(
+        store
+            .publish_pending_receipt(scope, committed[0].0.receipt_id, &jetstream)
+            .await,
+        Err(outbox::Failure::NotAcknowledged),
+        "a failed broker acknowledgement must leave the original receipt pending",
+    );
+    let foreign = Organization {
+        organization: Uuid::new_v4(),
+        ..scope
+    };
+    assert_eq!(
+        store
+            .publish_pending_receipt(foreign, committed[0].0.receipt_id, &jetstream)
+            .await,
+        Ok(None),
+    );
 
     let Delivery::JetStream(name) = fact::Posted::DELIVERY else {
         panic!("the owner contract requires JetStream");
@@ -1414,7 +1474,7 @@ async fn receipt_transport_publish_committed_inventory_outbox() {
     ops.create_stream(stream::Config {
         name: name.into(),
         description: Some(transport::STREAM_MARKER.into()),
-        subjects: vec![committed[0].subject().unwrap()],
+        subjects: vec![committed[0].1.subject().unwrap()],
         storage: stream::StorageType::Memory,
         max_messages: 3,
         max_age: Duration::from_secs(900),
@@ -1425,9 +1485,24 @@ async fn receipt_transport_publish_committed_inventory_outbox() {
     .await
     .unwrap();
     // Deliver the second physical lot first. Separate test processes share only this stream.
-    for (sequence, event) in (1..).zip(committed.iter().rev()) {
-        let ack = jetstream.publish(event).await.unwrap();
-        assert_eq!(ack.sequence, sequence);
-        assert!(!ack.duplicate);
+    for (sequence, (command, _)) in (1..).zip(committed.iter().rev()) {
+        let receipt = command.receipt_id;
+        assert_eq!(
+            store
+                .publish_pending_receipt(scope, receipt, &jetstream)
+                .await
+                .unwrap(),
+            Some((sequence, false)),
+        );
+        assert_eq!(
+            store
+                .publish_pending_receipt(scope, receipt, &jetstream)
+                .await
+                .unwrap(),
+            None,
+        );
+    }
+    if drop_database {
+        db.drop().await.unwrap();
     }
 }

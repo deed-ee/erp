@@ -375,7 +375,7 @@ async fn mongo_persists_gaps_replay_conflicts_and_bounded_continuation() {
 #[tokio::test]
 #[ignore = "requires disposable loopback Mongo replica set and the Inventory transport publisher's JetStream"]
 async fn receipt_transport_observe_inventory_facts_and_exact_replay() {
-    let (db, jetstream) = transport::connect("procurement").await;
+    let (db, jetstream, drop_database) = transport::connect("procurement").await;
     // Fixture authorization and issued line are independent of the received envelope.
     // This proof does not issue an order or grant authority to receive.
     let scope = Scope {
@@ -529,6 +529,8 @@ async fn receipt_transport_observe_inventory_facts_and_exact_replay() {
             .unwrap(),
         1
     );
-    db.drop().await.unwrap();
+    if drop_database {
+        db.drop().await.unwrap();
+    }
     ops.delete_stream(name).await.unwrap();
 }

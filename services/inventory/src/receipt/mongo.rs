@@ -38,6 +38,8 @@ use tokio::{
 use uuid::Uuid;
 
 mod fact;
+#[cfg(test)]
+mod outbox;
 mod records;
 #[cfg(test)]
 mod tests;
