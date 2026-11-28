@@ -290,6 +290,15 @@ test('source bounds and owner conflicts fail closed without posting another ID',
   await expect(panel(page)).toContainText('The issued receiving lines could not be verified.');
   await expect(panel(page).getByLabel('Issued purchase line')).toHaveCount(0);
 
+  api.state.getSource = route => route.fulfill({headers: noStore, json: {
+    plan_id: plan, lines: [issuedPlate], unexpected: 'X'.repeat(16 * 1024),
+  }});
+  const oversized = page.waitForResponse(response => response.url().endsWith('/receipt-source'));
+  await discover(page).click();
+  await oversized;
+  await expect(panel(page)).toContainText('The issued receiving lines could not be verified.');
+  await expect(panel(page).getByLabel('Issued purchase line')).toHaveCount(0);
+
   api.state.getSource = normal;
   await choosePlate(page);
   await quantity(page).fill('6');

@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { LucideCheck, LucideClipboardList, LucideRefreshCw, LucideSearch, LucideX } from '@lucide/angular';
 import { ArticleApi } from './article-api';
+import { readBoundedJson } from './bounded-json';
 import type { Message } from './messages';
 import { Preferences } from './preferences';
 import {
@@ -10,6 +11,8 @@ import {
   type PostedReceipt, type ReceiptAllocation, type ReceiptIntent, type ReceiptSourceLine,
 } from './purchase-receipt-api';
 import { Feedback } from './ui';
+
+const MAX_RECEIPT_RESPONSE_BYTES = 16 * 1024;
 
 interface Access {
   plan: string; sourcePath: string; allocationBase: string; key: string;
@@ -164,7 +167,8 @@ export class PurchaseReceiptPanel {
         this.patch({feedback: 'receiptSourceMissing'});
         return;
       }
-      const lines = response.status === 200 ? receiptSource(await response.json(), access.plan) : null;
+      const lines = response.status === 200
+        ? receiptSource(await readBoundedJson(response, MAX_RECEIPT_RESPONSE_BYTES), access.plan) : null;
       if (this.active(access)) this.patch({lines: lines ?? [], feedback: lines ? null : 'receiptSourceUnavailable'});
     } catch {
       if (this.active(access)) this.patch({feedback: 'receiptSourceUnavailable'});
@@ -208,7 +212,8 @@ export class PurchaseReceiptPanel {
         this.patch({readFeedback: 'receiptNoneObserved'});
         return;
       }
-      const current = response.status === 200 ? receiptAllocation(await response.json(), access.plan, line) : null;
+      const current = response.status === 200
+        ? receiptAllocation(await readBoundedJson(response, MAX_RECEIPT_RESPONSE_BYTES), access.plan, line) : null;
       if (this.active(access)) this.patch({current, readFeedback: current ? 'receiptReadSnapshot' : 'receiptReadUnavailable'});
     } catch {
       if (this.active(access)) this.patch({readFeedback: 'receiptReadUnavailable'});
@@ -242,7 +247,7 @@ export class PurchaseReceiptPanel {
       if (!retry && (response.status === 401 || response.status === 403)) this.setPending(access, null);
       if (this.denied(access, response)) return;
       if (response.status === 201 || response.status === 200) {
-        const posted = postedReceipt(await response.json(), intent, access.plan, line);
+        const posted = postedReceipt(await readBoundedJson(response, MAX_RECEIPT_RESPONSE_BYTES), intent, access.plan, line);
         if (!this.active(access)) return;
         if (posted) {
           this.patch({selected: line, posted, feedback: 'receiptRecorded', draft: ''});
@@ -250,7 +255,7 @@ export class PurchaseReceiptPanel {
           return;
         }
       } else if (response.status === 409) {
-        const feedback = receiptConflict(await response.json());
+        const feedback = receiptConflict(await readBoundedJson(response, MAX_RECEIPT_RESPONSE_BYTES));
         if (!this.active(access)) return;
         if (feedback === 'receiptOver' || feedback === 'receiptIneligible') this.setPending(access, null);
         if (feedback === 'receiptChanged') this.setPending(access, {...pending, needsOperator: true});

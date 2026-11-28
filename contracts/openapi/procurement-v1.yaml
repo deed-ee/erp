@@ -239,7 +239,8 @@ paths:
         preparer, every approving actor and the issuer. The source contains immutable order/line tuples
         from one issued batch, not a draft, live policy decision or received/open balance. No general
         purchase-order read permission is implied or required. Does not expose commercial, supplier,
-        approval or audit data. Inventory uses its own call and selects exactly one tuple by both
+        approval or audit data. The source response body is bounded to 16 KiB.
+        Inventory uses its own call and selects exactly one tuple by both
         purchase order and line IDs. No client-provided copy of this response can authorize a receipt.
       responses:
         '200':

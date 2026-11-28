@@ -1,3 +1,4 @@
+import { readBoundedJson } from './bounded-json';
 import type { Message } from './messages';
 
 export const LOG_LIMIT = 100;
@@ -110,27 +111,6 @@ export function logPath(cursor: string | null): LogPath {
 
 type PreviewResponse = { kind: 'ok'; body: unknown } | { kind: 'denied' | 'gap' | 'unavailable' };
 
-async function boundedJson(response: Response): Promise<unknown> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('Empty diagnostics response');
-  const decoder = new TextDecoder('utf-8', { fatal: true });
-  let size = 0, text = '';
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) return JSON.parse(text + decoder.decode()) as unknown;
-      size += value.byteLength;
-      if (size > PREVIEW_BODY_LIMIT) {
-        await reader.cancel();
-        throw new Error('Diagnostics response exceeds the preview bound');
-      }
-      text += decoder.decode(value, { stream: true });
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
-
 export async function readPreview(
   path: '/v1/admin/runtime' | LogPath, headers: { Authorization: string }, signal: AbortSignal,
 ): Promise<PreviewResponse> {
@@ -140,7 +120,7 @@ export async function readPreview(
       cache: 'no-store', credentials: 'omit', redirect: 'error',
     });
     if (response.ok) {
-      const body = await boundedJson(response);
+      const body = await readBoundedJson(response, PREVIEW_BODY_LIMIT);
       return { kind: 'ok', body };
     }
     await response.body?.cancel();

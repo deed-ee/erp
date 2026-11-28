@@ -177,7 +177,7 @@ paths:
         command gets the original committed result without contacting Procurement, even after the
         plan changes. A receipt ID is unique across the tenant and organization; intent binds the
         Sales order/line, purchase order/line and exact quantity. On an uncertain outcome retry
-        with the same ID.
+        with the same ID. Response JSON bodies are bounded to 16 KiB.
       requestBody:
         required: true
         content:
@@ -212,6 +212,7 @@ paths:
         independently of Procurement. This does not alter the original material-plan snapshot or
         material-plan.netted event. The view exists once a receipt binds the specified line;
         before then absence is not an assertion about order existence, available stock or balance.
+        Response JSON bodies are bounded to 16 KiB.
       responses:
         '200':
           description: Inventory-owned receipt allocation and current plan-row quantities at the local read snapshot
