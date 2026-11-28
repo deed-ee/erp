@@ -63,6 +63,16 @@ validate_url((ROOT / "openapi/diagnostics-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/sales-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/inventory-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/procurement-v1.yaml").as_uri())
+budget_policy = load(ROOT / "examples/procurement/budget-policy-v1.json")
+budget_wire = validator("procurement-budget-policy-v1.json")
+budget_wire.validate(budget_policy)
+assert not budget_wire.is_valid({**budget_policy, "currency": "USD"})
+assert not budget_wire.is_valid({**budget_policy, "stages": []})
+assert not budget_wire.is_valid({**budget_policy, "require_distinct_approvers": "true"})
+for amount in (1500, "01500.00", "-0.00", "1500.001", "1E3"):
+    assert not budget_wire.is_valid({**budget_policy, "stages": [{"key": "budget", "minimum_amount": amount}]})
+assert not budget_wire.is_valid({key: value for key, value in budget_policy.items()
+                                 if key != "require_distinct_approvers"})
 procurement_api = yaml.safe_load((ROOT / "openapi/procurement-v1.yaml").read_text())
 draft_terms = Draft202012Validator({
     "$ref": "#/components/schemas/SavePurchaseTerms", "components": procurement_api["components"],

@@ -11,6 +11,7 @@ Use the existing [RFC process](../../GOVERNANCE.md#rfc-process). A research tick
 | [NovaMotion execution](novamotion-execution-preview.md) | One ship-complete dispatch versus six plus four under explicit split delivery terms | Manufacturing, Inventory, and fulfillment owners |
 | [Private PDF release #17](preview-document-release.md) | Interrupted replacement of shipment evidence versus a service-only completion report | Documents, fulfillment, and security reviewers |
 | [Process history #22](novamotion-process-history.md) | A delayed purchase draft after an observed handoff versus an order that needs no inventory | Workflow, fact owners, and security reviewers |
+| [Staged purchase approvals #23](preview-budget-approvals.md) | A two-stage NovaMotion draft versus a firm with a different explicitly configured spending policy | Procurement and the authorized budget owner |
 
 Do not reopen ADR 0002 to choose a different messaging platform. The outstanding question is how long replay evidence is kept and how its effects are reconciled. Likewise, ADR 0001 decides service ownership, not the master-data override policy.
 

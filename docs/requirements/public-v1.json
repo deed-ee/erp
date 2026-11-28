@@ -1442,7 +1442,7 @@
       "status": "proposed",
       "priority": "P1",
       "milestone": "M3",
-      "revision": 1,
+      "revision": 2,
       "scenarios": [
         "SC-05"
       ],

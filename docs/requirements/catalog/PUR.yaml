@@ -18,6 +18,8 @@
   acceptance:
   - Ten requested and six eligible create one proposal for four under the chosen partial policy; a non-approver
     cannot issue it; approved receipt satisfies waiting demand only once.
+  - Under a configured two-level EUR policy, an eligible draft spanning both levels remains unapproved after one
+    decision. Decisions refer to the exact saved terms and policy revision; revised terms require fresh approval.
   scenarios:
   - SC-05
   decisions:
@@ -34,6 +36,7 @@
   - contracts/openapi/procurement-v1.yaml
   - contracts/schemas/get-draft-proposal-v1.json
   - contracts/schemas/nats-inventory-material-plan-netted-v1.json
+  - contracts/schemas/procurement-budget-policy-v1.json
   - contracts/schemas/stock-shortage-v1.json
   tests:
   - tests/integration/procurement.py
@@ -41,5 +44,6 @@
   - tests/integration/procurement_terms.py
   evidence: []
   questions:
-  - Who may approve their own proposal?
-  revision: 1
+  - Which amount limits and role assignments apply per organization, and when must different people approve different stages?
+  - Outside the local preview, may a configured policy allow self-approval for any low-risk purchases?
+  revision: 2
