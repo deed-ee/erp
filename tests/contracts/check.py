@@ -38,6 +38,102 @@ def api_validator(api, schema):
     }, format_checker=FormatChecker())
 
 
+def check_receipt_intent_api(inventory, first_posted, second_posted):
+    # Check protocol shapes only; actor binding, duplicate header rejection, atomicity and
+    # recovery across sign-in require runtime evidence before activation.
+    receipts_path = ("/v1/inventory/reservations/{order_id}/{line_id}/material-plan"
+                     "/purchase-orders/{purchase_order_id}/lines/{purchase_line_id}/receipts")
+    receipts, intent = (inventory["paths"][path] for path in (receipts_path, f"{receipts_path}/intent"))
+    assert set(intent) == {"get", "post", "parameters"}  # No list, close or operator override.
+    assert inventory["security"] == [{"AccessToken": []}]
+    assert intent["parameters"] == receipts["parameters"]
+    parameters = [inventory["components"]["parameters"][param["$ref"].split("/")[-1]]
+                  for param in intent["parameters"]]
+    assert len(parameters) == 6
+    assert {(p["in"], p["name"]) for p in parameters} == {
+        ("header", "X-Erp4us-Tenant"), ("header", "X-Erp4us-Organization"),
+        ("path", "order_id"), ("path", "line_id"), ("path", "purchase_order_id"), ("path", "purchase_line_id"),
+    }
+    for param in parameters:
+        assert param["required"] is True
+        assert param["schema"]["$ref"] == "#/components/schemas/CanonicalId"
+    canonical = api_validator(inventory, "CanonicalId")
+    original_id = first_posted["receipt_id"]
+    canonical.validate(original_id)
+    for malformed in (None, "", "not-a-uuid", f"{original_id},{original_id}", original_id.upper(),
+                      original_id + "\n", "00000000-0000-0000-0000-000000000000"):
+        assert not canonical.is_valid(malformed)
+
+    prepare, reopen, confirm = intent["post"], intent["get"], receipts["post"]
+    for operation in (prepare, reopen, confirm):
+        assert operation["x-contract-status"] == "proposed"
+        assert "security" not in operation  # Inherit the verified bearer requirement.
+        assert {"400", "401", "403", "404", "503"} <= operation["responses"].keys()
+    assert "requestBody" not in reopen and "parameters" not in reopen
+    for operation, request in ((prepare, "PreparePurchaseReceiptIntent"), (confirm, "PostPurchaseReceipt")):
+        body = operation["requestBody"]
+        assert body["required"] is True
+        assert body["content"]["application/json"]["schema"]["$ref"] == f"#/components/schemas/{request}"
+        assert operation["responses"]["409"]["content"]["application/json"]["schema"]["$ref"] == (
+            "#/components/schemas/PurchaseReceiptConflict")
+        assert "413" in operation["responses"]
+    assert {prepare["responses"]["200"]["$ref"], reopen["responses"]["200"]["$ref"]} == {
+        "#/components/responses/CurrentPurchaseReceiptIntent"}
+    responses = inventory["components"]["responses"]
+    original_result = responses["PostedPurchaseReceipt"]
+    current = responses["CurrentPurchaseReceiptIntent"]
+    assert current["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PurchaseReceiptIntent"
+    assert prepare["responses"]["201"]["content"]["application/json"]["schema"]["$ref"] == (
+        "#/components/schemas/PreparedPurchaseReceiptIntent")
+    for status in ("200", "201"):
+        assert confirm["responses"][status]["$ref"] == "#/components/responses/PostedPurchaseReceipt"
+    no_store = inventory["components"]["headers"]["ReceiptNoStore"]
+    assert no_store["required"] and no_store["schema"]["const"] == "no-store"
+    for response in (current, original_result, prepare["responses"]["201"], reopen["responses"]["404"]):
+        assert response["headers"]["Cache-Control"]["$ref"] == "#/components/headers/ReceiptNoStore"
+
+    prepare_body = api_validator(inventory, "PreparePurchaseReceiptIntent")
+    first = {"pieces": first_posted["pieces"], "acknowledged_receipt_id": None}
+    later = {"pieces": second_posted["pieces"], "acknowledged_receipt_id": original_id}
+    # The same six pieces may describe two physically distinct lots; only the later
+    # request carries the explicit acknowledgement, not a client-assigned new ID.
+    prepare_body.validate(first)
+    prepare_body.validate(later)
+    for invalid in ({"pieces": "6"}, {"acknowledged_receipt_id": None},
+                    {**later, "acknowledged_receipt_id": True},
+                    {**later, "acknowledged_receipt_id": original_id.upper()},
+                    {**later, "acknowledged_receipt_id": "00000000-0000-0000-0000-000000000000"}):
+        assert not prepare_body.is_valid(invalid)
+    for field in ("receipt_id", "actor_id", "tenant_id", "organization_id", "plan_id", "purchase_line_id",
+                  "purchase_order_id", "warehouse_id", "receipt_source", "operator_override"):
+        assert not prepare_body.is_valid({**later, field: original_id})
+    for pieces in (6, "0", "06", "6.0", "6\n", "1000001"):
+        assert not prepare_body.is_valid({**later, "pieces": pieces})
+
+    intent_view = api_validator(inventory, "PurchaseReceiptIntent")
+    prepared_view = api_validator(inventory, "PreparedPurchaseReceiptIntent")
+    confirm_body = api_validator(inventory, "PostPurchaseReceipt")
+    assert original_id != second_posted["receipt_id"] and first["pieces"] == later["pieces"]
+    for posted in (first_posted, second_posted):
+        confirmation = {"receipt_id": posted["receipt_id"], "pieces": posted["pieces"]}
+        prepared = {"state": "prepared", **confirmation}
+        confirmed = {"state": "confirmed", "receipt": posted}
+        confirm_body.validate(confirmation)
+        assert not confirm_body.is_valid({**confirmation, "acknowledged_receipt_id": original_id})
+        prepared_view.validate(prepared)
+        intent_view.validate(prepared)
+        intent_view.validate(confirmed)
+        assert not prepared_view.is_valid(confirmed)
+        for invalid in (posted, posted["allocation_after"], {**prepared, "state": "closed"},
+                        {**prepared, "receipt": posted}, {"state": "confirmed", "receipt": None},
+                        {"state": "confirmed", "receipt": posted["allocation_after"]}):
+            assert not intent_view.is_valid(invalid)
+    conflict = api_validator(inventory, "PurchaseReceiptConflict")
+    for code in ("receipt_intent_not_current", "receipt_intent_changed", "over_receipt", "plan_ineligible"):
+        conflict.validate({"code": code})
+        assert not conflict.is_valid({"code": code, "receipt": first_posted})
+
+
 def check_receipt_contracts(procurement, inventory):
     # Static wire/schema cases only: no authorization, persistence or delivery is exercised.
     sample = load(ROOT / "examples/nats/inventory-purchase-receipt-posted-v1.json")
@@ -108,11 +204,15 @@ def check_receipt_contracts(procurement, inventory):
     }
     allocation_view = api_validator(inventory, "PurchaseReceiptAllocation")
     posted = api_validator(inventory, "PostedPurchaseReceipt")
+    posted_examples = []
     for allocation, receipt_id in ((first_allocation, command["receipt_id"]), (final_allocation, str(uuid4()))):
         allocation_view.validate(allocation)
-        posted.validate({"receipt_id": receipt_id, "pieces": "6", "posted_at": event["timestamp"],
-                         "allocation_after": allocation})
+        result = {"receipt_id": receipt_id, "pieces": "6", "posted_at": event["timestamp"],
+                  "allocation_after": allocation}
+        posted.validate(result)
+        posted_examples.append(result)
     assert not allocation_view.is_valid({**final_allocation, "reserved": "20", "uncovered": "0"})
+    check_receipt_intent_api(inventory, *posted_examples)
 
     status_base = {**purchase_ids, "unit": "EA", "ordered_pieces": "12"}
     unknown = {**status_base, "state": "unknown", "received_pieces": None, "open_pieces": None,
