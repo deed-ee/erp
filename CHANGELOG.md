@@ -8,6 +8,7 @@
 - Added scoped Sales drafts with catalog-backed customer and product snapshots and exact EUR totals. Drafts do not confirm an order or reserve inventory.
 - Added explicit Sales confirmation with an atomic outbox and recovery-aware JetStream publication.
 - Added replay-safe Inventory consumption and a linked reservation view with actual reserved and outstanding finished-goods quantities.
+- Pinned Debian's `libzstd1` security update in the service images while the upstream Bookworm image still ships the earlier package.
 - Replaced the shared demo bearer token with verified OAuth access tokens and per-operation grants scoped to the tenant and organization.
 - Added a local German/English Angular workspace for registering and retrieving articles, with labeled icon buttons and a keyboard-driven browser scenario.
 
