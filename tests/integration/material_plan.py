@@ -91,6 +91,9 @@ def main():
         "_id.tenantId": "{TENANT}", "_id.organizationId": "{ORGANIZATION}", available: {{$lt: 0}}
     }}))""") == 0
     print("NovaMotion exact net material shortages, atomic replay, restart and denied scope passed")
+    if os.getenv("ERP4US_PROCUREMENT_E2E") == "1":
+        from procurement_handoff import exercise
+        exercise(stored, BUY)
 
 
 if __name__ == "__main__":

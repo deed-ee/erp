@@ -168,6 +168,15 @@ jobs:
           load: true
           cache-from: type=gha,scope=inventory-${{ env.CACHE_NAMESPACE }}
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,ignore-error=true,scope=inventory-{0}', env.CACHE_NAMESPACE) || '' }}
+      - name: Build Procurement release image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: services/procurement/Dockerfile
+          tags: erp4us-ci-procurement:latest
+          load: true
+          cache-from: type=gha,scope=procurement-${{ env.CACHE_NAMESPACE }}
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,ignore-error=true,scope=procurement-{0}', env.CACHE_NAMESPACE) || '' }}
       - name: Seed and exercise the scoped Manufacturing API
         run: |
           compose() { docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml "$@"; }
@@ -197,12 +206,16 @@ jobs:
           compose run --rm -T inventory-seed
           compose up --no-build -d inventory-worker
           python3 tests/integration/sales_inventory.py
-          python3 tests/integration/material_plan.py
+      - name: Net material demand and exercise durable Procurement draft creation
+        run: |
+          docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml \
+            up --no-build -d inventory-plan-relay procurement procurement-worker
+          ERP4US_PROCUREMENT_E2E=1 python3 tests/integration/material_plan.py
       - name: Scan built service images
         run: |
           sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"
-          for service in master-data article-relay manufacturing diagnostics sales inventory; do
-            container=$(docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.inventory.yaml ps -q "$service")
+          for service in master-data article-relay manufacturing diagnostics sales inventory procurement; do
+            container=$(docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.inventory.yaml -f compose.procurement.yaml ps -q "$service")
             image=$(docker inspect --format '{{.Config.Image}}' "$container")
             "$RUNNER_TEMP/tools/trivy" image --image-src docker --scanners vuln --severity HIGH,CRITICAL \
               --format json --output "$RUNNER_TEMP/trivy.json" "$image"
@@ -221,6 +234,7 @@ jobs:
         env:
           ERP4US_MANUFACTURING_E2E: '1'
           ERP4US_SALES_E2E: '1'
+          ERP4US_PROCUREMENT_E2E: '1'
         working-directory: ui
         run: |
           npm ci
@@ -235,6 +249,7 @@ jobs:
           ERP4US_DIAGNOSTICS_PORT: '8191'
           ERP4US_SALES_PORT: '8192'
           ERP4US_INVENTORY_PORT: '8193'
+          ERP4US_PROCUREMENT_PORT: '8194'
           ERP4US_IDENTITY_DIR: ./.erp4us-preview
           ERP4US_REAL_OIDC_E2E: '1'
         run: |
@@ -246,18 +261,19 @@ jobs:
           docker tag erp4us-ci-article-delivery erp4us-ci-identity-article-delivery
           docker tag erp4us-ci-sales erp4us-ci-identity-sales
           docker tag erp4us-ci-inventory erp4us-ci-identity-inventory
-          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml "$@"; }
+          docker tag erp4us-ci-procurement erp4us-ci-identity-procurement
+          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml "$@"; }
           preview up -d preview-identity
           python3 scripts/preview-identity.py configure
           preview up --no-build -d --wait nats
           # A foreground one-shot returns the initializer's exit status even if
           # it exits before Compose could attach a separate wait operation.
           preview run --rm --no-deps -T delivery-init
-          preview up --no-build -d master-data manufacturing sales sales-relay diagnostics inventory
+          preview up --no-build -d master-data manufacturing sales sales-relay diagnostics inventory procurement
           preview run --rm manufacturing-seed
           preview run --rm master-data-seed
           preview run --rm -T inventory-seed
-          preview up --no-build -d inventory-worker
+          preview up --no-build -d inventory-worker inventory-plan-relay procurement-worker
           npm --prefix ui run test:e2e -- tests/preview-signin.spec.ts
       - name: Save trusted npm download cache
         if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
@@ -266,15 +282,15 @@ jobs:
           path: ~/.npm/_cacache
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
       - if: failure()
-        run: docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml logs --no-color --tail=80
+        run: docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml logs --no-color --tail=80
       - if: always()
-        run: if [ -f .env ]; then docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml down -v; fi
+        run: if [ -f .env ]; then docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml down -v; fi
       - if: always()
         env:
           ERP4US_IDENTITY_DIR: ./.erp4us-preview
         run: |
           if [ -f .erp4us-preview/identity-policy.json ]; then
-            docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml down -v
+            docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml down -v
           fi
   audit:
     needs: impact

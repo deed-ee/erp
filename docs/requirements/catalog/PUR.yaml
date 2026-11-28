@@ -28,12 +28,16 @@
   - 16
   - 23
   - 92
-  prs: []
+  prs:
+  - 120
   contracts:
+  - contracts/openapi/procurement-v1.yaml
   - contracts/schemas/get-draft-proposal-v1.json
+  - contracts/schemas/nats-inventory-material-plan-netted-v1.json
   - contracts/schemas/stock-shortage-v1.json
   tests:
   - tests/integration/procurement.py
+  - tests/integration/procurement_handoff.py
   evidence: []
   questions:
   - Who may approve their own proposal?

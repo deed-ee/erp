@@ -16,9 +16,12 @@ service_password=$(openssl rand -hex 32)
     printf 'DEV_NATS_DIAGNOSTICS_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_NATS_SALES_RELAY_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_NATS_INVENTORY_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+    printf 'DEV_NATS_INVENTORY_PLAN_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+    printf 'DEV_NATS_PROCUREMENT_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_RECEIPTS_MONGO_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_MANUFACTURING_MONGO_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_SALES_MONGO_PASSWORD=%s\n' "$(openssl rand -hex 32)"
     printf 'DEV_INVENTORY_MONGO_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+    printf 'DEV_PROCUREMENT_MONGO_PASSWORD=%s\n' "$(openssl rand -hex 32)"
 } > "${ERP4US_ENV_FILE:-.env}"
 printf 'Created .env with local development credentials.\n'

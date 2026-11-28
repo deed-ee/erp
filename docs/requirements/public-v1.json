@@ -1458,9 +1458,12 @@
         23,
         92
       ],
-      "prs": [],
+      "prs": [
+        120
+      ],
       "tests": [
-        "tests/integration/procurement.py"
+        "tests/integration/procurement.py",
+        "tests/integration/procurement_handoff.py"
       ],
       "evidence": []
     },

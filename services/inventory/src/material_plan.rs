@@ -26,6 +26,8 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{net::TcpStream, task::JoinSet, time::timeout};
 use uuid::Uuid;
 
+pub(super) mod handoff;
+
 const CONFLICT: StatusCode = StatusCode::CONFLICT;
 const UNAVAILABLE: StatusCode = StatusCode::SERVICE_UNAVAILABLE;
 const READ: &str = "inventory.material-plan.read";

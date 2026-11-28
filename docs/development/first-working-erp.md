@@ -24,7 +24,7 @@ The synthetic issuer is only for automated fixture tests, not user authenticatio
 
 ## Try the real browser login
 
-On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 8091, 8092, 8093, 9443 and 4200 free, run:
+On a trusted local machine, with the usual Compose prerequisites and ports 8080, 8090, 8091, 8092, 8093, 8094, 9443 and 4200 free, run:
 
 ```sh
 sh scripts/demo-start.sh
@@ -42,7 +42,7 @@ ERP4US_IDENTITY_DIR=./.erp4us-preview docker compose -p erp4us-preview \
   --env-file .erp4us-preview/compose.env -f compose.yaml -f compose.delivery.yaml \
   -f compose.manufacturing.yaml -f compose.preview-identity.yaml \
   -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml \
-  -f compose.inventory.yaml down
+  -f compose.inventory.yaml -f compose.procurement.yaml down
 ```
 
 The explicit demo seed also creates three fictitious customers (including Atlas Handling) and four suppliers in Master Data. Browse the records under **Master data → Business partners** and filter by role. The directory and optional profile are published in the [Master Data API](../../contracts/openapi/master-data-v1.yaml); existing profile-free records remain valid. Seeding again does not overwrite an existing code in its scope. Addresses are synthetic and the current preview has one address and one delivery address per profile, no external identifier import.
@@ -61,6 +61,10 @@ For the confirmed `NM-1000` line, open **Check reservation** and select **Plan a
 
 On a fresh NovaMotion seed, the plan recommends making ten `NM-1100`, ten `NM-1200` and ten `NM-1000`, and buying **12 end plates, 6 motors, 10 spindles, 8 rails and 10 sensors**. The other materials come from physical opening stock. This is a linked, persisted material plan, not purchase approval, an issued purchase order, a production order or shipping authority. A later order in the same warehouse sees less available stock. Do not rerun the seed expecting to recover stock; releasing/replanning material allocations is not yet exposed.
 
+### Send shortages to Procurement
+
+With the separate handoff grant, choose **Send shortages to Procurement** on the saved material plan. The action commits one pending Inventory event; it neither commits spend nor requires the broker to be online. When Procurement consumes it, the same view can retrieve the authorized **Purchase proposal draft** with a stable proposal ID and the five uncovered quantities. JetStream acknowledgement and a stored Procurement draft are shown separately. Use **Refresh proposal** if delivery is still pending. Retrying the handoff or replaying the event does not create another proposal. Supplier selection, exact purchase terms, buyer approval, issuing orders and receiving goods are subsequent work.
+
 ### Check application readiness
 
 Sign in with the separate `platform-monitor` account and open **Administration**. The [diagnostics adapter](../adr/0007-preview-application-observation.md) probes Master Data, Manufacturing and JetStream. A responding service can still be unready; a stopped service produces **Not responding**, not a fabricated container status. The screen refreshes about every six seconds. Tenant roles do not implicitly grant platform access.
@@ -72,7 +76,7 @@ If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-previ
 ## Remaining acceptance gates
 
 - Permission-aware workflows across all contexts and editable tenant, organization, warehouse and role administration; extend isolation and user lifecycle coverage beyond the scoped planning view.
-- Publish a durable shortage handoff from the saved plan and create Procurement-owned proposals, then add purchasing and partial receipts. The stored plan itself buys nothing.
+- [Decide the preview approval and partial receipt policy](https://github.com/erp4us-org/erp4us/issues/23#issuecomment-7236963509). Authorize purchase terms and issue purchase orders from Procurement-owned drafts; post partial receipts against issued lines and allocate them to the waiting plan. The draft itself buys nothing.
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
-- Restricted diagnostics collector for actual runtime inventory, heartbeat staleness, and redacted historical/live logs. Do not grant runtime access to any UI, gateway or business container.
+- Heartbeat staleness and a [reviewed runtime inventory and redacted log boundary](https://github.com/erp4us-org/erp4us/issues/122#issuecomment-7236971940). Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.

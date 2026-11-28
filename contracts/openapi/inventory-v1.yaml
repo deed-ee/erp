@@ -84,6 +84,50 @@ paths:
         '409': { description: 'No demand remains to plan, the reservation changed, or the pinned structure is unavailable for planning' }
         '413': { description: No request body is accepted and its size exceeded the bounded request limit }
         '503': { description: 'Inventory or Manufacturing unavailable, or configured component stock could not be verified' }
+  /v1/inventory/reservations/{order_id}/{line_id}/material-plan/procurement-handoff:
+    parameters:
+      - in: header
+        name: X-Erp4us-Tenant
+        required: true
+        schema: { type: string, format: uuid }
+      - in: header
+        name: X-Erp4us-Organization
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: order_id
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: line_id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getProcurementHandoff
+      description: Requires inventory.material-plan.read. Published means acknowledged by JetStream, not processed or approved in Procurement.
+      responses:
+        '200': { $ref: '#/components/responses/ProcurementHandoff' }
+        '400': { description: Invalid scope or line reference }
+        '401': { description: Missing or invalid bearer token }
+        '403': { description: Missing material-plan read grant }
+        '404': { description: No handoff for this line in the authorized scope }
+        '503': { description: Inventory storage unavailable }
+    post:
+      operationId: sendMaterialShortages
+      description: >
+        Requires inventory.material-plan.send. No request body is accepted. Inventory writes one pending event for
+        positive uncovered material quantities in its immutable plan. A retry returns the original handoff.
+        This does not commit spend or wait for Procurement.
+      responses:
+        '201': { $ref: '#/components/responses/ProcurementHandoff' }
+        '200': { $ref: '#/components/responses/ProcurementHandoff' }
+        '400': { description: Invalid scope or line reference or unexpected request body }
+        '401': { description: Missing or invalid bearer token }
+        '403': { description: Missing handoff permission }
+        '404': { description: No material plan for this line in the authorized scope }
+        '409': { description: No positive buy rows or the event would exceed its preview bounds }
+        '413': { description: Request body exceeds the bounded request limit }
+        '503': { description: Inventory storage unavailable or the source correlation could not be resolved }
 components:
   securitySchemes:
     AccessToken: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -93,6 +137,17 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/MaterialPlan' }
+    ProcurementHandoff:
+      description: Inventory outbox state
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [plan_id, event_id, state]
+            properties:
+              plan_id: { type: string, format: uuid }
+              event_id: { type: string, format: uuid }
+              state: { enum: [pending, published] }
   schemas:
     Quantity: { type: string, pattern: '^(?:0|[1-9][0-9]{0,2}|1000)(?![\s\S])' }
     Reservation:

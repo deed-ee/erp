@@ -5,6 +5,7 @@ import { LucideListChecks, LucideRefreshCw } from '@lucide/angular';
 import { ArticleApi, isArticleId } from './article-api';
 import type { Message } from './messages';
 import { Preferences } from './preferences';
+import { ProcurementHandoffPanel } from './procurement-handoff';
 import { Feedback, PageHeading } from './ui';
 
 interface Reservation {
@@ -16,7 +17,7 @@ interface MaterialPlan { id: string; production: PlanRow[]; materials: PlanRow[]
 interface Access { path: string; headers: Record<string, string>; signal: AbortSignal }
 
 @Component({
-  imports: [RouterLink, LucideListChecks, LucideRefreshCw, Feedback, PageHeading],
+  imports: [RouterLink, LucideListChecks, LucideRefreshCw, Feedback, PageHeading, ProcurementHandoffPanel],
   template: `
     <erp-page-heading [title]="t()('reservationLink')" [description]="t()('reservationIntro')" />
     <a routerLink="/sales/orders">{{ t()('salesOrders') }}</a>
@@ -57,6 +58,11 @@ interface Access { path: string; headers: Record<string, string>; signal: AbortS
                   }
                 </tbody>
               </table>
+            }
+            @if (reservation(); as row) {
+              <erp-procurement-handoff
+                [orderId]="row.order_id" [lineId]="row.line_id" [planId]="stored.id"
+                [hasShortages]="hasShortages(stored)" />
             }
           } @else if (api.canCreateMaterialPlan() && reservation()?.outstanding !== '0') {
             <button type="button" class="primary" (click)="planMaterials()" [disabled]="planBusy()">
@@ -141,6 +147,10 @@ export class OrderReservation {
       {label: 'materialProduction', uncovered: 'materialToMake', rows: plan.production},
       {label: 'materialPurchasing', uncovered: 'materialToBuy', rows: plan.materials},
     ];
+  }
+
+  hasShortages(plan: MaterialPlan) {
+    return plan.materials.some(row => row.uncovered !== '0');
   }
 
   planMaterials() {

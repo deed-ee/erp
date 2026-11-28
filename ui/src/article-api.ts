@@ -32,6 +32,8 @@ export class ArticleApi {
   readonly canReadMaterialPlan = computed(() => this.grant()?.permissions.includes('inventory.material-plan.read') ?? false);
   readonly canCreateMaterialPlan = computed(() => this.canPlan()
     && (this.grant()?.permissions.includes('inventory.material-plan.create') ?? false));
+  readonly canSendMaterialPlan = computed(() => this.grant()?.permissions.includes('inventory.material-plan.send') ?? false);
+  readonly canReadProposal = computed(() => this.grant()?.permissions.includes('procurement.proposal.read') ?? false);
   readonly canCreateSalesDraft = computed(() => this.canReadPartners() && this.canPlan()
     && (this.grant()?.permissions.includes('sales.order.draft.create') ?? false));
   readonly canReadHealth = computed(() => this.verifiedPlatform().includes('platform.health.read'));

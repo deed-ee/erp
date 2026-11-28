@@ -41,6 +41,7 @@ def identity_policy():
             "master-data.partner.read", "master-data.unit.read", "sales.order.read", "sales.order.draft.create",
             "sales.order.confirm", "inventory.reservation.read",
             "inventory.material-plan.read", "inventory.material-plan.create",
+            "inventory.material-plan.send", "procurement.proposal.read",
         ])]},
         USERS["auditor"]: {"actor_id": USERS["auditor"], "grants": [grant(OTHER, ["master-data.article.read"])]},
         USERS["platform-monitor"]: {"actor_id": USERS["platform-monitor"], "grants": [],

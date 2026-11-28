@@ -2,6 +2,23 @@
 
 This is a priority order, not a release schedule. Run the smallest useful slice continuously and keep new services independently deployable.
 
+## Current integration: a complete manufacturing preview
+
+The [First Working ERP milestone](https://github.com/erp4us-org/erp4us/milestone/5) uses [tracker #119](https://github.com/erp4us-org/erp4us/issues/119) and one [draft integration PR #120](https://github.com/erp4us-org/erp4us/pull/120). The following milestones describe draft-branch evidence and future exit criteria, not released capabilities.
+
+| Step | Evidence or next gate |
+|---|---|
+| Sign-in, catalog and order | The draft branch runs real local Keycloak sign-in with verified tenant scope, persisted partners and pinned BOMs. An Atlas order for 10 `NM-1000` at EUR 2,490 confirms durably; Inventory reserves eligible finished stock after JetStream delivery without allocating again on replay. |
+| Net material planning | The [tested checkpoint](https://github.com/erp4us-org/erp4us/commit/eaf5ee9) commits one pinned plan and actual component reservations. It recommends making ten of each subassembly and the final module and identifies five exact purchase shortages. |
+| Procurement draft | The draft branch creates one Procurement-owned proposal from an authorized handoff of the five shortages. Local Compose and browser tests verify the handoff survives broker outage and replay without changing the proposal. Nothing is approved or ordered. |
+| Purchase order and partial receipts | [#23](https://github.com/erp4us-org/erp4us/issues/23): agree who can approve exact terms before issuing a purchase order. Receive the end plates in two lots of six, account for the open quantity and allocate each receipt to the waiting plan exactly once. |
+| Production and fulfillment | [#46](https://github.com/erp4us-org/erp4us/issues/46), [#51](https://github.com/erp4us-org/erp4us/issues/51), [#17](https://github.com/erp4us-org/erp4us/issues/17) and [#22](https://github.com/erp4us-org/erp4us/issues/22): consume held inputs, record actual quantities bottom-up, reserve the completed modules for Sales and ship ten. Verify the open remainder after an authorized partial shipment. Persist the shipment document and linked process history. Verify zero outstanding finished demand and holds, no duplicate movements and no negative stock. |
+| Operational acceptance | [#122](https://github.com/erp4us-org/erp4us/issues/122): extend application readiness and JetStream counters with restricted runtime observations, stale-heartbeat reporting and redacted logs. Prove the full flow in a clean browser session, tenant isolation and interrupted-service recovery. Qualify the preview identity image ([#121](https://github.com/erp4us-org/erp4us/issues/121)) before final acceptance. |
+
+See the [preview runbook](docs/development/first-working-erp.md) for the exact scope and remaining checks.
+
+## Platform priorities
+
 | Priority | Deliverable | Exit evidence |
 |---|---|---|
 | Now | Foundation and Master Data article register/get | Compose smoke reaches MongoDB; duplicate SKU is rejected; service restart preserves the article. Draft contract checks, governance and initial threat model are present. |

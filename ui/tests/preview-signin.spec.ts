@@ -108,4 +108,19 @@ test('real OIDC: production user saves, confirms and reopens a priced sales orde
   for (const sku of ['NM-1000', 'NM-1100', 'NM-1200']) {
     await expect(production.getByRole('row').filter({ hasText: sku }).getByRole('cell').last()).toHaveText('10 EA');
   }
+  await page.getByRole('button', { name: 'Send shortages to Procurement' }).click();
+  const proposal = page.getByRole('table', { name: 'Purchase proposal draft' });
+  await expect(proposal.getByRole('row')).toHaveCount(6);
+  for (const [sku, pieces] of Object.entries({
+    'NM-ENDPLATE': 12, 'NM-MOTOR': 6, 'NM-SPINDLE': 10, 'NM-RAIL': 8, 'NM-SENSOR': 10,
+  })) {
+    await expect(proposal.getByRole('row').filter({ hasText: sku }).getByRole('cell').last()).toHaveText(`${pieces} EA`);
+  }
+  const proposalRef = page.getByText(/^Proposal ID:/);
+  await expect(proposalRef).toBeVisible();
+  const ref = await proposalRef.innerText();
+  await page.getByRole('link', { name: 'Sales orders' }).click();
+  await match.getByRole('link', { name: 'Check reservation' }).click();
+  await expect(proposalRef).toHaveText(ref);
+  await expect(page.getByRole('button', { name: /place|approve/i })).toHaveCount(0);
 });

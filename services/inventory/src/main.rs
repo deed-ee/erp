@@ -185,6 +185,7 @@ async fn main() -> ExitCode {
         Some("seed-preview") => preview::seed().await,
         Some("provision-consumer") => consumer::provision().await,
         Some("consume") => consumer::consume().await,
+        Some("relay-plans") => material_plan::handoff::relay().await,
         Some(_) => Err(io::Error::other("Unknown Inventory role")),
     };
     match outcome {

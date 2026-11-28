@@ -80,3 +80,16 @@ services:
         condition: service_completed_successfully
       inventory-consumer-init:
         condition: service_completed_successfully
+  inventory-plan-relay:
+    <<: *inventory
+    command: ["relay-plans"]
+    restart: on-failure
+    environment:
+      <<: [*warehouse, *inventory-env]
+      NATS_URL: nats://nats:4222
+      NATS_PASSWORD: ${DEV_NATS_INVENTORY_PLAN_PASSWORD:?Generate a local Inventory plan relay password}
+    depends_on:
+      inventory-db-init:
+        condition: service_completed_successfully
+      delivery-init:
+        condition: service_completed_successfully

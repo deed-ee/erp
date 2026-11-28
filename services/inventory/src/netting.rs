@@ -13,7 +13,7 @@ pub(super) struct Item {
 }
 
 impl Item {
-    fn valid(&self) -> bool {
+    pub(super) fn valid(&self) -> bool {
         (1..=64).contains(&self.sku.len())
             && self
                 .sku
@@ -71,7 +71,7 @@ impl NetRow {
     }
 }
 
-fn positive(text: &str) -> Option<i32> {
+pub(super) fn positive(text: &str) -> Option<i32> {
     if !(1..=7).contains(&text.len())
         || text.starts_with('0')
         || !text.bytes().all(|b| b.is_ascii_digit())

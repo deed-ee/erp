@@ -43,6 +43,12 @@ test('fixture: review and confirm a saved order in the authorized scope', async 
   const rowForEndPlates = page.getByRole('row').filter({hasText: 'NM-ENDPLATE'});
   await expect(rowForEndPlates.getByRole('cell', {name: '20 EA', exact: true}).first()).toBeVisible();
   await expect(rowForEndPlates.getByRole('cell').last()).toHaveText(`${endPlates?.uncovered} EA`);
+  if (process.env.ERP4US_PROCUREMENT_E2E === '1') {
+    await page.getByRole('button', {name: 'Send shortages to Procurement'}).click();
+    const proposal = page.getByRole('table', {name: 'Purchase proposal draft'});
+    await expect(proposal.getByRole('row').filter({hasText: 'NM-ENDPLATE'}).getByRole('cell'))
+      .toHaveText(`${endPlates?.uncovered} EA`);
+  }
   await page.getByLabel('Company and organization').selectOption({index: 2});
   await expect(page.getByRole('heading', {name: 'NM-1000 · A'})).toHaveCount(0);
   await expect(rowForEndPlates).toHaveCount(0);

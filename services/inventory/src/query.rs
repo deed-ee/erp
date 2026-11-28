@@ -129,6 +129,10 @@ pub(super) async fn serve() -> io::Result<()> {
                 "/v1/inventory/reservations/{order_id}/{line_id}/material-plan",
                 get(material_plan::get).post(material_plan::create),
             )
+            .route(
+                "/v1/inventory/reservations/{order_id}/{line_id}/material-plan/procurement-handoff",
+                get(material_plan::handoff::get).post(material_plan::handoff::send),
+            )
             .layer(DefaultBodyLimit::max(1024))
             .layer(middleware::from_fn(
                 |request: Request, next: Next| async move {
