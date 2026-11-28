@@ -1,6 +1,6 @@
 import descriptor from '../../contracts/entities/article-v1.json';
 import manifest from '../../contracts/manifests/master-data-v1.json';
-import type { Article, ArticleNameMatches } from './article-api';
+import type { ArticleLookup } from './article-lookup';
 import { isArticleId, isArticleName, normalizeArticleSku, type ArticleLookupKind } from './article-identifiers';
 import type { Message } from './messages';
 
@@ -35,22 +35,9 @@ export const commandExample = (kind: ArticleLookupKind, locale: 'en' | 'de') =>
 // A 120-code-point name may occupy 240 UTF-16 code units before its intent prefix.
 export const maxCommandLength = 320;
 
-type Lookup =
-  | { operationId: 'getArticle'; filter: { id: string } }
-  | { operationId: 'findArticleBySku'; filter: { sku: string } }
-  | { operationId: 'findArticlesByName'; filter: { name: string } };
-type Resolution = { kind: 'lookup'; lookup: Lookup }
+type Resolution = { kind: 'lookup'; lookup: ArticleLookup }
   | { kind: 'clarificationRequired'; parameter?: 'name' }
   | { kind: 'unsupportedQuery' };
-
-export type CommandResult = {
-  readonly schemaVersion: 1;
-  readonly lookup: Lookup;
-} & (
-  | { status: 'success'; article: Article }
-  | ({ status: 'clarificationRequired' } & ArticleNameMatches)
-  | { status: 'noMatches' | 'unauthorized' | 'serviceUnavailable' | 'executionError'; message: Message }
-);
 
 export function normalizeCommand(value: string) {
   return value.trim().replace(/\s+/gu, ' ');

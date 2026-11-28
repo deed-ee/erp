@@ -128,7 +128,7 @@ test('unauthorized discovery and results stay hidden; changing credential clears
   await expect(results).toHaveCount(0);
 });
 
-test('live exact name lookup asks the user to choose a scoped SKU when names repeat', async ({ page }) => {
+test('live exact name lookup offers the same scoped SKU choices in global search and Products', async ({ page }) => {
   const marker = randomUUID().slice(0, 8).toUpperCase();
   const name = ` Werkstück  Kühlung ${marker} `;
   const records = [];
@@ -182,6 +182,94 @@ test('live exact name lookup asks the user to choose a scoped SKU when names rep
   await expect(page).toHaveURL(new RegExp(`/products/${records[3].id}$`));
   await expect(page.getByRole('main')).toBeFocused();
   await expect(page.getByRole('main')).toContainText(records[3].sku);
+
+  await page.getByRole('navigation', { name: 'Stammdaten' }).getByRole('link', { name: 'Produkte', exact: true }).click();
+  const products = page.getByRole('main');
+  const direct = products.getByRole('search', { name: 'Artikel per exakter Bezeichnung finden' });
+  const field = direct.getByRole('textbox', { name: 'Bezeichnung', exact: true });
+  await field.fill(name);
+  const directRead = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/v1/articles:find-by-name' && response.request().method() === 'GET');
+  await field.press('Enter');
+  const directResponse = await directRead;
+  expect(directResponse.status()).toBe(200);
+  expect(new URL(directResponse.url()).searchParams.get('name')).toBe(name);
+  const directAnswer = products.getByRole('region', { name: 'Suchergebnisse' });
+  await expect(directAnswer.getByRole('status')).toHaveText(/Wähle einen Artikel anhand seiner SKU/);
+  await expect(directAnswer.getByRole('link')).toHaveText(records.slice(0, 5).map(record => `Artikel öffnen ${record.sku}`));
+  await expect(directAnswer).toContainText('Nur die ersten fünf Treffer werden angezeigt.');
+  await expect(directAnswer).not.toContainText(foreign.sku);
+  await expect(deQuery).toBeEmpty();
+  await expect(page).toHaveURL(/\/products$/);
+  await directAnswer.getByRole('link', { name: `Artikel öffnen ${records[3].sku}` }).press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/products/${records[3].id}$`));
+  await expect(products).toBeFocused();
+});
+
+test('direct name lookup distinguishes invalid input, access denial and no scoped matches', async ({ page }) => {
+  await page.goto('/products');
+  const main = page.getByRole('main');
+  const form = main.getByRole('search', { name: 'Find article by exact name' });
+  const field = form.getByRole('textbox', { name: 'Name', exact: true });
+  const results = main.getByRole('region', { name: 'Search results' });
+  await form.getByRole('button', { name: 'Search by name' }).press('Enter');
+  await expect(field).toBeFocused();
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  await expect(results.getByRole('status')).toHaveText(/Enter a non-blank name/);
+
+  const unknown = `Missing part ${randomUUID()}`;
+  await field.fill(unknown);
+  await field.press('Enter');
+  await expect(results.getByRole('status')).toHaveText('Set a local demo credential first.');
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await setDemoAccess(page, demoToken('synthetic-registration'));
+  await page.getByRole('link', { name: 'Open products' }).click();
+  await field.fill(unknown);
+  await field.press('Enter');
+  await expect(results.getByRole('status')).toHaveText(/Access denied/);
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await expect(results.getByText('Interpreted as')).toHaveCount(0);
+
+  await setDemoAccess(page, demoToken('synthetic-reader'));
+  await page.getByRole('link', { name: 'Open products' }).click();
+  await expect(field).toBeEmpty();
+  await expect(results).toHaveCount(0);
+  await field.fill(unknown);
+  await field.press('Enter');
+  await expect(results.getByRole('status')).toHaveText('No article matches this filter in the selected scope.');
+  await expect(results.getByRole('link')).toHaveCount(0);
+});
+
+test('editing the direct name field discards a pending answer', async ({ page }) => {
+  await page.goto('/');
+  await setDemoAccess(page, 'synthetic-fixture');
+  await page.getByRole('link', { name: 'Open products' }).click();
+  let release!: () => void;
+  let markFinished!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const finished = new Promise<void>(resolve => { markFinished = resolve; });
+  await page.route(url => url.pathname === '/v1/articles:find-by-name', async route => {
+    const name = new URL(route.request().url()).searchParams.get('name');
+    await pending;
+    try {
+      await route.fulfill({ json: { matches: [{ id: randomUUID(), sku: 'OLDER', name, revision: 1 }], hasMore: false } });
+    } catch { /* The browser may reject a response after aborting the old read. */ }
+    finally { markFinished(); }
+  });
+  const products = page.getByRole('main');
+  const field = products.getByRole('textbox', { name: 'Name', exact: true });
+  const results = products.getByRole('region', { name: 'Search results' });
+  const request = page.waitForRequest(value => new URL(value.url()).pathname === '/v1/articles:find-by-name');
+  await field.fill('Older drive');
+  await field.press('Enter');
+  await request;
+  await expect(results.getByRole('status')).toHaveText('Request in progress …');
+  await field.fill('Current drive');
+  await expect(results).toHaveCount(0);
+  release();
+  await finished;
+  await expect(results).toHaveCount(0);
+  await expect(field).toHaveValue('Current drive');
 });
 
 test('clarifies known queries, refuses unsupported writes and distinguishes errors from no matches', async ({ page }) => {
