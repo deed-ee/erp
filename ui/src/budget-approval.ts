@@ -36,7 +36,7 @@ const stageKey = /^[a-z][a-z0-9-]{0,31}(?![\s\S])/;
           }
         </ol>
         @if (approval.state === 'approved') {
-          <p>{{ t()(api.canReadPurchaseOrders() ? 'budgetApprovalReady' : 'budgetApprovalComplete') }}</p>
+          <p>{{ t()('budgetApprovalReady') }}</p>
         } @else if (next(); as stage) {
           @if (!locked() && canApprove(stage.key)) {
             <button type="button" (click)="approve()" [disabled]="busy() || stale()">

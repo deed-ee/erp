@@ -168,7 +168,7 @@ test('real OIDC: production user saves and confirms a priced order; an authorize
       }
     }
     await page.getByRole('button', {name:'Refresh approvals'}).click();
-    await expect(page.getByText('All required stages are approved. No order has been issued.')).toBeVisible();
+    await expect(page.getByText('All required stages are approved. Approval alone does not issue purchase orders.')).toBeVisible();
   }
   await expect(page.getByRole('button', { name: /place|approve/i })).toHaveCount(0);
   if (issuance) {
@@ -201,6 +201,7 @@ test('real OIDC: production user saves and confirms a priced order; an authorize
       expect(result.purchase_orders[0].lines).toContainEqual(expect.objectContaining({ sku: 'NM-ENDPLATE', pieces: '12' }));
       purchaseOrderId = result.purchase_orders[0].purchase_order_id;
       await expect(issuer.getByRole('heading', { name: heading })).toBeVisible();
+      await expect(issuer.getByText(new RegExp(purchaseOrderId))).toBeVisible();
     } finally {
       await context.close();
     }
@@ -211,6 +212,8 @@ test('real OIDC: production user saves and confirms a priced order; an authorize
     expect(response.status()).toBe(200);
     expect((await response.json()).purchase_orders[0].purchase_order_id).toBe(purchaseOrderId);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    const issued = page.getByRole('table', { name: 'SUP-VECTORDRIVE · VectorDrive Components GmbH' });
+    await expect(issued.getByRole('row').filter({ hasText: 'NM-ENDPLATE' })).toContainText('12 EA');
     await expect(page.getByRole('button', { name: reviewName })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Save draft purchase terms' })).toHaveCount(0);
   }
