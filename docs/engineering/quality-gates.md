@@ -21,7 +21,7 @@ For infrastructure use Docker Compose v2, actionlint 1.7.12 and ShellCheck 0.11.
 | `./scripts/quality/check.sh --contracts` | `contracts` | OpenAPI, JSON Schema, known semantic references and NATS fixtures, historic Article compatibility, and requirements/index/tests. |
 | `./scripts/quality/check.sh --rust` | `rust` | Cargo metadata ownership, manifest lint inheritance, no direct `async-nats` outside the shared crate, workspace rustfmt/Clippy/locked tests. |
 | `./scripts/quality/check.sh --ui` | `compose` | Prettier with the temporary legacy ratchet, targeted TypeScript/Angular ESLint, strict Playwright typing and strict Angular build. |
-| `./scripts/quality/check.sh --infra` | `infra` | actionlint (including inline ShellCheck), standalone shell files and the Compose base plus delivery overlay model using inert fixture values. Does not start any service. |
+| `./scripts/quality/check.sh --infra` | `infra` (required by `contracts`) | actionlint (including inline ShellCheck), standalone shell files and the Compose base plus delivery overlay model using inert fixture values. Does not start any service. |
 
 Pass multiple named groups in order or use `--all` (also the default). Use `./scripts/quality/format.sh --rust` or `./scripts/quality/format.sh --ui src/example.ts` from any directory. For a formatted or deleted legacy UI file, remove its entry from `ui/format-baseline.json`. CI rejects added or rehashed entries after initial adoption. Keep formatting-only changes separate where that reduces review or merge conflicts.
 
@@ -43,7 +43,7 @@ Compare coverage for affected files against the same instrumentation on the revi
 
 ## CI adoption and review-only checks
 
-Keep existing required `audit`, `contracts`, `rust` and `compose` contexts. The workflow's always-emitted `quality-gate` requires success for always-on checks and every selected suite, accepts skips only when the event and impact result explicitly permit them, and fails a failed/cancelled impact check. After observing a docs-only PR, UI-only PR, full PR and merge-group run, ask the maintainer to add `quality-gate` as a required status in the existing ruleset using the GitHub Actions integration. Do not remove existing checks or add a workflow-level path filter. No rule changes are made by this branch.
+Keep existing required `audit`, `contracts`, `rust` and `compose` contexts. `contracts` already fails if infrastructure validation or PR impact analysis fails, so those checks do not depend on a rule change. The workflow's `quality-gate` requires success for always-on checks and every selected suite and accepts skips only when the event and impact result explicitly permit them. After observing a docs-only PR, UI-only PR, full PR and merge-group run, ask the maintainer to add `quality-gate` as a required status in the existing ruleset using the GitHub Actions integration. Do not remove existing checks or add a workflow-level path filter. No rule changes are made by this branch.
 
 Review rules without a safe automated signal: authorization and database filters, migration and data ownership, frontend architecture and token use, design/accessibility, complexity and broad contract compatibility. Evaluate targeted, structured fitness checks when repeatable violations justify them. Do not add Kubernetes or Dockerfile linters, duplicate scanners, global percentage gates or a mandatory remote analyzer without an observed need. Preserve existing GitHub secret scanning and push protection; [review the baseline](baseline.md).
 

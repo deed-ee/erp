@@ -87,9 +87,16 @@ jobs:
           sh scripts/init-dev.sh
           sh tests/integration/messaging.sh
   contracts:
+    needs: [impact, infra]
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Require workflow validation and valid PR check selection
+        if: needs.infra.result != 'success' || (github.event_name == 'pull_request' && needs.impact.result != 'success')
+        run: |
+          echo "Infrastructure validation or pull request impact analysis did not pass."
+          exit 1
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with: { persist-credentials: false }
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
