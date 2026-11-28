@@ -141,11 +141,15 @@ impl Store {
     pub async fn get(&self, scope: Scope, plan_id: Uuid) -> Result<Option<Draft>, Failure> {
         let options = CollectionOptions::builder()
             .read_concern(ReadConcern::majority())
+            .selection_criteria(mongodb::options::SelectionCriteria::ReadPreference(
+                mongodb::options::ReadPreference::Primary,
+            ))
             .build();
         Ok(self
             .0
             .collection_with_options::<Draft>(DRAFTS, options)
             .find_one(doc! {"_id": scoped_key(scope, "planId", plan_id)})
+            .max_time(std::time::Duration::from_secs(3))
             .await?)
     }
 

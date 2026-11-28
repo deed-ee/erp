@@ -15,12 +15,16 @@ use axum::{
 };
 use erp4us_identity::{Auth, Denial};
 use serde::Serialize;
-use std::{env, io, time::Duration};
-use tokio::time::timeout;
+use std::{env, future::Future, io, sync::Arc, time::Duration};
+use tokio::{
+    sync::Semaphore,
+    time::{Instant, timeout, timeout_at},
+};
 use uuid::Uuid;
 
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 const SAVE_TIMEOUT: Duration = Duration::from_secs(8);
+const MAX_OPERATIONS: usize = 16;
 const TERMS_BODY_LIMIT: usize = 16 * 1024;
 const READ_PERMISSION: &str = "procurement.proposal.read";
 const WRITE_TERMS_PERMISSION: &str = "procurement.proposal.terms.write";
@@ -31,6 +35,7 @@ struct Api {
     store: Store,
     terms: terms_store::Store,
     auth: Auth,
+    operations: Arc<Semaphore>,
 }
 
 #[derive(Serialize)]
@@ -113,18 +118,55 @@ impl From<partners::Failure> for StatusCode {
     }
 }
 
+async fn bounded<T: Send + 'static>(
+    operations: &Arc<Semaphore>,
+    deadline: Instant,
+    task: impl Future<Output = Result<T, StatusCode>> + Send + 'static,
+) -> Result<T, StatusCode> {
+    let permit = operations
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    // Timing out a request must not drop MongoDB driver futures. The detached
+    // operation retains its slot until it ends, even when the client disconnects.
+    let handle = tokio::spawn(async move {
+        let _permit = permit;
+        before(deadline)?;
+        task.await
+    });
+    timeout_at(deadline, handle)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+}
+
+fn before(deadline: Instant) -> Result<(), StatusCode> {
+    if Instant::now() >= deadline {
+        Err(StatusCode::SERVICE_UNAVAILABLE)
+    } else {
+        Ok(())
+    }
+}
+
 async fn lookup(
     State(api): State<Api>,
     headers: HeaderMap,
     Path(plan): Path<String>,
 ) -> Result<Json<Proposal>, StatusCode> {
     let scope = authorize(&api.auth, &headers, READ_PERMISSION)?;
-    let draft = timeout(LOOKUP_TIMEOUT, api.store.get(scope.into(), plan_id(&plan)?))
-        .await
-        .ok()
-        .and_then(Result::ok)
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let id = plan_id(&plan)?;
+    let draft = bounded(
+        &api.operations,
+        Instant::now() + LOOKUP_TIMEOUT,
+        async move {
+            api.store
+                .get(scope.into(), id)
+                .await
+                .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+                .ok_or(StatusCode::NOT_FOUND)
+        },
+    )
+    .await?;
     Ok(Json(draft.into()))
 }
 
@@ -134,13 +176,18 @@ async fn latest_terms(
     Path(plan): Path<String>,
 ) -> Result<Json<Terms>, StatusCode> {
     let scope = authorize(&api.auth, &headers, READ_PERMISSION)?;
-    let terms = timeout(
-        LOOKUP_TIMEOUT,
-        api.terms.latest(scope.into(), plan_id(&plan)?),
+    let id = plan_id(&plan)?;
+    let terms = bounded(
+        &api.operations,
+        Instant::now() + LOOKUP_TIMEOUT,
+        async move {
+            api.terms
+                .latest(scope.into(), id)
+                .await?
+                .ok_or(StatusCode::NOT_FOUND)
+        },
     )
-    .await
-    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)??
-    .ok_or(StatusCode::NOT_FOUND)?;
+    .await?;
     Ok(Json(terms))
 }
 
@@ -165,8 +212,9 @@ async fn save_terms(
         .map_err(|_| StatusCode::BAD_REQUEST)?;
     let command = command.normalize()?;
     let scope = identity.into();
+    let deadline = Instant::now() + SAVE_TIMEOUT;
 
-    timeout(SAVE_TIMEOUT, async {
+    bounded(&api.operations, deadline, async move {
         let draft = api
             .store
             .get(scope, plan_id)
@@ -177,6 +225,7 @@ async fn save_terms(
             Decision::Replay(terms) => return Ok((StatusCode::OK, Json(terms))),
             Decision::Create(revision) => revision,
         };
+        before(deadline)?;
         let bound = command.bind(&draft)?;
         let suppliers = match partners::resolve(&bearer, scope, bound.supplier_ids()).await {
             Ok(suppliers) => suppliers,
@@ -187,6 +236,7 @@ async fn save_terms(
             Err(error) => return Err(error.into()),
         };
         let saved = bound.snapshot(revision, &suppliers, identity.actor)?;
+        before(deadline)?;
         if api.terms.append(scope, &saved).await.is_err() {
             // If a unique index or an uncertain commit raced us, recover only
             // a majority-visible result. Otherwise leave the outcome unknown.
@@ -195,7 +245,6 @@ async fn save_terms(
         Ok((StatusCode::CREATED, Json(saved.terms)))
     })
     .await
-    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
 }
 
 async fn resolve_race(
@@ -220,6 +269,8 @@ pub(super) async fn serve() -> io::Result<()> {
         .await
         .map_err(|_| io::Error::other("Timed out initializing Procurement terms indexes"))??;
     let ready = store.clone();
+    let operations = Arc::new(Semaphore::new(MAX_OPERATIONS));
+    let ready_operations = operations.clone();
     let bind = env::var("ERP4US_BIND").unwrap_or_else(|_| {
         let port = env::var("ERP4US_PROCUREMENT_PORT").unwrap_or_else(|_| "8094".into());
         format!("127.0.0.1:{port}")
@@ -232,11 +283,18 @@ pub(super) async fn serve() -> io::Result<()> {
             .route(
                 "/health/ready",
                 get(move || async move {
-                    if timeout(LOOKUP_TIMEOUT, ready.ready()).await == Ok(true) {
-                        StatusCode::NO_CONTENT
-                    } else {
-                        StatusCode::SERVICE_UNAVAILABLE
-                    }
+                    bounded(
+                        &ready_operations,
+                        Instant::now() + LOOKUP_TIMEOUT,
+                        async move {
+                            if ready.ready().await {
+                                Ok(StatusCode::NO_CONTENT)
+                            } else {
+                                Err(StatusCode::SERVICE_UNAVAILABLE)
+                            }
+                        },
+                    )
+                    .await
                 }),
             )
             .route("/v1/procurement/proposals/by-plan/{plan_id}", get(lookup))
@@ -259,7 +317,12 @@ pub(super) async fn serve() -> io::Result<()> {
                     response
                 },
             ))
-            .with_state(Api { store, terms, auth }),
+            .with_state(Api {
+                store,
+                terms,
+                auth,
+                operations,
+            }),
     )
     .await
 }
@@ -270,6 +333,31 @@ mod tests {
     use crate::material_plan::tests::{read, sample};
     use mongodb::bson::{DateTime, doc, from_document, to_document};
     use serde_json::json;
+
+    #[tokio::test]
+    async fn deadline_leaves_in_flight_work_running_and_bounded() {
+        let slots = Arc::new(Semaphore::new(1));
+        let (release, waiting) = tokio::sync::oneshot::channel();
+        let (complete, completed) = tokio::sync::oneshot::channel();
+        let result = bounded(
+            &slots,
+            Instant::now() + Duration::from_millis(50),
+            async move {
+                waiting.await.unwrap();
+                complete.send(()).unwrap();
+                Ok(())
+            },
+        )
+        .await;
+        assert_eq!(result, Err(StatusCode::SERVICE_UNAVAILABLE));
+        assert_eq!(slots.available_permits(), 0);
+        release.send(()).unwrap();
+        timeout(Duration::from_secs(1), completed)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(before(Instant::now()), Err(StatusCode::SERVICE_UNAVAILABLE));
+    }
 
     #[test]
     fn public_response_has_only_draft_snapshot_fields() {

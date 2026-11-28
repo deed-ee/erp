@@ -5,13 +5,17 @@ use crate::{
 use mongodb::{
     Collection, Database, IndexModel,
     bson::{Document, doc},
-    options::{CollectionOptions, IndexOptions, ReadConcern, WriteConcern},
+    options::{
+        CollectionOptions, IndexOptions, ReadConcern, ReadPreference, SelectionCriteria,
+        WriteConcern,
+    },
 };
 use serde::Serialize;
-use std::io;
+use std::{io, time::Duration};
 use uuid::Uuid;
 
 const REVISIONS: &str = "purchase_terms_revisions";
+const DB_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Clone)]
 pub(super) struct Store(Collection<Saved>);
@@ -39,7 +43,13 @@ impl Store {
     pub(super) async fn open(db: &Database) -> io::Result<Self> {
         let options = CollectionOptions::builder()
             .read_concern(ReadConcern::majority())
-            .write_concern(WriteConcern::majority())
+            .selection_criteria(SelectionCriteria::ReadPreference(ReadPreference::Primary))
+            .write_concern(
+                WriteConcern::builder()
+                    .w(mongodb::options::Acknowledgment::Majority)
+                    .w_timeout(DB_TIMEOUT)
+                    .build(),
+            )
             .build();
         let collection = db.collection_with_options(REVISIONS, options);
         let unique = |keys| {
@@ -53,6 +63,7 @@ impl Store {
                 unique(doc! {"tenantId": 1, "organizationId": 1, "terms.plan_id": 1, "terms.revision": -1}),
                 unique(doc! {"tenantId": 1, "organizationId": 1, "terms.plan_id": 1, "commandId": 1}),
             ])
+            .max_time(DB_TIMEOUT)
             .await
             .map_err(|_| io::Error::other("Cannot initialize Procurement terms indexes"))?;
         Ok(Self(collection))
@@ -65,6 +76,7 @@ impl Store {
     ) -> Result<Option<Terms>, Failure> {
         self.0
             .find_one(scope_key(scope, plan_id))
+            .max_time(DB_TIMEOUT)
             .sort(doc! {"terms.revision": -1})
             .await
             .map(|stored| stored.map(|saved| saved.terms))
@@ -85,6 +97,7 @@ impl Store {
         let saved = self
             .0
             .find_one(key)
+            .max_time(DB_TIMEOUT)
             .await
             .map_err(|_| Failure::Unavailable)?;
         command.decide(latest.map_or(0, |terms| terms.revision), saved)

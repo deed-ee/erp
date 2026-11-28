@@ -63,6 +63,22 @@ validate_url((ROOT / "openapi/diagnostics-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/sales-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/inventory-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/procurement-v1.yaml").as_uri())
+procurement_api = yaml.safe_load((ROOT / "openapi/procurement-v1.yaml").read_text())
+draft_terms = Draft202012Validator({
+    "$ref": "#/components/schemas/SavePurchaseTerms", "components": procurement_api["components"],
+}, format_checker=FormatChecker())
+terms_command = {"command_id": str(uuid4()), "expected_revision": 0, "lines": [
+    {"sku": "NM-ENDPLATE", "revision": None, "supplier_id": str(uuid4()), "unit_price": "30.10"},
+]}
+draft_terms.validate(terms_command)
+for price in (30.10, "030.10", "-30.10", "30.100", "10000000.00", "30.10\n"):
+    invalid = deepcopy(terms_command)
+    invalid["lines"][0]["unit_price"] = price
+    assert not draft_terms.is_valid(invalid)
+for extra in ("pieces", "currency", "line_total"):
+    invalid = deepcopy(terms_command)
+    invalid["lines"][0][extra] = "1"
+    assert not draft_terms.is_valid(invalid)
 sales_event = load(ROOT / "examples/nats/sales-order-confirmed-v1.json")
 sales_wire = validator("nats-sales-order-confirmed-v1.json")
 sales_wire.validate(sales_event)

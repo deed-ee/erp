@@ -38,6 +38,7 @@
   tests:
   - tests/integration/procurement.py
   - tests/integration/procurement_handoff.py
+  - tests/integration/procurement_terms.py
   evidence: []
   questions:
   - Who may approve their own proposal?

@@ -175,3 +175,6 @@ def exercise(plan, expected):
     wait_until_ready(PROCUREMENT)
     assert draft()[2] == proposal and handoff(send=True)[2]["event_id"] == sent["event_id"]
     print("Pending handoff survived outage; one exact draft survived replay, rejected conflicts and foreign scope")
+    if os.getenv("ERP4US_PURCHASE_TERMS_E2E") == "1":
+        from procurement_terms import exercise as exercise_terms
+        exercise_terms(proposal)

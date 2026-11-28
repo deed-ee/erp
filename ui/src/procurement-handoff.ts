@@ -3,13 +3,10 @@ import { LucideRefreshCw, LucideSend } from '@lucide/angular';
 import { ArticleApi, isArticleId } from './article-api';
 import type { Message } from './messages';
 import { Preferences } from './preferences';
+import { ProcurementTermsPanel, type PurchaseDraft } from './procurement-terms';
 import { Feedback } from './ui';
 
 interface Handoff { plan_id: string; event_id: string; state: 'pending' | 'published' }
-interface Draft {
-  proposal_id: string; plan_id: string; status: 'draft';
-  lines: {sku: string; revision: string | null; unit: string; pieces: string}[];
-}
 interface Access {
   handoffPath: string; proposalPath: string; plan: string; headers: Record<string, string>;
   signal: AbortSignal; canReadProposal: boolean;
@@ -17,7 +14,7 @@ interface Access {
 
 @Component({
   selector: 'erp-procurement-handoff',
-  imports: [Feedback, LucideRefreshCw, LucideSend],
+  imports: [Feedback, LucideRefreshCw, LucideSend, ProcurementTermsPanel],
   template: `
     <section class="procurement">
       <h3>{{ t()('procurementDraft') }}</h3>
@@ -36,6 +33,7 @@ interface Access {
               }
             </tbody>
           </table>
+          <erp-procurement-terms [draft]="proposal" />
         } @else if (!api.canReadProposal()) {
           <p>{{ t()('procurementReadDenied') }}</p>
         }
@@ -65,7 +63,7 @@ export class ProcurementHandoffPanel {
   readonly hasShortages = input.required<boolean>();
   readonly busy = signal(false);
   readonly handoff = signal<Handoff | null>(null);
-  readonly draft = signal<Draft | null>(null);
+  readonly draft = signal<PurchaseDraft | null>(null);
   readonly message = signal<Message | null>(null);
   readonly refresh = signal(0);
   private access?: Access;
@@ -137,7 +135,7 @@ export class ProcurementHandoffPanel {
         if (access.canReadProposal) {
           const reply = await request(proposalPath);
           if (reply.ok) {
-            const proposal: Draft = await reply.json();
+            const proposal: PurchaseDraft = await reply.json();
             if (signal.aborted) return;
             if (proposal.plan_id !== plan || proposal.status !== 'draft') throw new Error('Invalid proposal reference');
             this.draft.set(proposal);

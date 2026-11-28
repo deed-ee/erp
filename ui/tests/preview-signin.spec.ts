@@ -122,8 +122,24 @@ test('real OIDC: production user saves, confirms and reopens a priced sales orde
   const proposalRef = page.getByText(/^Proposal ID:/);
   await expect(proposalRef).toBeVisible();
   const ref = await proposalRef.innerText();
+  if (process.env.ERP4US_PURCHASE_TERMS_E2E === '1') {
+    for (const [sku, price] of Object.entries({
+      'NM-ENDPLATE': '30.10', 'NM-MOTOR': '149.95', 'NM-SPINDLE': '45.20',
+      'NM-RAIL': '12.00', 'NM-SENSOR': '7.35',
+    })) {
+      await page.getByRole('combobox', { name: `Supplier ${sku}` })
+        .selectOption({ label: 'SUP-VECTORDRIVE · VectorDrive Components GmbH' });
+      await page.getByRole('textbox', { name: `Unit price (EUR) ${sku}` }).fill(price);
+    }
+    await page.getByRole('button', { name: 'Save draft purchase terms' }).click();
+    await expect(page.getByText(/Draft total: EUR 1882\.40/)).toBeVisible();
+  }
   await page.getByRole('link', { name: 'Sales orders' }).click();
   await match.getByRole('link', { name: 'Check reservation' }).click();
   await expect(proposalRef).toHaveText(ref);
+  if (process.env.ERP4US_PURCHASE_TERMS_E2E === '1') {
+    await expect(page.getByText(/Draft total: EUR 1882\.40/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save draft purchase terms' })).toBeDisabled();
+  }
   await expect(page.getByRole('button', { name: /place|approve/i })).toHaveCount(0);
 });

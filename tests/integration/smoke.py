@@ -18,7 +18,7 @@ base = f"http://127.0.0.1:{os.getenv('ERP4US_PORT', env.get('ERP4US_PORT', '8080
 DEFAULT_BEARER = object()
 
 
-def request(path, data=None, bearer=DEFAULT_BEARER, scope=(TENANT, ORGANIZATION), *, origin=base):
+def request(path, data=None, bearer=DEFAULT_BEARER, scope=(TENANT, ORGANIZATION), *, origin=base, timeout=7):
     headers = {"Accept": "application/json"}
     if bearer is DEFAULT_BEARER:
         bearer = token()
@@ -30,7 +30,7 @@ def request(path, data=None, bearer=DEFAULT_BEARER, scope=(TENANT, ORGANIZATION)
         headers["Content-Type"] = "application/json"
     req = Request(origin + path, data=data, headers=headers)
     try:
-        response = urlopen(req, timeout=7)
+        response = urlopen(req, timeout=timeout)
     except HTTPError as exc:
         response = exc
     with response:

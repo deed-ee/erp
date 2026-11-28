@@ -63,7 +63,9 @@ On a fresh NovaMotion seed, the plan recommends making ten `NM-1100`, ten `NM-12
 
 ### Send shortages to Procurement
 
-With the separate handoff grant, choose **Send shortages to Procurement** on the saved material plan. The action commits one pending Inventory event; it neither commits spend nor requires the broker to be online. When Procurement consumes it, the same view can retrieve the authorized **Purchase proposal draft** with a stable proposal ID and the five uncovered quantities. JetStream acknowledgement and a stored Procurement draft are shown separately. Use **Refresh proposal** if delivery is still pending. Retrying the handoff or replaying the event does not create another proposal. Supplier selection, exact purchase terms, buyer approval, issuing orders and receiving goods are subsequent work.
+With the separate handoff grant, choose **Send shortages to Procurement** on the saved material plan. The action commits one pending Inventory event; it neither commits spend nor requires the broker to be online. When Procurement consumes it, the same view can retrieve the authorized **Purchase proposal draft** with a stable proposal ID and the five uncovered quantities. JetStream acknowledgement and a stored Procurement draft are shown separately. Use **Refresh proposal** if delivery is still pending. Retrying the handoff or replaying the event does not create another proposal.
+
+Under **Draft purchase terms**, a user with the separate write grant can select a scoped supplier and enter an exact EUR unit price for each existing row. For the synthetic example, choose `SUP-VECTORDRIVE` and enter 30.10 per end plate, 149.95 per motor, 45.20 per spindle, 12.00 per rail and 7.35 per sensor; the saved draft totals **EUR 1,882.40**. Procurement snapshots the supplier references and computes totals from the original shortage quantities. Saving creates a new revision, not an approval or order. Reopening retrieves the stored draft terms even if the partner directory is offline; updating them requires current supplier verification. See the [Procurement contract](../../contracts/openapi/procurement-v1.yaml).
 
 ### Check application readiness
 
