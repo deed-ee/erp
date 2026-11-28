@@ -50,6 +50,8 @@ def check_broker_permissions():
         "$JS.API.STREAM.MSG.GET.ERP4US_BUSINESS_EVENTS_V1",
         f"$JS.API.STREAM.DELETE.DIAG_NOT_A_REAL_STREAM_{uuid4().hex}",
         "$JS.API.CONSUMER.MSG.NEXT.ERP4US_BUSINESS_EVENTS_V1.article-receipts",
+        "$JS.API.CONSUMER.MSG.NEXT.ERP4US_BUSINESS_EVENTS_V1.inventory-sales-v1",
+        "$JS.API.CONSUMER.MSG.NEXT.ERP4US_BUSINESS_EVENTS_V1.procurement-material-plans-v1",
         "v1.config.system.article-delivery.event.heartbeat.changed.v1",
         HEARTBEAT,
     )
@@ -116,7 +118,11 @@ def check_heartbeat(credential):
 if __name__ == "__main__":
     credential = token(subject="synthetic-platform")
     before = wait(credential, {"master-data": "ready", "manufacturing": "ready", "jetstream": "ready"},
-                  lambda report: all(value is not None for value in report["jetstream"].values()))
+                  lambda report: all(report["jetstream"][key] is not None for key in ("stream", "consumer")))
+    # Neither business durable has been installed in this application-readiness stack yet.
+    assert before["jetstream"]["pipeline_consumers"] == {
+        "inventory_sales": None, "procurement_material_plans": None,
+    }
     assert query()[0] == 401
     assert query(token())[0] == 403  # Tenant writer is not a platform monitor.
     assert request("/v1/partners", bearer=credential)[0] == 403
@@ -136,7 +142,9 @@ if __name__ == "__main__":
     try:
         subprocess.run([*COMPOSE, "stop", "nats"], check=True, timeout=40)
         down = wait(credential, {"jetstream": "unreachable", "manufacturing": "ready"})
-        assert down["jetstream"] == {"stream": None, "consumer": None}
+        assert down["jetstream"] == {"stream": None, "consumer": None, "pipeline_consumers": {
+            "inventory_sales": None, "procurement_material_plans": None,
+        }}
         assert down["article_relay_heartbeat"]["state"] == "unavailable"
     finally:
         subprocess.run([*COMPOSE, "start", "nats"], check=True, timeout=40)

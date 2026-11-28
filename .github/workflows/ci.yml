@@ -210,7 +210,8 @@ jobs:
         run: |
           docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml \
             up --no-build -d inventory-plan-relay procurement procurement-worker
-          ERP4US_PROCUREMENT_E2E=1 ERP4US_PURCHASE_TERMS_E2E=1 python3 tests/integration/material_plan.py
+          ERP4US_PROCUREMENT_E2E=1 ERP4US_PURCHASE_TERMS_E2E=1 ERP4US_PIPELINE_DIAGNOSTICS_E2E=1 \
+            python3 tests/integration/material_plan.py
       - name: Scan built service images
         run: |
           sh scripts/install-dependency-scanner.sh trivy "$RUNNER_TEMP/tools"

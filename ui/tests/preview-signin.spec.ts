@@ -61,7 +61,9 @@ test('real OIDC: platform monitor sees actual application health', async ({ page
   await expect(page.getByRole('row').filter({ hasText: 'manufacturing' }).getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'jetstream' }).getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
   await expect(page.getByText('Stored messages', { exact: true })).toBeVisible();
-  await expect(page.getByText('Awaiting acknowledgement', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sales orders to Inventory' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Material plans to Procurement' })).toBeVisible();
+  await expect(page.getByText('Awaiting acknowledgement', { exact: true })).toHaveCount(3);
   await expect(page.getByRole('heading', { name: 'Article Relay heartbeat' })).toBeVisible();
   await expect(page.getByText('Heartbeat received recently', { exact: true })).toBeVisible({ timeout: 20000 });
   await expect(page.getByText('Seconds since last receipt', { exact: true })).toBeVisible();
@@ -134,7 +136,7 @@ test('real OIDC: production user saves, confirms and reopens a priced sales orde
     await page.getByRole('button', { name: 'Save draft purchase terms' }).click();
     await expect(page.getByText(/Draft total: EUR 1882\.40/)).toBeVisible();
   }
-  await page.getByRole('link', { name: 'Sales orders' }).click();
+  await page.getByRole('main').getByRole('link', { name: 'Sales orders', exact: true }).click();
   await match.getByRole('link', { name: 'Check reservation' }).click();
   await expect(proposalRef).toHaveText(ref);
   if (process.env.ERP4US_PURCHASE_TERMS_E2E === '1') {

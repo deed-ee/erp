@@ -48,6 +48,8 @@ test('fixture: review and confirm a saved order in the authorized scope', async 
     const proposal = page.getByRole('table', {name: 'Purchase proposal draft'});
     await expect(proposal.getByRole('row').filter({hasText: 'NM-ENDPLATE'}).getByRole('cell'))
       .toHaveText(`${endPlates?.uncovered} EA`);
+    const proposalRef = page.getByText(/^Proposal ID:/);
+    const stableRef = await proposalRef.innerText();
     if (process.env.ERP4US_PURCHASE_TERMS_E2E === '1') {
       const shortages = data.materials.filter(item => item.uncovered !== '0');
       for (const {sku} of shortages) {
@@ -59,6 +61,13 @@ test('fixture: review and confirm a saved order in the authorized scope', async 
       const total = 2 * shortages.reduce((sum, item) => sum + Number(item.uncovered), 0);
       await expect(page.getByText(`Revision: 1 · Draft total: EUR ${total}.00`)).toBeVisible();
       await expect(page.getByRole('button', {name:'Save draft purchase terms'})).toBeDisabled();
+    }
+    await page.getByRole('main').getByRole('link', {name:'Sales orders', exact:true}).click();
+    await row.getByRole('link', {name:'Check reservation'}).click();
+    await expect(proposalRef).toHaveText(stableRef);
+    if (process.env.ERP4US_PURCHASE_TERMS_E2E === '1') {
+      const total = 2 * data.materials.reduce((sum, item) => sum + Number(item.uncovered), 0);
+      await expect(page.getByText(`Revision: 1 · Draft total: EUR ${total}.00`)).toBeVisible();
     }
   }
   await page.getByLabel('Company and organization').selectOption({index: 2});

@@ -90,6 +90,19 @@ def check_business_replays(event):
     assert mongo_eval(COMPOSE, "print(db.getSiblingDB('procurement').material_plan_drafts.countDocuments({}))") == 1
 
 
+def wait_for_pipeline_backlog(cleared):
+    from diagnostics import wait
+
+    def expected(report):
+        pipeline = report["jetstream"]["pipeline_consumers"]
+        inventory, procurement = pipeline["inventory_sales"], pipeline["procurement_material_plans"]
+        return inventory is not None and procurement is not None and (
+            (procurement["pending"] == 0 and procurement["ack_pending"] == 0)
+            if cleared else procurement["pending"] > 0)
+
+    return wait(token(subject="synthetic-platform"), {"jetstream": "ready"}, expected)
+
+
 def exercise(plan, expected):
     wait_until_ready(PROCUREMENT)
     check_broker_permissions()
@@ -116,6 +129,9 @@ def exercise(plan, expected):
     assert handoff(send=True, bearer=reader)[0] == 403
     assert request(path, b'{"buyRows":[]}', origin=INVENTORY)[0] == 400
 
+    check_metrics = os.getenv("ERP4US_PIPELINE_DIAGNOSTICS_E2E") == "1"
+    if check_metrics:
+        manage("stop", "procurement-worker")
     manage("stop", "nats")
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -130,8 +146,18 @@ def exercise(plan, expected):
         assert handoff()[2] == handoff(send=True)[2] == sent
     finally:
         manage("start", "nats")
-    manage("restart", "inventory-plan-relay", "procurement-worker")
+    if check_metrics:
+        try:
+            manage("restart", "inventory-plan-relay")
+            wait_for_pipeline_backlog(cleared=False)
+        finally:
+            manage("start", "procurement-worker")
+    else:
+        manage("restart", "inventory-plan-relay", "procurement-worker")
     proposal = eventually(read_draft, "Procurement draft after broker recovery")
+    if check_metrics:
+        wait_for_pipeline_backlog(cleared=True)
+        print("Platform diagnostics observed Procurement backlog before consumption and zero after acknowledgement")
     assert (proposal["plan_id"], proposal["order_id"], proposal["line_id"], proposal["status"]) == (
         plan["id"], plan["order_id"], plan["line_id"], "draft")
     assert proposal["bom"] == {"sku": plan["sku"], "revision": plan["product_revision"]}
