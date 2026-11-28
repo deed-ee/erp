@@ -13,6 +13,7 @@
 - Added Article Relay heartbeat visibility to platform diagnostics, separate from readiness and runtime state.
 - Added versioned draft purchase terms with verified supplier snapshots and exact EUR unit prices and totals. Saving does not issue or approve orders.
 - Added platform-only JetStream backlog and acknowledgement counters for the Inventory and Procurement consumers.
+- Added opt-in budget approval stages for exact purchase draft and policy revisions, with separate approvers and no automatic purchase.
 - Pinned Debian's `libzstd1` security update in the service images while the upstream Bookworm image still ships the earlier package.
 - Replaced the shared demo bearer token with verified OAuth access tokens and per-operation grants scoped to the tenant and organization.
 - Added a local German/English Angular workspace for registering and retrieving articles, with labeled icon buttons and a keyboard-driven browser scenario.

@@ -70,3 +70,36 @@ def check_superseded(proposal, revised_terms, first_command):
     status, _, _ = request(path, json.dumps(new_command).encode(), origin=PROCUREMENT, timeout=11,
                           bearer=token(subject="synthetic-department-approver"))
     assert status == 409
+
+
+def check_revision_race(proposal, terms):
+    base = f"/v1/procurement/proposals/by-plan/{proposal['plan_id']}"
+    status, _, before = request(f"{base}/approval", origin=PROCUREMENT, timeout=11)
+    assert status == 200 and before["state"] == "pending"
+    assert before["terms_revision"] == terms["revision"]
+    assert all(stage["state"] == "pending" for stage in before["stages"])
+    department = token(subject="synthetic-department-approver")
+    approve = json.dumps({
+        "command_id": str(uuid4()), "terms_revision": terms["revision"], "policy_id": before["policy_id"],
+        "policy_revision": before["policy_revision"], "stage_key": "department",
+    }).encode()
+    lines = [{"sku": row["sku"], "revision": row["revision"], "supplier_id": row["supplier"]["id"],
+              "unit_price": row["unit_price"]} for row in terms["lines"]]
+    lines[0]["unit_price"] = "60.00" if lines[0]["unit_price"] != "60.00" else "61.00"
+    edit = json.dumps({"command_id": str(uuid4()), "expected_revision": terms["revision"], "lines": lines}).encode()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        approved = pool.submit(request, f"{base}/approval", approve, bearer=department, origin=PROCUREMENT, timeout=11)
+        saved = pool.submit(request, f"{base}/terms", edit, origin=PROCUREMENT, timeout=11)
+        approval_status, _, stage = approved.result()
+        save_status, _, latest = saved.result()
+    assert save_status == 201 and latest["revision"] == terms["revision"] + 1
+    assert approval_status in (201, 409), approval_status
+    if approval_status == 201:
+        # The stage may have won the race, but can only describe the old terms.
+        assert stage["terms_revision"] == terms["revision"]
+        assert stage["stages"][0]["state"] == "approved"
+        assert request(f"{base}/approval", approve, bearer=department, origin=PROCUREMENT, timeout=11)[2] == stage
+    status, _, now = request(f"{base}/approval", origin=PROCUREMENT, timeout=11)
+    assert status == 200 and now["terms_revision"] == latest["revision"]
+    assert now["state"] == "pending" and all(row["state"] == "pending" for row in now["stages"])
+    print("Concurrent terms change and stage approval cannot carry a decision to revised terms")

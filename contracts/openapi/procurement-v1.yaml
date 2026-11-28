@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: erp4us Procurement drafts
   version: 1.0.0
-  description: Read Procurement's draft recommendation for material shortages and save non-binding terms. This API cannot approve a proposal, contact a supplier, commit spend, issue a purchase order or receive goods.
+  description: Read shortage proposals, save non-binding terms and record configured budget approval stages. This API does not issue purchase orders, commit spend, contact suppliers, reserve budget balances or receive goods.
 security:
   - AccessToken: []
 paths:
@@ -112,7 +112,6 @@ paths:
         '409': { description: 'Stale or exhausted terms revision, or changed intent under an already saved command ID' }
         '503': { description: 'Procurement storage or supplier verification unavailable, or write outcome uncertain' }
   /v1/procurement/proposals/by-plan/{plan_id}/approval:
-    x-preview-proposed: true
     parameters:
       - in: header
         name: X-Erp4us-Tenant

@@ -67,6 +67,18 @@ With the separate handoff grant, choose **Send shortages to Procurement** on the
 
 Under **Draft purchase terms**, a user with the separate write grant can select a scoped supplier and enter an exact EUR unit price for each existing row. For the synthetic example, choose `SUP-VECTORDRIVE` and enter 30.10 per end plate, 149.95 per motor, 45.20 per spindle, 12.00 per rail and 7.35 per sensor; the saved draft totals **EUR 1,882.40**. Procurement snapshots the supplier references and computes totals from the original shortage quantities. Saving creates a new revision, not an approval or order. Reopening retrieves the stored draft terms even if the partner directory is offline; updating them requires current supplier verification. See the [Procurement contract](../../contracts/openapi/procurement-v1.yaml).
 
+### Review configured budget stages
+
+Budget approval is an explicit opt-in on a fresh, disposable local preview. To test with the synthetic two-stage policy from this repository, start with:
+
+```sh
+ERP4US_PREVIEW_BUDGET_APPROVALS=1 \
+ERP4US_PROCUREMENT_BUDGET_POLICY_FILE=./contracts/examples/procurement/budget-policy-v1.json \
+sh scripts/demo-start.sh
+```
+
+This file is test data, not a real spending policy. The opt-in seeds a `department-approver` and a separate `budget-approver` in a fresh preview realm. It does not modify an existing realm in place: keep using a previous fixture without opt-in if its data must be preserved. Never discard preview volumes just to change a policy. In the saved Atlas proposal, sign in separately with each reviewer and choose the next **Approve stage** after reviewing the exact terms. One approval is not enough for the **EUR 1,882.40** example. A different terms or policy revision cannot reuse the completed stages; deploy policy changes with a new revision. Neither completion nor absence of a policy issues a purchase order or reserves a budget balance.
+
 ### Check application readiness
 
 Sign in with the separate `platform-monitor` account and open **Administration**. The [diagnostics adapter](../adr/0007-preview-application-observation.md) probes Master Data, Manufacturing and JetStream. A responding service can still be unready; a stopped service produces **Not responding**, not a fabricated container status. The screen refreshes about every six seconds. Tenant roles do not implicitly grant platform access.

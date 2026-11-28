@@ -97,6 +97,7 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: erp4us-ci
       ERP4US_HEARTBEAT_SECONDS: "2"
+      ERP4US_PROCUREMENT_BUDGET_POLICY_FILE: ./contracts/examples/procurement/budget-policy-v1.json
       DOCKER_BUILD_RECORD_UPLOAD: "false"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -206,11 +207,11 @@ jobs:
           compose run --rm -T inventory-seed
           compose up --no-build -d inventory-worker
           python3 tests/integration/sales_inventory.py
-      - name: Net materials, verify durable Procurement drafts and save exact draft terms
+      - name: Prove material plans, exact Procurement drafts and staged budget approvals
         run: |
-          docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml \
+          docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml -f compose.procurement-approvals.yaml \
             up --no-build -d inventory-plan-relay procurement procurement-worker
-          ERP4US_PROCUREMENT_E2E=1 ERP4US_PURCHASE_TERMS_E2E=1 ERP4US_PIPELINE_DIAGNOSTICS_E2E=1 \
+          ERP4US_PROCUREMENT_E2E=1 ERP4US_PURCHASE_TERMS_E2E=1 ERP4US_PIPELINE_DIAGNOSTICS_E2E=1 ERP4US_BUDGET_APPROVAL_E2E=1 \
             python3 tests/integration/material_plan.py
       - name: Scan built service images
         run: |
@@ -237,6 +238,7 @@ jobs:
           ERP4US_SALES_E2E: '1'
           ERP4US_PROCUREMENT_E2E: '1'
           ERP4US_PURCHASE_TERMS_E2E: '1'
+          ERP4US_BUDGET_APPROVAL_E2E: '1'
         working-directory: ui
         run: |
           npm ci
@@ -255,6 +257,8 @@ jobs:
           ERP4US_IDENTITY_DIR: ./.erp4us-preview
           ERP4US_REAL_OIDC_E2E: '1'
           ERP4US_PURCHASE_TERMS_E2E: '1'
+          ERP4US_PREVIEW_BUDGET_APPROVALS: '1'
+          ERP4US_BUDGET_APPROVAL_E2E: '1'
         run: |
           python3 scripts/preview-identity.py prepare
           jq -r 'to_entries[].value | "::add-mask::" + .' .erp4us-preview/credentials.json
@@ -265,7 +269,7 @@ jobs:
           docker tag erp4us-ci-sales erp4us-ci-identity-sales
           docker tag erp4us-ci-inventory erp4us-ci-identity-inventory
           docker tag erp4us-ci-procurement erp4us-ci-identity-procurement
-          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml "$@"; }
+          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml -f compose.procurement-approvals.yaml "$@"; }
           preview up -d preview-identity
           python3 scripts/preview-identity.py configure
           preview up --no-build -d --wait nats

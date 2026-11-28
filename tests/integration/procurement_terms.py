@@ -115,4 +115,8 @@ def exercise(proposal):
     wait_until_ready()
     status, _, untouched = request(path.removesuffix("/terms"), origin=PROCUREMENT)
     assert status == 200 and untouched == proposal and untouched["status"] == "draft"
+    if approval_command is not None:
+        from procurement_approval import check_revision_race
+
+        check_revision_race(proposal, latest)
     print("Draft terms exact cents, owner checks, revision conflicts and outage-safe replay passed")

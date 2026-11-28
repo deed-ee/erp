@@ -50,15 +50,16 @@ test('fixture: review and confirm a saved order in the authorized scope', async 
       .toHaveText(`${endPlates?.uncovered} EA`);
     const proposalRef = page.getByText(/^Proposal ID:/);
     const stableRef = await proposalRef.innerText();
+    const unitPrice = process.env.ERP4US_BUDGET_APPROVAL_E2E === '1' ? 100 : 2;
     if (process.env.ERP4US_PURCHASE_TERMS_E2E === '1') {
       const shortages = data.materials.filter(item => item.uncovered !== '0');
       for (const {sku} of shortages) {
         await page.getByRole('combobox', {name:`Supplier ${sku}`})
           .selectOption({label: 'SUP-VECTORDRIVE · VectorDrive Components GmbH'});
-        await page.getByRole('textbox', {name:`Unit price (EUR) ${sku}`}).fill('2.00');
+        await page.getByRole('textbox', {name:`Unit price (EUR) ${sku}`}).fill(`${unitPrice}.00`);
       }
       await page.getByRole('button', {name:'Save draft purchase terms'}).click();
-      const total = 2 * shortages.reduce((sum, item) => sum + Number(item.uncovered), 0);
+      const total = unitPrice * shortages.reduce((sum, item) => sum + Number(item.uncovered), 0);
       await expect(page.getByText(`Revision: 1 · Draft total: EUR ${total}.00`)).toBeVisible();
       await expect(page.getByRole('button', {name:'Save draft purchase terms'})).toBeDisabled();
     }
@@ -66,8 +67,14 @@ test('fixture: review and confirm a saved order in the authorized scope', async 
     await row.getByRole('link', {name:'Check reservation'}).click();
     await expect(proposalRef).toHaveText(stableRef);
     if (process.env.ERP4US_PURCHASE_TERMS_E2E === '1') {
-      const total = 2 * data.materials.reduce((sum, item) => sum + Number(item.uncovered), 0);
+      const total = unitPrice * data.materials.reduce((sum, item) => sum + Number(item.uncovered), 0);
       await expect(page.getByText(`Revision: 1 · Draft total: EUR ${total}.00`)).toBeVisible();
+      if (process.env.ERP4US_BUDGET_APPROVAL_E2E === '1') {
+        const budget = page.getByRole('region', {name:'Budget approval'});
+        await expect(budget.getByText('Department approval · Pending', {exact:true})).toBeVisible();
+        await expect(budget.getByText('Budget approval · Pending', {exact:true})).toBeVisible();
+        await expect(budget.getByRole('button', {name:/Approve stage/})).toHaveCount(0);
+      }
     }
   }
   await page.getByLabel('Company and organization').selectOption({index: 2});
