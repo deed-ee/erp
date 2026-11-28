@@ -8,6 +8,8 @@ Use the existing [RFC process](../../GOVERNANCE.md#rfc-process). A research tick
 | [Conversions #56](https://github.com/erp4us-org/erp4us/issues/56) | Fixed pack versus measured timber volume and mass | Unit steward and Inventory posting owner |
 | [Translation review #57](https://github.com/erp4us-org/erp4us/issues/57) | Source revised while a translation candidate is awaiting approval | Resource owner and localization reviewers |
 | [Business numbers #59](https://github.com/erp4us-org/erp4us/issues/59) | Cancelled draft and simultaneous confirmations in two entities | Document owner with local finance reviewer |
+| [NovaMotion execution](novamotion-execution-preview.md) | One ship-complete dispatch versus six plus four under explicit split delivery terms | Manufacturing, Inventory, and fulfillment owners |
+| [Private PDF release #17](preview-document-release.md) | Interrupted replacement of shipment evidence versus a service-only completion report | Documents, fulfillment, and security reviewers |
 
 Do not reopen ADR 0002 to choose a different messaging platform. The outstanding question is how long replay evidence is kept and how its effects are reconciled. Likewise, ADR 0001 decides service ownership, not the master-data override policy.
 
