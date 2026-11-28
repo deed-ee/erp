@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 test.use({ ignoreHTTPSErrors: true }); // Only for the locally generated preview certificate.
 
-async function login(page: Page, user: 'production' | 'auditor' | 'platform-monitor') {
+async function login(page: Page, user: 'production' | 'auditor' | 'platform-monitor' | 'department-approver' | 'budget-approver') {
   const passwords: Record<string, string> = JSON.parse(readFileSync('../.erp4us-preview/credentials.json', 'utf8'));
   await page.goto('/local-access');
   await page.getByRole('button', { name: 'Sign in with Keycloak' }).click();
@@ -69,8 +69,9 @@ test('real OIDC: platform monitor sees actual application health', async ({ page
   await expect(page.getByText('Seconds since last receipt', { exact: true })).toBeVisible();
 });
 
-test('real OIDC: production user saves, confirms and reopens a priced sales order', async ({ page }) => {
+test('real OIDC: production user saves, confirms and reopens a priced sales order', async ({ page, browser }) => {
   test.skip(process.env.ERP4US_REAL_OIDC_E2E !== '1', 'Requires the dedicated Keycloak preview stack');
+  if (process.env.ERP4US_BUDGET_APPROVAL_E2E === '1') test.setTimeout(70000);
   await login(page, 'production');
   await page.getByRole('link', { name: 'Sales orders' }).click();
   await expect(page.getByRole('option', { name: /CUS-ATLAS/ })).toHaveCount(1);
@@ -142,6 +143,31 @@ test('real OIDC: production user saves, confirms and reopens a priced sales orde
   if (process.env.ERP4US_PURCHASE_TERMS_E2E === '1') {
     await expect(page.getByText(/Draft total: EUR 1882\.40/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save draft purchase terms' })).toBeDisabled();
+  }
+  if (process.env.ERP4US_BUDGET_APPROVAL_E2E === '1') {
+    await expect(page.getByRole('button', { name: /Approve stage/ })).toHaveCount(0);
+    for (const [user, stage] of [
+      ['department-approver', 'Department approval'], ['budget-approver', 'Budget approval'],
+    ] as const) {
+      const context = await browser.newContext({ ignoreHTTPSErrors: true });
+      try {
+        const approver = await context.newPage();
+        await login(approver, user);
+        await approver.getByRole('link', { name: 'Sales orders' }).click();
+        await approver.getByRole('row').filter({hasText:id}).getByRole('link', { name:'Check reservation' }).click();
+        await expect(approver.getByText(/Reviewed draft total: EUR 1882\.40/)).toBeVisible();
+        await expect(approver.getByRole('button', { name:'Save draft purchase terms' })).toHaveCount(0);
+        await approver.getByRole('button', {name:`Approve stage: ${stage}`}).click();
+        await expect(approver.getByText(`${stage} · Approved`, {exact:true})).toBeVisible();
+        if (user === 'department-approver') {
+          await expect(approver.getByText('Budget approval · Pending', {exact:true})).toBeVisible();
+        }
+      } finally {
+        await context.close();
+      }
+    }
+    await page.getByRole('button', {name:'Refresh approvals'}).click();
+    await expect(page.getByText('All required stages are approved. No order has been issued.')).toBeVisible();
   }
   await expect(page.getByRole('button', { name: /place|approve/i })).toHaveCount(0);
 });

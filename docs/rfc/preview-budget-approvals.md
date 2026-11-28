@@ -1,6 +1,6 @@
 # Staged purchase approvals for the NovaMotion preview
 
-Scope: [#23](https://github.com/erp4us-org/erp4us/issues/23), [PUR-001](../requirements/catalog/PUR.yaml), and [First Working ERP #119](https://github.com/erp4us-org/erp4us/issues/119). The maintainer confirmed separate purchasing/receiving authority for this local scenario and clarified that budget approvals can require more than one level. The exact limits, role assignments, and distinction between preview and production rules remain explicit configuration decisions.
+Scope: [#23](https://github.com/erp4us-org/erp4us/issues/23), [PUR-001](../requirements/catalog/PUR.yaml), and [First Working ERP #119](https://github.com/erp4us-org/erp4us/issues/119). The [recorded preview direction](https://github.com/erp4us-org/erp4us/issues/23#issuecomment-7237683084) confirms separate purchasing/receiving authority and multi-level budget approvals. The exact limits, role assignments, and distinction between preview and production rules remain explicit configuration decisions.
 
 **Requirement:** a scoped buyer cannot issue a purchase based on a shortage or draft alone. Approve the complete immutable terms snapshot, then issue through a separate authorized action only when every required stage is satisfied. A changed supplier, price, quantity, or terms/policy revision cannot use the previous approval. The maker of the terms cannot approve that revision in this preview. Recording approval alone takes no stock, does not issue an order and does not contact suppliers.
 

@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { LucideArrowRight, LucideRefreshCw, LucideSave } from '@lucide/angular';
 import { ArticleApi, isArticleId } from './article-api';
+import { BudgetApprovalPanel } from './budget-approval';
 import type { Message } from './messages';
 import { Preferences } from './preferences';
 import { Feedback } from './ui';
@@ -21,7 +22,7 @@ const cents = /^(?:0|[1-9][0-9]{0,6})\.[0-9]{2}(?![\s\S])/;
 
 @Component({
   selector: 'erp-procurement-terms',
-  imports: [Feedback, LucideArrowRight, LucideRefreshCw, LucideSave],
+  imports: [Feedback, LucideArrowRight, LucideRefreshCw, LucideSave, BudgetApprovalPanel],
   template: `
     <section class="terms">
       <h4>{{ t()('purchaseTerms') }}</h4>
@@ -40,6 +41,8 @@ const cents = /^(?:0|[1-9][0-9]{0,6})\.[0-9]{2}(?![\s\S])/;
             }
           </tbody>
         </table>
+        <erp-budget-approval
+          [planId]="terms.plan_id" [proposalId]="terms.proposal_id" [termsRevision]="terms.revision" />
       }
       @if (api.canEditProposalTerms() && loaded()) {
         <form (submit)="save($event)">

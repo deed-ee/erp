@@ -21,6 +21,12 @@ NOVA = ("ddcae139-c1e8-47d2-8b48-349cb6f30ce5", "3e793fb5-75a7-45f6-8f66-45a58fc
 OTHER = ("a260610d-ebcf-4bb7-b871-9d221ace30a8", "2886c61e-85d8-4688-813a-b59c6641f9f8")
 USERS = {"production": "142a290f-4bbc-438e-aefe-e3697a8bcd16", "auditor": "154474cf-c105-473e-9843-38dd023d8a39",
          "platform-monitor": "163494cf-c105-473e-9843-38dd023d8a39"}
+APPROVERS = {
+    "department-approver": ("f54dff7f-ac9b-4551-b7f1-c60b58dcb360", "department"),
+    "budget-approver": ("0c875371-a771-4f09-b781-e040d251ab2a", "budget"),
+}
+if os.getenv("ERP4US_PREVIEW_BUDGET_APPROVALS") == "1":
+    USERS.update({name: subject for name, (subject, _) in APPROVERS.items()})
 
 
 def save(path, value, mode=0o600):
@@ -35,7 +41,7 @@ def grant(scope, permissions):
 
 
 def identity_policy():
-    return {"issuer": ISSUER, "audience": AUDIENCE, "principals": {
+    principals = {
         USERS["production"]: {"actor_id": USERS["production"], "grants": [grant(NOVA, [
             "manufacturing.plan.read", "master-data.article.read", "master-data.article.register",
             "master-data.partner.read", "master-data.unit.read", "sales.order.read", "sales.order.draft.create",
@@ -47,7 +53,14 @@ def identity_policy():
         USERS["auditor"]: {"actor_id": USERS["auditor"], "grants": [grant(OTHER, ["master-data.article.read"])]},
         USERS["platform-monitor"]: {"actor_id": USERS["platform-monitor"], "grants": [],
                                     "platform_permissions": ["platform.health.read"]},
-    }}
+    }
+    for username, (subject, stage) in APPROVERS.items():
+        if username in USERS:
+            principals[subject] = {"actor_id": subject, "grants": [grant(NOVA, [
+                "sales.order.read", "inventory.reservation.read", "inventory.material-plan.read",
+                "procurement.proposal.read", f"procurement.approval.{stage}",
+            ])]}
+    return {"issuer": ISSUER, "audience": AUDIENCE, "principals": principals}
 
 
 def prepare():

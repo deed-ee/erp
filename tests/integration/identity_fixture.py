@@ -95,6 +95,28 @@ def initialize():
             "grants": [{"tenant_id": TENANT, "organization_id": OTHER_ORGANIZATION,
                         "permissions": ["master-data.partner.read", "master-data.partner.register"]}],
         },
+        "synthetic-department-approver": {
+            "actor_id": "f54dff7f-ac9b-4551-b7f1-c60b58dcb360",
+            "grants": [{"tenant_id": TENANT, "organization_id": ORGANIZATION,
+                        "permissions": ["procurement.proposal.read", "procurement.approval.department",
+                                        "procurement.approval.budget"]}],
+        },
+        "synthetic-budget-approver": {
+            "actor_id": "0c875371-a771-4f09-b781-e040d251ab2a",
+            "grants": [
+                {"tenant_id": TENANT, "organization_id": ORGANIZATION,
+                 "permissions": ["procurement.proposal.read", "procurement.approval.budget"]},
+                {"tenant_id": TENANT, "organization_id": OTHER_ORGANIZATION,
+                 "permissions": ["procurement.proposal.read", "procurement.approval.budget"]},
+            ],
+        },
+        "synthetic-dual-role-buyer": {
+            # Subject alias for the original actor: even with the stage grant
+            # the person who prepared this exact revision cannot approve it.
+            "actor_id": ACTOR,
+            "grants": [{"tenant_id": TENANT, "organization_id": ORGANIZATION,
+                        "permissions": ["procurement.proposal.read", "procurement.approval.department"]}],
+        },
         "synthetic-platform": {"actor_id": "263494cf-c105-473e-9843-38dd023d8a39",
                                "grants": [], "platform_permissions": ["platform.health.read"]},
         "synthetic-registration": {"actor_id": "935c486c-37bc-4408-9629-7857100ba57c",

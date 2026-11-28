@@ -74,6 +74,12 @@ def exercise(proposal):
         assert saved["line_total"] == f"{Decimal(saved['unit_price']) * int(saved['pieces']):.2f}"
         assert saved["supplier"] == {key: supplier[key] for key in ("id", "code", "name")}
 
+    approval_command = None
+    if os.getenv("ERP4US_BUDGET_APPROVAL_E2E") == "1":
+        from procurement_approval import exercise as exercise_approval
+
+        approval_command = exercise_approval(proposal, created)
+
     stale = {**command, "command_id": str(uuid4())}
     assert terms(stale)[0] == 409
     changed = deepcopy(command)
@@ -92,6 +98,10 @@ def exercise(proposal):
     wait_until_ready(PROCUREMENT)
     assert terms(bearer=observer)[2] == latest
     assert terms(scope=(OTHER_TENANT, EXTERNAL_ORGANIZATION))[0] == 404
+    if approval_command is not None:
+        from procurement_approval import check_superseded
+
+        check_superseded(proposal, latest, approval_command)
 
     try:
         manage("stop", "master-data")

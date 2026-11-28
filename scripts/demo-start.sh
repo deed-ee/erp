@@ -1,6 +1,13 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
+if [ "${ERP4US_PREVIEW_BUDGET_APPROVALS:-0}" = "1" ]; then
+    : "${ERP4US_PROCUREMENT_BUDGET_POLICY_FILE:?Select an approved preview budget policy file}"
+    if [ ! -f "$ERP4US_PROCUREMENT_BUDGET_POLICY_FILE" ] || [ ! -r "$ERP4US_PROCUREMENT_BUDGET_POLICY_FILE" ]; then
+        printf '%s\n' 'Cannot read the selected preview budget policy file.' >&2
+        exit 1
+    fi
+fi
 python3 scripts/preview-identity.py prepare
 export ERP4US_IDENTITY_DIR=./.erp4us-preview
 export ERP4US_ENV_FILE="$PWD/.erp4us-preview/compose.env"
@@ -16,6 +23,9 @@ for key in DEV_NATS_DIAGNOSTICS_PASSWORD DEV_SALES_MONGO_PASSWORD DEV_NATS_SALES
     fi
 done
 compose() {
+    if [ "${ERP4US_PREVIEW_BUDGET_APPROVALS:-0}" = "1" ]; then
+        set -- -f compose.procurement-approvals.yaml "$@"
+    fi
     docker compose -p erp4us-preview --env-file "$ERP4US_ENV_FILE" \
         -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml \
         -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml \
