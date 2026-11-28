@@ -442,6 +442,8 @@ fn subtract(left: i32, right: i32) -> Option<i32> {
 mod tests;
 
 #[cfg(test)]
+mod application;
+#[cfg(test)]
 mod mongo;
 #[cfg(test)]
 mod source;

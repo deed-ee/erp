@@ -223,14 +223,10 @@ fn version(document: &Document) -> Result<(), Reject> {
         .ok_or(Reject::InvalidState)
 }
 
-/// Inspect the stored netting snapshot, never availability, for the original buy row.
-/// A live reservation still linked to this exact snapshot is the preview's waiting guard.
-pub(super) fn original(
+pub(super) fn plan_header(
     record: &Document,
     sales: SalesLine,
-    issued_plan: Uuid,
-    issued_item: &Item,
-) -> Result<(PlanRow, Document), Reject> {
+) -> Result<(&Document, Uuid, Uuid), Reject> {
     version(record)?;
     let key = sales_key(sales);
     let plan = field(record.get_document("plan"))?;
@@ -243,6 +239,18 @@ pub(super) fn original(
     {
         return Err(Reject::InvalidState);
     }
+    Ok((plan, plan_id, warehouse))
+}
+
+/// Inspect the stored netting snapshot, never availability, for the original buy row.
+/// A live reservation still linked to this exact snapshot is the preview's waiting guard.
+pub(super) fn original(
+    record: &Document,
+    sales: SalesLine,
+    issued_plan: Uuid,
+    issued_item: &Item,
+) -> Result<(PlanRow, Document), Reject> {
+    let (plan, plan_id, warehouse) = plan_header(record, sales)?;
     if plan_id != issued_plan {
         return Err(Reject::InvalidSource);
     }
@@ -273,7 +281,7 @@ pub(super) fn original(
         return Err(Reject::InvalidState);
     }
     let guard = doc! {
-        "_id": key, "schemaVersion": SCHEMA, "materialPlanId": plan_id.to_string(),
+        "_id": sales_key(sales), "schemaVersion": SCHEMA, "materialPlanId": plan_id.to_string(),
         "sourceEventId": id(plan, "source_event_id")?.to_string(), "stock": stock_key(&source_stock),
         "outstanding": outstanding, "cancellation": {"$exists": false},
     };

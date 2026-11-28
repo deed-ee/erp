@@ -7,6 +7,9 @@ use erp4us_identity::Scope;
 use serde::{Deserialize, Deserializer, de};
 use uuid::Uuid;
 
+pub(super) use owner::Receiver;
+#[cfg(test)]
+pub(super) use owner::tests::{fixture_auth, fixture_headers};
 mod owner;
 
 const MAX_LINES: usize = 32;
@@ -53,7 +56,7 @@ fn explicit_revision<'de, D: Deserializer<'de>>(input: D) -> Result<Option<Strin
 }
 
 #[derive(Debug)]
-struct Selected {
+pub(super) struct Selected {
     scope: Organization,
     actor: Uuid,
     plan: Uuid,
@@ -63,7 +66,7 @@ struct Selected {
 }
 
 impl Selected {
-    fn as_issued(&self) -> IssuedLine<'_> {
+    pub(super) fn as_issued(&self) -> IssuedLine<'_> {
         IssuedLine {
             scope: self.scope,
             actor: self.actor,

@@ -41,7 +41,7 @@ mod fact;
 mod records;
 mod tests;
 
-use fact::ActorKind;
+pub(super) use fact::ActorKind;
 use records::{
     SCHEMA, purchase_key, receipt_key, receipt_ref, row_key, sales_key, selection_key, stock_key,
 };
@@ -78,14 +78,14 @@ impl Allocation {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct Saved {
+pub(super) struct Saved {
     effect: ReceiptEffect,
     posted_at: DateTime,
     message_id: Uuid,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct Intent {
+pub(super) struct Intent {
     command: Command,
     acknowledged: Option<Uuid>,
     plan: Uuid,
@@ -100,13 +100,13 @@ impl Intent {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Prepare {
+pub(super) enum Prepare {
     Created(Intent),
     Replay(Intent),
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Post {
+pub(super) enum Post {
     Created(Saved),
     Replay(Saved),
 }
@@ -130,7 +130,7 @@ struct CheckedLot {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Failure {
+pub(super) enum Failure {
     Rejected(Reject),
     /// Includes unknown commit outcome. Retry the same preparation or confirmation.
     Unavailable,
@@ -177,7 +177,7 @@ fn purchase_index() -> IndexModel {
 }
 
 #[derive(Clone)]
-struct Store {
+pub(super) struct Store {
     db: Database,
     posting_slots: Arc<Semaphore>,
 }
@@ -226,7 +226,7 @@ impl Store {
     /// Check before any plan, destination or Procurement lookup. Only a
     /// current prepared receipt returns `None` and permits source verification.
     /// The caller must already have verified current receiver authorization.
-    async fn replay(&self, command: Command) -> Result<Option<Saved>, Failure> {
+    pub(super) async fn replay(&self, command: Command) -> Result<Option<Saved>, Failure> {
         self.read_snapshot(async |session| {
             Ok(self
                 .confirmation_target(session, command)
@@ -237,13 +237,16 @@ impl Store {
         .await
     }
 
-    async fn reopen(&self, selection: Selection) -> Result<Option<Intent>, Failure> {
+    pub(super) async fn reopen(&self, selection: Selection) -> Result<Option<Intent>, Failure> {
         self.read_snapshot(async |session| self.current(session, selection).await)
             .await
     }
 
     /// Called before looking up any owner source to create a new intent.
-    async fn prepare_replay(&self, request: Preparation) -> Result<Option<Intent>, Failure> {
+    pub(super) async fn prepare_replay(
+        &self,
+        request: Preparation,
+    ) -> Result<Option<Intent>, Failure> {
         self.read_snapshot(async |session| {
             let current = self.current(session, request.selection).await?;
             match prepare_action(request, current.as_ref().map(Intent::state))? {
@@ -252,6 +255,25 @@ impl Store {
             }
         })
         .await
+    }
+
+    /// Resolve the Inventory-owned plan for the exact, already authorized Sales line.
+    /// Confirmation still rechecks the original plan, mapping and line in its write transaction.
+    pub(super) async fn plan_destination(&self, sales: SalesLine) -> Result<(Uuid, Uuid), Failure> {
+        timeout(DB_LIMIT, async {
+            let document = self
+                .majority_read("material_plans")
+                .find_one(doc! {"_id": sales_key(sales)})
+                .max_time(DB_LIMIT)
+                .await
+                .map_err(|_| Failure::Unavailable)?
+                .ok_or(Failure::Rejected(Reject::NotFound))?;
+            records::plan_header(&document, sales)
+                .map(|(_, plan, warehouse)| (plan, warehouse))
+                .map_err(Failure::Rejected)
+        })
+        .await
+        .map_err(|_| Failure::Unavailable)?
     }
 
     async fn read_snapshot<T>(
@@ -388,7 +410,7 @@ impl Store {
         .map_err(|_| Failure::Unavailable)?
     }
 
-    async fn post(
+    pub(super) async fn post(
         &self,
         command: Command,
         issued: &IssuedLine<'_>,
@@ -404,7 +426,7 @@ impl Store {
         }
     }
 
-    async fn prepare(
+    pub(super) async fn prepare(
         &self,
         request: Preparation,
         issued: &IssuedLine<'_>,

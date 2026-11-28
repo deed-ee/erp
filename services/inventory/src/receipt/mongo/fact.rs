@@ -10,7 +10,7 @@ use uuid::Uuid;
 /// Must come from verified actor context, not the receipt request.
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(super) enum ActorKind {
+pub(in crate::receipt) enum ActorKind {
     User,
     Service,
     Agent,

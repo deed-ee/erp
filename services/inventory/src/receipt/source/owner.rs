@@ -24,13 +24,16 @@ const POST_PERMISSION: &str = "inventory.purchase-receipt.post";
 const UNAVAILABLE: StatusCode = StatusCode::SERVICE_UNAVAILABLE;
 const OWNER_TIMEOUT: Duration = Duration::from_secs(3);
 
-struct Receiver {
+pub(in crate::receipt) struct Receiver {
     identity: Scope,
     bearer: HeaderValue,
 }
 
 impl Receiver {
-    fn verify(auth: &Auth, incoming: &HeaderMap) -> Result<Self, StatusCode> {
+    pub(in crate::receipt) fn verify(
+        auth: &Auth,
+        incoming: &HeaderMap,
+    ) -> Result<Self, StatusCode> {
         let identity = crate::query::authorize(auth, incoming, POST_PERMISSION)?;
         for (header, id) in [
             (TENANT_HEADER, identity.tenant),
@@ -54,6 +57,10 @@ impl Receiver {
         Ok(Self { identity, bearer })
     }
 
+    pub(in crate::receipt) fn scope(&self) -> Scope {
+        self.identity
+    }
+
     /// Only fixed, origin-form requests; no browser destination or headers are copied.
     fn request(&self, plan: Uuid) -> Result<Request<()>, StatusCode> {
         if plan.is_nil() {
@@ -72,7 +79,7 @@ impl Receiver {
 
     /// The future runtime caller must pass the fixed Compose peer selected by
     /// the operator, never an origin from the request. There is no redirect.
-    async fn fetch(
+    pub(in crate::receipt) async fn fetch(
         &self,
         peer: impl ToSocketAddrs,
         plan: Uuid,
@@ -140,7 +147,7 @@ async fn read_owner(response: Response<Body>) -> Result<Bytes, StatusCode> {
 mod receipt_identity;
 
 #[cfg(test)]
-mod tests {
+pub(in crate::receipt) mod tests {
     use super::{receipt_identity::*, *};
     use axum::{Json, Router, routing::get};
     use serde_json::json;
@@ -157,17 +164,30 @@ mod tests {
     };
     const SOURCE_PERMISSION: &str = "procurement.purchase-order.receipt-source.read";
 
-    fn owner_auth(audience: &str, permissions: &[&str]) -> Auth {
+    const SCOPE: Scope = Scope {
+        tenant: TENANT,
+        organization: ORG,
+        actor: ACTOR,
+    };
+
+    pub(in crate::receipt) fn fixture_auth(
+        scope: Scope,
+        audience: Option<&str>,
+        permissions: &[&str],
+    ) -> Auth {
         let folder = std::env::temp_dir().join(format!("inventory-owned-auth-{}", Uuid::new_v4()));
         fs::create_dir(&folder).unwrap();
         let policy = folder.join("policy.json");
         let jwks = folder.join("jwks.json");
         let config = json!({
             "issuer": ISSUER,
-            "audience": audience,
+            "audience": audience.unwrap_or(AUDIENCE),
             "principals": {(SUBJECT): {
-                "actor_id": ACTOR,
-                "grants": [{"tenant_id": TENANT, "organization_id": ORG, "permissions": permissions}]
+                "actor_id": scope.actor,
+                "grants": [{
+                    "tenant_id": scope.tenant, "organization_id": scope.organization,
+                    "permissions": permissions,
+                }]
             }}
         });
         fs::write(&policy, config.to_string()).unwrap();
@@ -179,12 +199,23 @@ mod tests {
         auth.unwrap()
     }
 
-    fn headers() -> HeaderMap {
+    pub(in crate::receipt) fn fixture_headers(scope: Scope) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert(header::AUTHORIZATION, HeaderValue::from_static(BEARER));
-        headers.insert(TENANT_HEADER, TENANT.to_string().parse().unwrap());
-        headers.insert(ORGANIZATION_HEADER, ORG.to_string().parse().unwrap());
+        headers.insert(TENANT_HEADER, scope.tenant.to_string().parse().unwrap());
+        headers.insert(
+            ORGANIZATION_HEADER,
+            scope.organization.to_string().parse().unwrap(),
+        );
         headers
+    }
+
+    fn owner_auth(audience: &str, permissions: &[&str]) -> Auth {
+        fixture_auth(SCOPE, Some(audience), permissions)
+    }
+
+    fn headers() -> HeaderMap {
+        fixture_headers(SCOPE)
     }
 
     #[test]

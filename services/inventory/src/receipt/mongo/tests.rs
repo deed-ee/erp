@@ -1038,6 +1038,147 @@ async fn mongo_recovers_the_same_lot_until_deliberately_advancing_the_current_in
 }
 
 #[tokio::test]
+#[ignore = "requires INVENTORY_RECEIPT_TEST_MONGO_URI for a dedicated disposable replica set"]
+async fn mongo_application_replays_before_contacting_the_owner() {
+    use crate::receipt::{
+        application::{self, Line, Receiving},
+        source::{fixture_auth, fixture_headers},
+    };
+    use axum::{Json, Router, http::HeaderMap, http::StatusCode, routing::get};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use tokio::{net::TcpListener, task::JoinSet};
+
+    const POST: &str = "inventory.purchase-receipt.post";
+    const SOURCE: &str = "procurement.purchase-order.receipt-source.read";
+    let (uri, db, drop_database) = receipt_fixture().await;
+    let store = Store::open(&db).await.unwrap();
+    let sample = command(SCOPE, 11, "6");
+    let stock = stock(sample, "NM-ENDPLATE");
+    seed_waiting_endplates(&db, sample, &stock_key(&stock)).await;
+    let line = Line {
+        order: ORDER,
+        line: LINE,
+        purchase: PURCHASE,
+    };
+    let inventory = fixture_auth(SCOPE, None, &[POST]);
+    let procurement = fixture_auth(SCOPE, None, &[SOURCE]);
+    let online = Arc::new(AtomicBool::new(true));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let app = Router::new().route(
+        &format!("/v1/procurement/proposals/by-plan/{PLAN}/purchase-orders/receipt-source"),
+        get({
+            let online = online.clone();
+            let calls = calls.clone();
+            move |headers: HeaderMap| async move {
+                calls.fetch_add(1, Ordering::Relaxed);
+                let actor = crate::query::authorize(&procurement, &headers, SOURCE)?;
+                if actor.actor != SCOPE.actor {
+                    return Err(StatusCode::FORBIDDEN);
+                }
+                if !online.load(Ordering::Relaxed) {
+                    return Err(StatusCode::SERVICE_UNAVAILABLE);
+                }
+                Ok(Json(json!({
+                    "plan_id": PLAN,
+                    "lines": [{
+                        "purchase_order_id": PURCHASE.order, "purchase_line_id": PURCHASE.line,
+                        "sku":"NM-ENDPLATE","revision":null,"unit":"EA","ordered_pieces":"12"
+                    }]
+                })))
+            }
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let peer = listener.local_addr().unwrap();
+    let mut tasks = JoinSet::new();
+    tasks.spawn(async { axum::serve(listener, app).await });
+
+    let received = Receiving::authorize(&store, &inventory, &fixture_headers(SCOPE)).unwrap();
+    let missing = Line {
+        line: Uuid::new_v4(),
+        ..line
+    };
+    assert_eq!(
+        received.prepare(missing, None, "6", peer).await,
+        Err(application::Failure::Storage(Failure::Rejected(
+            Reject::NotFound
+        )))
+    );
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
+    let Prepare::Created(pending) = received.prepare(line, None, "6", peer).await.unwrap() else {
+        panic!("expected a newly prepared intent");
+    };
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    assert_eq!(
+        received.reopen(line).await.unwrap().as_ref(),
+        Some(&pending)
+    );
+    assert_eq!(
+        received.prepare(line, None, "6", peer).await,
+        Ok(Prepare::Replay(pending))
+    );
+    let intent = received.reopen(line).await.unwrap().unwrap();
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    online.store(false, Ordering::Relaxed);
+    assert_eq!(
+        received
+            .confirm(line, intent.command.receipt_id, "6", peer)
+            .await,
+        Err(application::Failure::Owner(StatusCode::SERVICE_UNAVAILABLE))
+    );
+    assert_eq!(received.reopen(line).await.unwrap(), Some(intent));
+    assert_eq!(
+        store
+            .majority_read(RECEIPTS)
+            .count_documents(doc! {"outbox": {"$exists": true}})
+            .await
+            .unwrap(),
+        0,
+    );
+    let intent = received.reopen(line).await.unwrap().unwrap();
+    online.store(true, Ordering::Relaxed);
+    let Post::Created(original) = received
+        .confirm(line, intent.command.receipt_id, "6", peer)
+        .await
+        .unwrap()
+    else {
+        panic!("expected the original confirmed lot");
+    };
+    assert_eq!(original.effect.plan_held, 14);
+    assert_eq!(original.effect.line_open, 6);
+    assert_eq!(calls.load(Ordering::Relaxed), 3);
+    // Reconstruct Inventory's client and authenticate the same actor again. The
+    // original command and snapshot must survive while the owner is offline.
+    online.store(false, Ordering::Relaxed);
+    let reconnected = Client::with_uri_str(&uri).await.unwrap();
+    let recovered = Store::open(&test_database(&reconnected, db.name()))
+        .await
+        .unwrap();
+    let received = Receiving::authorize(&recovered, &inventory, &fixture_headers(SCOPE)).unwrap();
+    let after = received.reopen(line).await.unwrap().unwrap();
+    assert_eq!(after.confirmed.as_deref(), Some(&original));
+    assert_eq!(
+        received
+            .confirm(line, intent.command.receipt_id, "6", peer)
+            .await,
+        Ok(Post::Replay(original)),
+    );
+    assert_eq!(calls.load(Ordering::Relaxed), 3);
+    assert_eq!(
+        recovered
+            .majority_read(LEDGER)
+            .count_documents(doc! {"_id.kind": "purchase-receipt"})
+            .await
+            .unwrap(),
+        1,
+    );
+    tasks.shutdown().await;
+    if drop_database {
+        db.drop().await.unwrap();
+    }
+}
+
+#[tokio::test]
 #[ignore = "requires disposable loopback Mongo replica set and empty JetStream; run before Procurement transport test"]
 async fn receipt_transport_publish_committed_inventory_outbox() {
     let (db, jetstream) = transport::connect("inventory").await;

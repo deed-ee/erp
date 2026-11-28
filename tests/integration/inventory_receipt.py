@@ -13,6 +13,7 @@ def main():
     tests = tuple(module + case for case in (
         'mongo_competing_lots_and_rollback_keep_all_effects_atomic',
         'mongo_recovers_the_same_lot_until_deliberately_advancing_the_current_intent',
+        'mongo_application_replays_before_contacting_the_owner',
     ))
     cargo = ['cargo', 'test', '--locked', '-p', 'inventory']
     # Check the exact names before starting Docker: libtest succeeds if zero match.
