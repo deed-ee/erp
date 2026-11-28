@@ -33,6 +33,8 @@ RUN git init --quiet \
     && test "$(git rev-parse FETCH_HEAD)" = e514445f9dcdabc5bdcf67cab56c1e49655de067 \
     && git checkout --quiet --detach FETCH_HEAD
 COPY guava-dependency.patch /tmp/guava-dependency.patch
+# Kiota generates the upstream TypeScript admin client and needs ICU at build time.
+RUN dnf install -y libicu && dnf clean all
 RUN git apply --check /tmp/guava-dependency.patch \
     && git apply /tmp/guava-dependency.patch \
     && /opt/apache-maven-3.9.16/bin/mvn --batch-mode --no-transfer-progress -T1 \
