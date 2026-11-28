@@ -62,6 +62,9 @@ test('real OIDC: platform monitor sees actual application health', async ({ page
   await expect(page.getByRole('row').filter({ hasText: 'jetstream' }).getByRole('cell', { name: 'Ready', exact: true })).toBeVisible();
   await expect(page.getByText('Stored messages', { exact: true })).toBeVisible();
   await expect(page.getByText('Awaiting acknowledgement', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Article Relay heartbeat' })).toBeVisible();
+  await expect(page.getByText('Heartbeat received recently', { exact: true })).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText('Seconds since last receipt', { exact: true })).toBeVisible();
 });
 
 test('real OIDC: production user saves, confirms and reopens a priced sales order', async ({ page }) => {

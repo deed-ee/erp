@@ -187,7 +187,7 @@ jobs:
           compose run --rm master-data-seed
           python3 tests/integration/manufacturing.py
           python3 tests/integration/preview_partners.py
-      - name: Exercise platform diagnostics across a real stop and restart
+      - name: Exercise platform diagnostics and relay heartbeats across a stop and restart
         run: |
           docker compose -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.diagnostics.yaml up --no-build -d diagnostics
           python3 tests/integration/diagnostics.py
@@ -269,7 +269,7 @@ jobs:
           # A foreground one-shot returns the initializer's exit status even if
           # it exits before Compose could attach a separate wait operation.
           preview run --rm --no-deps -T delivery-init
-          preview up --no-build -d master-data manufacturing sales sales-relay diagnostics inventory procurement
+          preview up --no-build -d master-data manufacturing sales sales-relay diagnostics inventory procurement article-relay
           preview run --rm manufacturing-seed
           preview run --rm master-data-seed
           preview run --rm -T inventory-seed

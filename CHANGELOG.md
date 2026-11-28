@@ -10,6 +10,7 @@
 - Added replay-safe Inventory consumption and a linked reservation view with actual reserved and outstanding finished-goods quantities.
 - Added persisted material netting against pinned multilevel BOMs. Planning reserves available components and shows uncovered production and purchase quantities without creating orders.
 - Added authorized shortage handoff through JetStream and scoped, replay-safe Procurement proposal drafts. No approval or purchase order is created.
+- Added Article Relay heartbeat visibility to platform diagnostics, separate from readiness and runtime state.
 - Pinned Debian's `libzstd1` security update in the service images while the upstream Bookworm image still ships the earlier package.
 - Replaced the shared demo bearer token with verified OAuth access tokens and per-operation grants scoped to the tenant and organization.
 - Added a local German/English Angular workspace for registering and retrieving articles, with labeled icon buttons and a keyboard-driven browser scenario.

@@ -15,6 +15,8 @@ from smoke import env, request
 ORIGIN = f"http://127.0.0.1:{os.getenv('ERP4US_DIAGNOSTICS_PORT', '8091')}"
 COMPOSE = ["docker", "compose", "-f", "compose.yaml", "-f", "compose.delivery.yaml",
            "-f", "compose.manufacturing.yaml", "-f", "compose.diagnostics.yaml"]
+HEARTBEAT = "v1.diagnostics.system.article-delivery.event.service.heartbeat.v1"
+FOREIGN_HEARTBEATS = "v1.diagnostics.system.*.event.service.heartbeat.v1"
 
 
 def query(credential=None):
@@ -48,14 +50,67 @@ def check_broker_permissions():
         "$JS.API.STREAM.MSG.GET.ERP4US_BUSINESS_EVENTS_V1",
         f"$JS.API.STREAM.DELETE.DIAG_NOT_A_REAL_STREAM_{uuid4().hex}",
         "$JS.API.CONSUMER.MSG.NEXT.ERP4US_BUSINESS_EVENTS_V1.article-receipts",
+        "v1.config.system.article-delivery.event.heartbeat.changed.v1",
+        HEARTBEAT,
     )
     # Test the delete ACL without targeting a real stream.
     output = broker_probe(COMPOSE, "platform_diagnostics", env["DEV_NATS_DIAGNOSTICS_PASSWORD"], [
-        "SUB _INBOX.article-consumer.> 1",
+        "SUB _INBOX.article-consumer.> 1", f"SUB {FOREIGN_HEARTBEATS} 2",
         *(command for subject in subjects for command in (f"PUB {subject} 1", "!")),
     ])
-    for denied in (*subjects, "_INBOX.article-consumer.>"):
+    for denied in (*subjects, "_INBOX.article-consumer.>", FOREIGN_HEARTBEATS):
         assert any("Permissions Violation" in line and denied in line for line in output.splitlines()), denied
+
+
+def heartbeat(credential, state, *, different_from=None):
+    def matches(report):
+        observation = report["article_relay_heartbeat"]
+        return observation["state"] == state and (
+            different_from is None or observation["instance_id"] != different_from)
+
+    return wait(credential, {}, matches)["article_relay_heartbeat"]
+
+
+def check_heartbeat(credential):
+    if os.getenv("COMPOSE_PROJECT_NAME") in (None, "", "erp4us", "erp4us-preview"):
+        raise RuntimeError("Heartbeat test needs a named isolated Compose project")
+    baseline = heartbeat(credential, "fresh")
+    delay = baseline["interval_seconds"]
+    assert isinstance(delay, int) and delay > 0
+    assert 0 <= baseline["age_seconds"] < delay * 3
+    assert baseline["instance_id"]
+
+    try:
+        subprocess.run([*COMPOSE, "stop", "article-relay"], check=True, timeout=40)
+        assert heartbeat(credential, "unavailable") == {
+            "state": "unavailable", "interval_seconds": None, "instance_id": None, "age_seconds": None,
+        }
+    finally:
+        subprocess.run([*COMPOSE, "start", "article-relay"], check=True, timeout=40)
+    resumed = heartbeat(credential, "fresh", different_from=baseline["instance_id"])
+    assert resumed["instance_id"] and resumed["interval_seconds"] == delay
+
+    result = subprocess.run(
+        [*COMPOSE, "run", "--rm", "--no-deps", "-T", "article-config-reader"],
+        capture_output=True, text=True, check=True, timeout=25,
+    )
+    config = json.loads(result.stdout)
+    assert config["heartbeatSeconds"] == delay
+
+    def set_interval(expected, seconds):
+        subprocess.run(
+            [*COMPOSE, "exec", "-T", "article-relay", "/usr/local/bin/article-delivery",
+             "set-heartbeat", str(expected), str(seconds)], check=True, timeout=25,
+        )
+
+    set_interval(config["revision"], 0)
+    try:
+        assert heartbeat(credential, "disabled") == {
+            "state": "disabled", "interval_seconds": 0, "instance_id": None, "age_seconds": None,
+        }
+    finally:
+        set_interval(config["revision"] + 1, delay)
+    assert heartbeat(credential, "fresh")["interval_seconds"] == delay
 
 
 if __name__ == "__main__":
@@ -82,8 +137,10 @@ if __name__ == "__main__":
         subprocess.run([*COMPOSE, "stop", "nats"], check=True, timeout=40)
         down = wait(credential, {"jetstream": "unreachable", "manufacturing": "ready"})
         assert down["jetstream"] == {"stream": None, "consumer": None}
+        assert down["article_relay_heartbeat"]["state"] == "unavailable"
     finally:
         subprocess.run([*COMPOSE, "start", "nats"], check=True, timeout=40)
     wait(credential, {"jetstream": "ready"},
          lambda report: (report["jetstream"]["stream"] or {}).get("messages", 0) > count)
-    print("Platform-only readiness, live counters, broker ACLs, and stop/recovery checks passed")
+    check_heartbeat(credential)
+    print("Platform-only readiness, live counters, heartbeat/recovery and broker ACLs passed")
