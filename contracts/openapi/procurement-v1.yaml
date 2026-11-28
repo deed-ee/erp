@@ -1,0 +1,85 @@
+openapi: 3.1.0
+info:
+  title: erp4us Procurement drafts
+  version: 1.0.0
+  description: Read Procurement's draft recommendation for material shortages. This API cannot approve a proposal or issue a purchase order.
+security:
+  - AccessToken: []
+paths:
+  /v1/procurement/proposals/by-plan/{plan_id}:
+    get:
+      operationId: getDraftProposalByPlan
+      description: >
+        Requires procurement.proposal.read for the verified tenant and organization.
+        A draft appears asynchronously after Inventory publishes a material plan with positive buy shortages.
+        No draft is created for plans with no buy shortages.
+      parameters:
+        - in: header
+          name: X-Erp4us-Tenant
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: X-Erp4us-Organization
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: plan_id
+          required: true
+          schema: { $ref: '#/components/schemas/Id' }
+      responses:
+        '200':
+          description: Persisted draft in the authorized scope
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Proposal' }
+        '400': { description: Invalid scope selectors or plan reference }
+        '401':
+          description: Missing or invalid bearer token
+          headers:
+            WWW-Authenticate:
+              schema: { type: string, const: Bearer }
+        '403': { description: Missing proposal read grant for the requested scope }
+        '404': { description: No proposal for that plan in the authorized scope }
+        '503': { description: Procurement storage unavailable }
+components:
+  securitySchemes:
+    AccessToken: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Id:
+      type: string
+      format: uuid
+      not: { const: '00000000-0000-0000-0000-000000000000' }
+    Sku: { type: string, pattern: '^[A-Z0-9-]{1,64}(?![\s\S])' }
+    Revision: { type: string, pattern: '^[A-Za-z0-9._-]{1,32}(?![\s\S])' }
+    Pieces: { type: string, pattern: '^(?:[1-9][0-9]{0,5}|1000000)(?![\s\S])' }
+    Proposal:
+      type: object
+      required: [proposal_id, plan_id, order_id, line_id, status, bom, lines]
+      properties:
+        proposal_id: { $ref: '#/components/schemas/Id' }
+        plan_id: { $ref: '#/components/schemas/Id' }
+        order_id: { $ref: '#/components/schemas/Id' }
+        line_id: { $ref: '#/components/schemas/Id' }
+        status: { type: string, const: draft }
+        bom:
+          type: object
+          required: [sku, revision]
+          properties:
+            sku: { $ref: '#/components/schemas/Sku' }
+            revision: { $ref: '#/components/schemas/Revision' }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: Unique per SKU and revision, sorted by SKU then revision (null first).
+          items:
+            type: object
+            required: [sku, revision, unit, pieces]
+            properties:
+              sku: { $ref: '#/components/schemas/Sku' }
+              revision:
+                oneOf:
+                  - { $ref: '#/components/schemas/Revision' }
+                  - { type: 'null' }
+              unit: { type: string, const: EA }
+              pieces: { $ref: '#/components/schemas/Pieces' }

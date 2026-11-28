@@ -1714,10 +1714,16 @@ dependencies = [
 name = "procurement"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "erp4us-identity",
+ "erp4us-messaging",
+ "futures-util",
  "mongodb",
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
