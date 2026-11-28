@@ -107,3 +107,18 @@ If the preview realm seed changes, use `sh scripts/demo-reset.sh --discard-previ
 - Durable production orders/material consumption, deliveries and stored PDF, process timeline, and business recovery evidence.
 - A [reviewed runtime inventory and redacted log boundary](https://github.com/erp4us-org/erp4us/issues/122#issuecomment-7236971940). Do not grant runtime access to any UI, gateway or business container.
 - Generate the ten-unit quantitative evidence and full browser test on a clean launch before a final maintainer review or publishing any claims.
+
+### Quantitative acceptance trace (not yet runnable end to end)
+
+Use a fresh disposable warehouse and distinct approved roles. Capture the same scoped Sales order, material plan and purchase line references throughout; do not reset stock, edit a database, or publish a broker message to make a browser step succeed. The [quantity reference test](../../tests/requirements/test_novamotion_quantitative_case.py) checks this arithmetic, not browser behavior or approval.
+
+| Checkpoint | What the browser acceptance must prove |
+|---|---|
+| Confirm and plan | Atlas: 10 × `NM-1000/A` at EUR 2,490.00, exact total EUR 24,900.00; 0 finished units held and 10 outstanding. The pinned plan starts with 8 end plates held and 12 missing. |
+| Approve and issue | Both reviews bind to the same EUR 1,882.40 terms. Neither review issues anything. The separate issuer records one order for the five lines; issued but undelivered supply does not change stock. |
+| Post the first lot | The separate receiver sees only eligible lines, not commercial terms. Six end plates give 14 held, 6 open and no new free stock. The original plan still shows 8 held/12 missing **at planning time**. Retry the same ID after an interrupted response, with no extra movement. |
+| Prove the dependency | Once its own components are held, the drive can proceed independently. The frame still needs six plates; final assembly cannot use an unproduced frame. An expected delivery or incomplete receipt projection must not be counted as a hold. |
+| Finish receipts and build | Record a **new** six-piece end-plate lot: 20 held, 0 open. A further plate is denied. Consume actual held inputs for 10 frames, 10 drives and 10 modules; the output is held for the parent or the Atlas line, not free stock. |
+| Ship and reopen | Under the proposed ship-complete terms, six cannot dispatch and ten can. End with 10 shipped, zero outstanding delivery, no scenario holds, zero finished `NM-1000/A` stock and no negatives. Reopen the same authorized shipment PDF and linked history after restart, without a second movement or document. |
+
+Run the denial cases with a wrong role, another organization and another tenant. Record unavailable or stale evidence as such; it is not measured zero. Production, dispatch, receiving activation, document storage and history remain individually gated by their linked reviews.
