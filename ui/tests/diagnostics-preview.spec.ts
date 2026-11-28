@@ -203,6 +203,13 @@ test('proposed platform diagnostics are independent, bounded and cleared with th
 
     await diagnosticLogs.getByRole('button', { name: 'Return to live logs' }).click();
     await expect(logTable).toContainText('Relay connected');
+    logResponse = route => route.fulfill({ json: { ...logWindow([plan], 'huge_body'), raw_field: 'X'.repeat(65536) } });
+    await refresh();
+    await expect(diagnosticLogs).toContainText('Diagnostic logs unavailable');
+    await expect(logTable).toHaveCount(0);
+    logResponse = route => route.fulfill({ json: logWindow([relay], 'bounded_body') });
+    await refresh();
+    await expect(logTable).toContainText('Relay connected');
     logResponse = route => route.fulfill({ json: logWindow(Array.from({ length: 101 }, () => plan), 'oversize') });
     await refresh();
     await expect(diagnosticLogs).toContainText('Diagnostic logs unavailable');

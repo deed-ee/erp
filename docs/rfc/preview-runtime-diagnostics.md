@@ -10,6 +10,8 @@ The [host observer proposal](https://github.com/erp4us-org/erp4us/issues/122#iss
 
 The observer would replace a versioned bounded artifact atomically in a dedicated host-owned directory. The Diagnostics API receives the directory read-only and no Docker socket, Docker API, proxy, elevated group, or host command path. Reject unknown shapes, excess input, source mismatch and ambiguous observations rather than rendering them as known runtime states. The UI sees a server-authorized response, never the host files, socket or Docker credentials. The artifact reader must not let a caller choose a filename, Compose project or target. Without a reviewed observer and a fresh complete artifact, the UI must not show fabricated runtime state.
 
+The [proposed HTTP view](../../contracts/openapi/diagnostics-runtime-preview-v1.yaml) and its [browser fixture](../../ui/tests/diagnostics-preview.spec.ts) demonstrate the statuses and the separate read grants for an initial three-service subset. They do not enable server endpoints, provision grants, or observe any container. The client limits record count and response bytes and never renders an upstream message body as a log line.
+
 ## Diagnostic logs
 
 As a separate read capability, accept only reviewed records from specific services (for example Manufacturing startup and Article Relay delivery backoff). On the host, project to time, service key, severity and an allowlisted diagnostic code before writing anything retained. Drop free-form, oversized, unknown or malformed records rather than trying to redact arbitrary stdout. In the browser, translate known codes; never forward raw messages, business IDs/payloads, credentials or original paths.

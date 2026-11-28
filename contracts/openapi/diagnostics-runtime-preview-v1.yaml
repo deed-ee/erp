@@ -6,7 +6,8 @@ info:
     UI and fixture proposal for issue #122, not an implemented API or an approved trust decision.
     The intended source is a bounded, sanitized artifact from an optional observer for the fixed local
     preview project. No route, observer, grant provisioning, proxy or runtime control is provided here.
-    Do not derive runtime state from HTTP, NATS or application heartbeats.
+    Do not derive runtime state from HTTP, NATS or application heartbeats. Bound each JSON
+    response body to 64 KiB in addition to the page and record shape limits.
 x-preview-proposed: true
 externalDocs:
   description: Unapproved host-observer boundary proposal for issue #122

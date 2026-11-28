@@ -60,6 +60,8 @@ def check_article_reader(api, response_schema, previous):
 validate_url(OPENAPI.as_uri())
 validate_url((ROOT / "openapi/manufacturing-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/diagnostics-v1.yaml").as_uri())
+# Syntax validation of the proposed artifact views is not implementation evidence.
+validate_url((ROOT / "openapi/diagnostics-runtime-preview-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/sales-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/inventory-v1.yaml").as_uri())
 validate_url((ROOT / "openapi/procurement-v1.yaml").as_uri())
