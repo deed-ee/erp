@@ -223,9 +223,103 @@ paths:
         '409':
           description: 'Incomplete approvals, stale terms or policy, changed command intent, or plan already issued'
         '503': { description: 'No applicable policy, storage unavailable, or commit outcome uncertain' }
+  /v1/procurement/proposals/by-plan/{plan_id}/purchase-orders/receipt-source:
+    parameters:
+      - $ref: '#/components/parameters/ReceiptTenant'
+      - $ref: '#/components/parameters/ReceiptOrganization'
+      - $ref: '#/components/parameters/ReceiptPlan'
+    get:
+      operationId: getPreviewPurchaseReceiptSource
+      x-contract-status: proposed
+      description: >
+        Proposed local preview, not implemented. For scoped receiver discovery and new Inventory
+        receipt verification only.
+        Procurement verifies the receiver's bearer identity and exact tenant and organization grant
+        procurement.purchase-order.receipt-source.read. The receiver must differ from the recorded terms
+        preparer, every approving actor and the issuer. The source contains immutable order/line tuples
+        from one issued batch, not a draft, live policy decision or received/open balance. No general
+        purchase-order read permission is implied or required. Does not expose commercial, supplier,
+        approval or audit data. Inventory uses its own call and selects exactly one tuple by both
+        purchase order and line IDs. No client-provided copy of this response can authorize a receipt.
+      responses:
+        '200':
+          description: Bounded, allowlisted receipt sources from the single scoped issuance batch
+          headers:
+            Cache-Control: { $ref: '#/components/headers/ReceiptNoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurchaseReceiptSource' }
+        '400': { description: Invalid scope selectors or plan identifier }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing scoped source grant or receiver not permitted by the separation rule }
+        '404': { description: No issued batch for the plan in the authorized scope }
+        '503': { description: The issued snapshot or separation check cannot be verified }
+  /v1/procurement/proposals/by-plan/{plan_id}/purchase-orders/{purchase_order_id}/lines/{purchase_line_id}/receipt-status:
+    parameters:
+      - $ref: '#/components/parameters/ReceiptTenant'
+      - $ref: '#/components/parameters/ReceiptOrganization'
+      - $ref: '#/components/parameters/ReceiptPlan'
+      - $ref: '#/components/parameters/ReceiptPurchaseOrder'
+      - $ref: '#/components/parameters/ReceiptPurchaseLine'
+    get:
+      operationId: getPreviewPurchaseReceiptStatus
+      x-contract-status: proposed
+      description: >
+        Proposed local preview, not implemented. Requires procurement.purchase-order.read and
+        visibility of this issued line in the verified scope. A separate, eventually consistent read;
+        issuance and receipt-source responses remain immutable. Status is derived from committed
+        Inventory receipt facts only. An observed balance is as of an applied per-line sequence,
+        not a claim that Inventory is currently caught up. No verified facts, a known gap, or an
+        unresolved reconciliation issue returns unknown (null balances), never an assumed zero.
+        Not a balance check for posting or authorization to act.
+      responses:
+        '200':
+          description: Projected status or explicit unknown for a visible issued line
+          headers:
+            Cache-Control: { $ref: '#/components/headers/ReceiptNoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurchaseReceiptStatus' }
+        '400': { description: Invalid scope selectors or plan/purchase order/purchase line identifiers }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing scoped purchase order read grant }
+        '404': { description: No matching visible issued order and line in the authorized plan and scope }
+        '503': { description: Procurement cannot safely read the issued line or its projection state }
 components:
   securitySchemes:
     AccessToken: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    ReceiptTenant:
+      in: header
+      name: X-Erp4us-Tenant
+      required: true
+      description: Selects tenant; does not grant access.
+      schema: { $ref: '#/components/schemas/CanonicalId' }
+    ReceiptOrganization:
+      in: header
+      name: X-Erp4us-Organization
+      required: true
+      description: Selects organization; does not grant access.
+      schema: { $ref: '#/components/schemas/CanonicalId' }
+    ReceiptPlan:
+      in: path
+      name: plan_id
+      required: true
+      schema: { $ref: '#/components/schemas/CanonicalId' }
+    ReceiptPurchaseOrder:
+      in: path
+      name: purchase_order_id
+      required: true
+      schema: { $ref: '#/components/schemas/CanonicalId' }
+    ReceiptPurchaseLine:
+      in: path
+      name: purchase_line_id
+      required: true
+      schema: { $ref: '#/components/schemas/CanonicalId' }
+  headers:
+    ReceiptNoStore:
+      required: true
+      schema: { type: string, const: no-store }
   responses:
     Unauthorized:
       description: Missing or invalid bearer token
@@ -259,6 +353,66 @@ components:
         - { $ref: '#/components/schemas/Revision' }
         - { type: 'null' }
     Pieces: { type: string, pattern: '^(?:[1-9][0-9]{0,5}|1000000)(?![\s\S])' }
+    PurchaseReceiptSource:
+      type: object
+      additionalProperties: false
+      required: [plan_id, lines]
+      properties:
+        plan_id: { $ref: '#/components/schemas/CanonicalId' }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 32
+          uniqueItems: true
+          description: All issued lines in the plan's batch, unique and sorted by the pair of purchase order ID and purchase line ID.
+          items:
+            type: object
+            additionalProperties: false
+            required: [purchase_order_id, purchase_line_id, sku, revision, unit, ordered_pieces]
+            properties:
+              purchase_order_id: { $ref: '#/components/schemas/CanonicalId' }
+              purchase_line_id: { $ref: '#/components/schemas/CanonicalId' }
+              sku: { $ref: '#/components/schemas/Sku' }
+              revision: { $ref: '#/components/schemas/OptionalRevision' }
+              unit: { type: string, const: EA }
+              ordered_pieces: { $ref: '#/components/schemas/Pieces' }
+    PurchaseReceiptStatus:
+      type: object
+      additionalProperties: false
+      required: [purchase_order_id, purchase_line_id, unit, ordered_pieces, state, received_pieces, open_pieces, through_receipt_sequence, projected_at]
+      properties:
+        purchase_order_id: { $ref: '#/components/schemas/CanonicalId' }
+        purchase_line_id: { $ref: '#/components/schemas/CanonicalId' }
+        unit: { type: string, const: EA }
+        ordered_pieces: { $ref: '#/components/schemas/Pieces' }
+        state: { type: string, enum: [observed, unknown] }
+        received_pieces: { type: [string, 'null'] }
+        open_pieces: { type: [string, 'null'] }
+        through_receipt_sequence: { type: [integer, 'null'] }
+        projected_at: { type: [string, 'null'], format: date-time }
+      oneOf:
+        - properties:
+            state: { const: observed }
+            received_pieces: { $ref: '#/components/schemas/Pieces' }
+            open_pieces:
+              type: string
+              pattern: '^(?:0|[1-9][0-9]{0,5}|1000000)(?![\s\S])'
+              description: Ordered minus observed received pieces; may overstate current open quantity while facts are in flight.
+            through_receipt_sequence:
+              type: integer
+              minimum: 1
+              maximum: 1000000
+              description: Last contiguous applied sequence for this line; not a broker cursor.
+            projected_at:
+              type: string
+              format: date-time
+              description: UTC time when Procurement last advanced the contiguous prefix, not the time Inventory was checked.
+        - properties:
+            state: { const: unknown }
+            received_pieces: { type: 'null' }
+            open_pieces: { type: 'null' }
+            through_receipt_sequence: { type: 'null' }
+            projected_at: { type: 'null' }
     Proposal:
       type: object
       required: [proposal_id, plan_id, order_id, line_id, status, bom, lines]
