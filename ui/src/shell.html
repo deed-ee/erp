@@ -5,36 +5,61 @@
     <span>erp<b>4</b>us</span>
   </a>
   <span class="organization"><svg lucideBuilding2 aria-hidden="true"></svg>{{ t()('scope') }}</span>
+  @if (showCommand) {
+    <erp-command-bar />
+  }
   <div class="top-actions">
-    <label class="sr-only" for="language">{{ t()('language') }}</label>
-    <select id="language" #language [value]="prefs.locale()"
-      (change)="prefs.locale.set(language.value === 'de' ? 'de' : 'en')">
-      <option value="en" lang="en">English</option><option value="de" lang="de">Deutsch</option>
-    </select>
-    <label class="sr-only" for="theme">{{ t()('theme') }}</label>
-    <select id="theme" #theme [value]="prefs.theme()"
-      (change)="prefs.theme.set(theme.value === 'light' ? 'light' : theme.value === 'dark' ? 'dark' : 'system')">
-      <option value="system">{{ t()('systemTheme') }}</option><option value="light">{{ t()('lightTheme') }}</option>
-      <option value="dark">{{ t()('darkTheme') }}</option>
-    </select>
-    <label class="sr-only" for="density">{{ t()('density') }}</label>
-    <select id="density" #density [value]="prefs.density()"
-      (change)="prefs.density.set(density.value === 'compact' ? 'compact' : 'comfortable')">
-      <option value="comfortable">{{ t()('comfortable') }}</option><option value="compact">{{ t()('compact') }}</option>
-    </select>
-    @if (loopback) { <a class="button" routerLink="/local-access">{{ t()('access') }}</a> }
+    @if (contextPanel()) {
+      <button #panelButton type="button" aria-controls="context-panel" [attr.aria-expanded]="panelOpen()"
+        (click)="togglePanel()">
+        <svg lucideCircleHelp aria-hidden="true"></svg>{{ t()('help') }}
+      </button>
+    }
+    <details #userPreferences class="user-preferences" (keydown.escape)="closePreferences($event)">
+      <summary class="button"><svg lucideSettings aria-hidden="true"></svg>{{ t()('preferences') }}</summary>
+      <div class="preferences-panel">
+        <label for="language">{{ t()('language') }}</label>
+        <select id="language" #language [value]="prefs.locale()"
+          (change)="prefs.locale.set(language.value === 'de' ? 'de' : 'en')">
+          <option value="en" lang="en">English</option><option value="de" lang="de">Deutsch</option>
+        </select>
+        <label for="theme">{{ t()('theme') }}</label>
+        <select id="theme" #theme [value]="prefs.theme()"
+          (change)="prefs.theme.set(theme.value === 'light' ? 'light' : theme.value === 'dark' ? 'dark' : 'system')">
+          <option value="system">{{ t()('systemTheme') }}</option><option value="light">{{ t()('lightTheme') }}</option>
+          <option value="dark">{{ t()('darkTheme') }}</option>
+        </select>
+        <label for="density">{{ t()('density') }}</label>
+        <select id="density" #density [value]="prefs.density()"
+          (change)="prefs.density.set(density.value === 'compact' ? 'compact' : 'comfortable')">
+          <option value="comfortable">{{ t()('comfortable') }}</option><option value="compact">{{ t()('compact') }}</option>
+        </select>
+        @if (loopback) {
+          <a class="button" routerLink="/local-access">
+            <svg lucideKeyRound aria-hidden="true"></svg>{{ t()('access') }}
+          </a>
+        }
+      </div>
+    </details>
   </div>
 </header>
 
-<div class="shell-body" [class.secondary-closed]="prefs.secondary() === 'closed'" [class.mobile-open]="mobileNav()">
+<div class="shell-body" [class.rail-closed]="prefs.rail() === 'closed'"
+  [class.secondary-closed]="prefs.secondary() === 'closed'" [class.mobile-open]="mobileNav()">
   <nav class="rail" [attr.aria-label]="t()('modules')">
+    <div id="primary-modules" class="primary-modules">
     @for (module of visible; track module.id) {
       <a class="module-link" [routerLink]="module.route" [class.selected]="current()?.id === module.id"
          [attr.aria-current]="current()?.id === module.id ? 'true' : null">
         <span aria-hidden="true"><ng-container *ngComponentOutlet="module.icon" /></span>
-        {{ t()(module.label) }}
+        <span class="module-label">{{ t()(module.label) }}</span>
       </a>
     }
+    </div>
+    <button type="button" class="rail-toggle" [attr.aria-pressed]="prefs.rail() === 'closed'"
+      (click)="prefs.rail.update(value => value === 'open' ? 'closed' : 'open')">
+      <svg lucidePanelLeft aria-hidden="true"></svg>{{ t()('mainNavigation') }}
+    </button>
   </nav>
   @if (current(); as module) {
     @if (module.groups.length) {
@@ -65,7 +90,7 @@
   }
   <div class="content" [class.with-panel]="panelOpen()">
     <main #main id="content" tabindex="-1">
-      @if (current()?.groups?.length || contextPanel()) {
+      @if (current()?.groups?.length) {
         <div class="page-controls">
           @if (current()?.groups?.length) {
             <button type="button" class="desktop-toggle" aria-controls="secondary"
@@ -77,12 +102,6 @@
               <svg lucidePanelLeft aria-hidden="true"></svg>{{ t()('navigation') }}
             </button>
           }
-          @if (contextPanel()) {
-            <button #panelButton type="button" aria-controls="context-panel" [attr.aria-expanded]="panelOpen()"
-              (click)="togglePanel()">
-              <svg lucideCircleHelp aria-hidden="true"></svg>{{ t()('help') }}
-            </button>
-          }
         </div>
       }
       <router-outlet />
@@ -91,7 +110,7 @@
       <aside class="context" id="context-panel" [hidden]="!panelOpen()" aria-labelledby="context-title" (keydown.escape)="closePanel()">
         <div class="panel-heading">
           <h2 #panelTitle id="context-title" tabindex="-1">{{ t()(panel.title) }}</h2>
-          <button type="button" [attr.aria-label]="t()('close')" (click)="closePanel()"><svg lucideX aria-hidden="true"></svg></button>
+          <button type="button" (click)="closePanel()"><svg lucideX aria-hidden="true"></svg>{{ t()('close') }}</button>
         </div>
         <ng-container *ngComponentOutlet="panel.component" />
       </aside>
@@ -99,6 +118,6 @@
   </div>
 </div>
 <footer class="statusbar">
-  <span class="status-environment">{{ t()('local') }}</span><span>{{ t()('scope') }}</span>
+  <span class="status-environment">{{ t()('local') }}</span><span>v{{ version }}</span><span>{{ t()('scope') }}</span>
   <span>{{ t()('notMonitored') }}</span>
 </footer>

@@ -17,4 +17,6 @@ This is a priority order, not a release schedule. Run the smallest useful slice 
 
 Defer accounting, payroll, general-purpose workflow, WASM, marketplace and multi-region infrastructure until there is a concrete use case. Country-specific tax rules are extension work, not universal core logic. No regulatory compliance is claimed.
 
+The [Solution-First Workspace](docs/development/solution-first-workspace.md) is a follow-up to the [Manufacturing Preview](https://github.com/erp4us-org/erp4us/issues/119), not part of its acceptance. A read-only Article lookup and shell work can be reviewed independently on `main`; materials, receipts, preview sign-in and diagnostics must be assessed against the integrated, tested service boundaries before extending the workspace.
+
 For business rationale, proposed M0–M7 phase gates and measurable acceptance cases, see the [requirements guide](docs/requirements/guide.md), [catalog index](docs/requirements/index.md) and [tracked backlog](docs/requirements/backlog.md). The order-to-procurement MVP remains the first cross-service outcome; a phase or capability entry is not a release promise.

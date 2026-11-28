@@ -38,11 +38,7 @@ pub(crate) struct Article {
 impl Article {
     pub(crate) fn register(scope: Scope, command: RegisterArticle) -> Result<Self, &'static str> {
         let sku = command.sku;
-        if !(1..=32).contains(&sku.len())
-            || !sku
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'-')
-        {
+        if !valid_sku(&sku) {
             return Err("SKU must have 1–32 uppercase ASCII letters, digits or hyphens");
         }
         let name = command.name;
@@ -64,6 +60,13 @@ impl Article {
             name,
         })
     }
+}
+
+pub(crate) fn valid_sku(sku: &str) -> bool {
+    (1..=32).contains(&sku.len())
+        && sku
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'-')
 }
 
 #[cfg(test)]

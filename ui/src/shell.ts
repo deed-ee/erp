@@ -1,16 +1,18 @@
 import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import { FocusMonitor } from '@angular/cdk/a11y';
-import { Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, HostListener, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { LucideBuilding2, LucideCircleHelp, LucidePanelLeft, LucideX } from '@lucide/angular';
+import { LucideBuilding2, LucideCircleHelp, LucideKeyRound, LucidePanelLeft, LucideSettings, LucideX } from '@lucide/angular';
+import { version } from '../package.json';
+import { CommandBar } from './command-bar';
 import { SHELL_REGISTRATION, permits, visibleModules } from './navigation';
 import { Preferences } from './preferences';
 
 @Component({
   selector: 'app-root',
   imports: [RouterLink, RouterLinkActive, RouterOutlet, NgComponentOutlet, NgTemplateOutlet,
-    LucideBuilding2, LucideCircleHelp, LucidePanelLeft, LucideX],
+    CommandBar, LucideBuilding2, LucideCircleHelp, LucideKeyRound, LucidePanelLeft, LucideSettings, LucideX],
   templateUrl: './shell.html'
 })
 export class Shell {
@@ -18,7 +20,11 @@ export class Shell {
   readonly prefs = inject(Preferences);
   readonly loopback = this.registration.localSetup;
   readonly t = this.prefs.t;
+  readonly version = version;
   readonly visible = visibleModules(this.registration.modules, this.registration.access);
+  readonly showCommand = this.visible.some(module => module.id === 'master-data');
+  readonly command = viewChild(CommandBar);
+  readonly preferences = viewChild<ElementRef<HTMLDetailsElement>>('userPreferences');
   readonly routeData = signal<Record<string, unknown>>({});
   readonly mobileNav = signal(false);
   readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
@@ -45,11 +51,33 @@ export class Shell {
       }
       this.routeData.set(data);
       this.mobileNav.set(false);
+      this.command()?.reset();
+      this.closePreferences();
       if (this.router.lastSuccessfulNavigation()?.previousNavigation) {
         this.focus.focusVia(this.main().nativeElement, 'program');
         this.main().nativeElement.scrollIntoView({ block: 'start' });
       }
     });
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  focusCommand(event: KeyboardEvent) {
+    const command = this.command();
+    if (!command || event.isComposing || event.repeat || event.altKey || event.shiftKey ||
+        !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
+    event.preventDefault();
+    this.closePreferences();
+    command.focus();
+  }
+
+  closePreferences(event?: Event) {
+    const menu = this.preferences()?.nativeElement;
+    if (!menu?.open) return;
+    menu.open = false;
+    if (event) {
+      event.stopPropagation();
+      menu.querySelector('summary')?.focus();
+    }
   }
 
   toggleNavigation() {

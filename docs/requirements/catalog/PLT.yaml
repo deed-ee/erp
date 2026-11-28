@@ -202,6 +202,8 @@
   acceptance:
   - 'Save a two-company filter, revoke one grant, reopen on a phone and desktop: rows, facets and counts contain
     only allowed records; keyboard focus reaches contextual help.'
+  - Replacing or clearing the active credential invalidates in-flight results and discovery. A delayed response or
+    result from an earlier scope must not reappear. No credential, query or result is stored as a display preference.
   scenarios:
   - SC-05
   - SC-08
@@ -209,10 +211,12 @@
   refines: *id003
   issues:
   - 3
+  - 85
   prs: []
   contracts: []
-  tests: []
+  tests:
+  - ui/tests/command.spec.ts
   evidence: []
   questions:
   - May users share layouts without sharing their data?
-  revision: 1
+  revision: 2

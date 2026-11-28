@@ -18,7 +18,7 @@ base = f"http://127.0.0.1:{os.getenv('ERP4US_PORT', env.get('ERP4US_PORT', '8080
 DEFAULT_BEARER = object()
 
 
-def request(path, data=None, bearer=DEFAULT_BEARER, scope=(TENANT, ORGANIZATION), *, origin=base):
+def request(path, data=None, bearer=DEFAULT_BEARER, scope=(TENANT, ORGANIZATION), *, origin=base, method=None):
     headers = {"Accept": "application/json"}
     if bearer is DEFAULT_BEARER:
         bearer = token()
@@ -28,7 +28,7 @@ def request(path, data=None, bearer=DEFAULT_BEARER, scope=(TENANT, ORGANIZATION)
         headers["X-Erp4us-Tenant"], headers["X-Erp4us-Organization"] = scope
     if data is not None:
         headers["Content-Type"] = "application/json"
-    req = Request(origin + path, data=data, headers=headers)
+    req = Request(origin + path, data=data, headers=headers, method=method)
     try:
         response = urlopen(req, timeout=7)
     except HTTPError as exc:
@@ -230,13 +230,35 @@ def main():
     assert request(path, bearer=separate_writer)[0] == 403
     assert request(f"/v1/articles/{uuid4()}", bearer=writer)[0] == 404
     assert request(path, bearer=writer, scope=(OTHER_TENANT, ORGANIZATION))[0] == 403
+    sku_endpoint = "/v1/articles:find-by-sku"
+    sku_path = f"{sku_endpoint}?sku={article['sku']}"
+    status, headers, result = request(sku_endpoint, bearer=reader, method="HEAD")
+    assert status == 204 and headers["Cache-Control"] == "no-store" and result is None
+    status, headers, result = request(sku_path, bearer=reader)
+    assert status == 200 and headers["Cache-Control"] == "no-store" and result == body
+    for address, method in ((sku_endpoint, "HEAD"), (sku_path, "GET")):
+        assert request(address, bearer=None, method=method)[0] == 401
+        assert request(address, bearer=token(exp=int(time.time()) - 1), method=method)[0] == 401
+        assert request(address, bearer=separate_writer, method=method)[0] == 403
+    assert request(sku_path, b'{"name":"not a write"}', writer)[0] == 405
+    for query in ("", "?sku=", "?sku=lowercase", "?sku=ABC%0A", "?sku=ABC%2FDEF", f"?sku={'A' * 33}",
+                  "?sku=A&sku=B", "?sku=A&organization_id=B"):
+        assert request(sku_endpoint + query, bearer=reader)[0] == 400
     for scope in ((TENANT, OTHER_ORGANIZATION), (OTHER_TENANT, EXTERNAL_ORGANIZATION)):
         assert request(path, bearer=reader, scope=scope)[0] == 403
+        assert request(sku_path, bearer=reader, scope=scope)[0] == 403
+        assert request(sku_endpoint, bearer=reader, scope=scope, method="HEAD")[0] == 403
         assert request(path, bearer=writer, scope=scope)[0] == 404
+        assert request(sku_path, bearer=writer, scope=scope)[0] == 404
         assert request(collection, payload, writer, scope)[0] == 403
         status, _, sibling = request(collection, payload, separate_writer, scope)
         assert status == 201 and tuple(sibling[key] for key in ("tenant_id", "organization_id")) == scope
         assert request(f"/v1/articles/{sibling['id']}", bearer=writer)[0] == 404
+        assert request(sku_path, bearer=writer, scope=scope)[2] == sibling
+        private_sku = f"PRIVATE-{uuid4().hex[:12].upper()}"
+        assert request(collection, json.dumps({"sku": private_sku, "name": "Other scope"}).encode(),
+                       separate_writer, scope)[0] == 201
+        assert request(f"{sku_endpoint}?sku={private_sku}", bearer=reader)[0] == 404
     status, headers, problem = request(collection, payload, writer)
     assert status == problem["status"] == 409
     assert headers.get_content_type() == "application/problem+json"
@@ -244,6 +266,7 @@ def main():
         subprocess.run([*compose, "restart", "master-data"], check=True)
         wait_until_ready()
         assert request(path, bearer=token())[2] == body
+        assert request(sku_path, bearer=token(subject="synthetic-reader"))[2] == body
     if "--outbox" in sys.argv:
         verify_outbox(compose, body, traceparent)
     if "--units" in sys.argv:

@@ -10,7 +10,7 @@
       "status": "proposed",
       "priority": "P1",
       "milestone": "M0",
-      "revision": 1,
+      "revision": 2,
       "scenarios": [
         "SC-05",
         "SC-06"
@@ -25,10 +25,14 @@
       ],
       "issues": [
         19,
-        44
+        44,
+        85
       ],
       "prs": [],
-      "tests": [],
+      "tests": [
+        "tests/integration/smoke.py",
+        "ui/tests/command.spec.ts"
+      ],
       "evidence": []
     },
     {
@@ -1323,7 +1327,7 @@
       "status": "proposed",
       "priority": "P2",
       "milestone": "M1",
-      "revision": 1,
+      "revision": 2,
       "scenarios": [
         "SC-05",
         "SC-08"
@@ -1336,10 +1340,13 @@
         "IAM-002"
       ],
       "issues": [
-        3
+        3,
+        85
       ],
       "prs": [],
-      "tests": [],
+      "tests": [
+        "ui/tests/command.spec.ts"
+      ],
       "evidence": []
     },
     {

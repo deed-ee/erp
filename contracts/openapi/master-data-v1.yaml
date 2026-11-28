@@ -65,6 +65,37 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/Problem' }
         '503': { $ref: '#/components/responses/Problem' }
+  /v1/articles:find-by-sku:
+    parameters:
+      - $ref: '#/components/parameters/Tenant'
+      - $ref: '#/components/parameters/Organization'
+    head:
+      operationId: discoverArticleSkuLookup
+      description: Check whether the current actor has `master-data.article.read` in the requested scope. Does not evaluate an SKU or inspect any records. This is not a readiness probe or an execution grant.
+      responses:
+        '204': { description: Exact SKU lookup is permitted in the requested scope. }
+        '400': { description: Invalid scope. }
+        '401': { description: A valid bearer token is required. }
+        '403': { description: Article read is not permitted in the requested scope. }
+    get:
+      operationId: findArticleBySku
+      description: Retrieve at most one article by exact, case-sensitive SKU using `master-data.article.read`. A record outside the selected scope is indistinguishable from no match. Responses are not cacheable.
+      parameters:
+        - in: query
+          name: sku
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 32, pattern: '^[A-Z0-9-]+$' }
+      responses:
+        '200':
+          description: Matching article in the authenticated scope.
+          content:
+            application/json:
+              schema: { $ref: ../schemas/article-v1.json }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /v1/units:register:
     parameters:
       - $ref: '#/components/parameters/Tenant'

@@ -3,7 +3,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, type CanDeactivateFn, Router, RouterLink } from '@angular/router';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucidePackageSearch, LucidePlus, LucideSearch } from '@lucide/angular';
-import { ArticleApi, type Article, isArticleId, isLoopback, type Result } from './article-api';
+import { ArticleApi, type Article, isLoopback, type Result } from './article-api';
+import { isArticleId, normalizeArticleSku } from './article-identifiers';
 import { Preferences } from './preferences';
 import { Feedback, PageHeading, Section, type Crumb } from './ui';
 import type { Message } from './messages';
@@ -31,11 +32,23 @@ export class ProductGuide { readonly t = inject(Preferences).t; }
         <button type="submit"><svg lucideSearch aria-hidden="true"></svg>{{ t()('retrieve') }}</button>
       </form>
       <erp-feedback id="lookup-feedback" tone="error" [message]="invalid() ? t()('invalidId') : ''" />
-      <div class="empty">
-        <svg lucidePackageSearch aria-hidden="true"></svg>
-        <h2>{{ t()('listUnavailable') }}</h2><p>{{ t()('listHint') }}</p>
-      </div>
     </erp-section>
+    <erp-section class="lookup-section" [title]="t()('masterData.article.findBySku')">
+      <form class="lookup-form" novalidate (submit)="$event.preventDefault(); lookupSku()" [attr.aria-busy]="skuStatus() === 'busy'">
+        <div><label for="lookup-sku">{{ t()('sku') }}</label>
+          <input #skuInput id="lookup-sku" [formControl]="sku" required maxlength="32"
+            spellcheck="false" autocomplete="off" [attr.aria-invalid]="skuStatus() === 'invalidSku'"
+            aria-describedby="sku-lookup-feedback">
+        </div>
+        <button type="submit"><svg lucideSearch aria-hidden="true"></svg>{{ t()('search') }}</button>
+      </form>
+      <erp-feedback id="sku-lookup-feedback" [tone]="skuStatus() === 'busy' ? 'neutral' : 'error'"
+        [message]="skuStatus() ? t()(skuStatus()!) : ''" />
+    </erp-section>
+    <div class="empty">
+      <svg lucidePackageSearch aria-hidden="true"></svg>
+      <h2>{{ t()('listUnavailable') }}</h2><p>{{ t()('listHint') }}</p>
+    </div>
   `
 })
 export class Products {
@@ -44,13 +57,45 @@ export class Products {
   readonly id = new FormControl('', { nonNullable: true });
   readonly idInput = viewChild.required<ElementRef<HTMLInputElement>>('idInput');
   readonly invalid = signal(false);
+  readonly sku = new FormControl('', { nonNullable: true });
+  readonly skuInput = viewChild.required<ElementRef<HTMLInputElement>>('skuInput');
+  readonly skuStatus = signal<Message | null>(null);
+  private readonly api = inject(ArticleApi);
   private readonly router = inject(Router);
+  private active?: AbortController;
+
+  constructor() {
+    const destroy = inject(DestroyRef);
+    destroy.onDestroy(() => this.active?.abort());
+    this.sku.valueChanges.pipe(takeUntilDestroyed(destroy)).subscribe(() => {
+      this.active?.abort();
+      this.skuStatus.set(null);
+    });
+  }
 
   lookup() {
     const id = this.id.value.trim();
     this.invalid.set(!isArticleId(id));
     if (this.invalid()) this.idInput().nativeElement.focus();
     else void this.router.navigate(['/products', id]);
+  }
+
+  async lookupSku() {
+    this.active?.abort();
+    const sku = normalizeArticleSku(this.sku.value);
+    if (!sku) {
+      this.skuStatus.set('invalidSku');
+      this.skuInput().nativeElement.focus();
+      return;
+    }
+    const controller = this.active = new AbortController();
+    const version = this.api.credentialVersion();
+    this.skuStatus.set('busy');
+    const result = await this.api.findBySku(sku, controller.signal);
+    if (controller.signal.aborted || version !== this.api.credentialVersion()) return;
+    if ('error' in result) this.skuStatus.set(result.error === 'missing' ? 'commandNoMatches' : result.error);
+    else if (result.article.sku !== sku) this.skuStatus.set('executionError');
+    else await this.router.navigate(['/products', result.article.id]);
   }
 }
 

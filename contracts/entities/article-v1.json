@@ -15,6 +15,20 @@
       "operationId": "getArticle",
       "permission": "master-data.article.read",
       "labelKey": "masterData.article.read"
+    },
+    "findBySku": {
+      "kind": "query",
+      "operationId": "findArticleBySku",
+      "permission": "master-data.article.read",
+      "labelKey": "masterData.article.findBySku",
+      "discovery": {
+        "authorizationOperationId": "discoverArticleSkuLookup",
+        "parameter": "sku",
+        "phrases": {
+          "en": ["find article with sku", "show me the article with sku", "find product by sku", "show product"],
+          "de": ["finde artikel mit sku", "zeige mir den artikel mit sku", "finde produkt nach sku", "zeige produkt"]
+        }
+      }
     }
   }
 }

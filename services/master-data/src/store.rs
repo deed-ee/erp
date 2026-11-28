@@ -168,9 +168,24 @@ impl Store {
         self.articles.find_one(Self::scoped_id(scope, id)).await
     }
 
+    pub(crate) async fn find_by_sku(
+        &self,
+        scope: Scope,
+        sku: &str,
+    ) -> mongodb::error::Result<Option<Article>> {
+        let mut selector = Self::scope_selector(scope);
+        selector.insert("sku", sku);
+        self.articles.find_one(selector).await
+    }
+
     fn scoped_id(scope: Scope, id: Uuid) -> Document {
+        let mut selector = Self::scope_selector(scope);
+        selector.insert("_id", id.to_string());
+        selector
+    }
+
+    fn scope_selector(scope: Scope) -> Document {
         doc! {
-            "_id": id.to_string(),
             "tenant_id": scope.tenant.to_string(),
             "organization_id": scope.organization.to_string(),
         }
