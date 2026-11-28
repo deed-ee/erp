@@ -12,7 +12,7 @@ Illustrative preview: the saved five-line NovaMotion purchase draft totals `1882
 
 ## Inventory owns receipt and allocation (proposed)
 
-The [Procurement](../../contracts/openapi/procurement-v1.yaml) and [Inventory](../../contracts/openapi/inventory-v1.yaml) receipt operations and the [messaging contract](../specifications/nats-messaging.md#proposed-inventory-purchase-receipt-posted-v1) are proposed only. Existing issuance, material-plan reads and handoff are unchanged. This is the local [PUR-001](../requirements/catalog/PUR.yaml) / [INV-001](../requirements/catalog/INV.yaml) waiting-plan case, not general receiving.
+Procurement implements the scoped receipt-source route below without provisioning a receiver grant. The other [Procurement](../../contracts/openapi/procurement-v1.yaml) and [Inventory](../../contracts/openapi/inventory-v1.yaml) receipt operations and the [messaging contract](../specifications/nats-messaging.md#proposed-inventory-purchase-receipt-posted-v1) are not deployed. Existing issuance, material-plan reads and handoff are unchanged. This is the local [PUR-001](../requirements/catalog/PUR.yaml) / [INV-001](../requirements/catalog/INV.yaml) waiting-plan case, not general receiving.
 
 ### Discover and verify the issued source
 

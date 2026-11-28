@@ -230,10 +230,9 @@ paths:
       - $ref: '#/components/parameters/ReceiptPlan'
     get:
       operationId: getPreviewPurchaseReceiptSource
-      x-contract-status: proposed
       description: >
-        Proposed local preview, not implemented. For scoped receiver discovery and new Inventory
-        receipt verification only.
+        Synthetic local preview for scoped receiver discovery and new Inventory receipt verification
+        only. The server route does not provision any receiver grants.
         Procurement verifies the receiver's bearer identity and exact tenant and organization grant
         procurement.purchase-order.receipt-source.read. The receiver must differ from the recorded terms
         preparer, every approving actor and the issuer. The source contains immutable order/line tuples
