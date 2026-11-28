@@ -71,6 +71,7 @@ export class CommandBar {
   private readonly authorized = signal<number | null>(null);
   private readonly typed = signal('');
   private readonly snapshot = signal<{ version: number; answer: CommandResult } | null>(null);
+  private interactionVersion = this.api.credentialVersion();
   private lookup?: AbortController;
   private discovery?: AbortController;
 
@@ -102,10 +103,7 @@ export class CommandBar {
       this.notice.set(null);
     });
     destroy.onDestroy(() => this.close());
-    effect(() => {
-      this.api.credentialVersion();
-      this.reset();
-    });
+    effect(() => this.resetForCredential(this.api.credentialVersion()));
   }
 
   focus() {
@@ -114,6 +112,9 @@ export class CommandBar {
   }
 
   open() {
+    // DOM focus can arrive before the scheduled effect after a credential change.
+    // Adopt the live version now so the effect cannot close this new interaction.
+    this.resetForCredential(this.api.credentialVersion());
     if (this.opened() || !commandAvailable) return;
     this.opened.set(true);
     if (!this.api.hasCredential()) return;
@@ -200,5 +201,11 @@ export class CommandBar {
   private cancelLookup() {
     this.lookup?.abort();
     this.snapshot.set(null);
+  }
+
+  private resetForCredential(version: number) {
+    if (this.interactionVersion === version) return;
+    this.interactionVersion = version;
+    this.reset();
   }
 }

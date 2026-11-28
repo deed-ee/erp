@@ -14,4 +14,6 @@ export async function setDemoAccess(page: Page, token: string) {
   await page.getByLabel('Demo token').fill(token);
   await page.getByRole('button', { name: 'Use for this session' }).press('Enter');
   await expect(page.getByLabel('Demo token')).toBeEmpty();
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(
+    'Credential stored for this session. The service verifies it on request.');
 }

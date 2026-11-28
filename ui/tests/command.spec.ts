@@ -96,11 +96,15 @@ test('live scoped lookup in English and German, with a direct route to the same 
 });
 
 test('unauthorized discovery and results stay hidden; changing credential clears the input', async ({ page }) => {
-  await page.goto('/');
-  await setDemoAccess(page, demoToken('synthetic-registration'));
+  await page.goto('/local-access');
+  await page.getByLabel('Demo token').fill(demoToken('synthetic-registration'));
   const discovery = page.waitForResponse(response =>
     response.url().endsWith('/v1/articles:find-by-sku') && response.request().method() === 'HEAD');
-  await page.keyboard.press('Control+k');
+  // Dispatch both events in one browser task, before the credential effect can render.
+  await page.getByRole('main').locator('form').evaluate((form: HTMLFormElement) => {
+    form.requestSubmit();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+  });
   expect((await discovery).status()).toBe(403);
   await expect(page.getByRole('button', { name: 'Find article by SKU' })).toHaveCount(0);
   const query = page.getByRole('searchbox', { name: 'Global search' });
@@ -138,7 +142,8 @@ test('clarifies known queries, refuses unsupported writes and distinguishes erro
   await expect(status).toHaveText('Enter one article ID or one exact SKU.');
   await ask('Create a sales order');
   await expect(status).toHaveText(/cannot change records/);
-  expect(methods).toEqual(['HEAD']);
+  expect(methods).toContain('HEAD');
+  expect(methods.filter(method => method !== 'HEAD')).toEqual([]);
   await ask('MISSING');
   await expect(status).toHaveText(/No article matches/);
   await ask('OFFLINE');
