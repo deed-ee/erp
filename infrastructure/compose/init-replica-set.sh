@@ -6,7 +6,7 @@ mongo() {
         --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" "$@"
 }
 
-for attempt in $(seq 1 30); do
+for _attempt in $(seq 1 30); do
     if mongo --eval 'quit(db.adminCommand({ping: 1}).ok === 1 ? 0 : 1)' >/dev/null 2>&1; then
         exec mongosh --quiet --norc \
             'mongodb://mongo:27017/admin?directConnection=true&serverSelectionTimeoutMS=5000' \

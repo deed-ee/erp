@@ -1,3 +1,4 @@
+#!/bin/sh
 mongosh --quiet --norc --eval '
 db.getSiblingDB("master_data").createUser({
   user: "master_data_app",

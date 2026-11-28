@@ -6,7 +6,9 @@
   "scripts": {
     "start": "ng serve",
     "build": "ng build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "lint": "eslint --max-warnings 0 --no-error-on-unmatched-pattern \"src/**/*.{ts,html}\" \"tests/**/*.ts\" \"identity-tests/**/*.ts\" \"playwright*.ts\"",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json"
   },
   "engines": {
     "node": "^24.15.0"
@@ -24,12 +26,18 @@
     "rxjs": "7.8.2"
   },
   "devDependencies": {
+    "@angular-eslint/eslint-plugin-template": "22.8.0",
+    "@angular-eslint/template-parser": "22.8.0",
     "@angular/build": "22.3.0",
     "@angular/cli": "22.3.0",
     "@angular/compiler": "22.3.0",
     "@angular/compiler-cli": "22.3.0",
     "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.65.1",
-    "typescript": "6.0.3"
+    "@types/node": "24.19.4",
+    "eslint": "10.16.0",
+    "prettier": "3.10.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.74.0"
   }
 }
