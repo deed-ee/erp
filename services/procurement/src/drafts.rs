@@ -4,17 +4,36 @@ use crate::{
     required,
 };
 use mongodb::{
-    Client, Database,
+    Client, ClientSession, Database,
     bson::{DateTime, Document, doc},
-    options::{CollectionOptions, ReadConcern, WriteConcern},
+    error::UNKNOWN_TRANSACTION_COMMIT_RESULT,
+    options::{
+        Acknowledgment, CollectionOptions, ReadConcern, ReadPreference, SelectionCriteria,
+        WriteConcern,
+    },
 };
 use serde::{Deserialize, Serialize};
-use std::io;
+use std::{io, time::Duration};
 use uuid::Uuid;
 
 const DRAFTS: &str = "material_plan_drafts";
 const INBOX: &str = "material_plan_inbox";
 const QUARANTINE: &str = "material_plan_quarantine";
+const DB_TIME: Duration = Duration::from_secs(3);
+
+fn primary_majority() -> CollectionOptions {
+    CollectionOptions::builder()
+        .read_concern(ReadConcern::majority())
+        .selection_criteria(SelectionCriteria::ReadPreference(ReadPreference::Primary))
+        .build()
+}
+
+fn majority_write() -> WriteConcern {
+    WriteConcern::builder()
+        .w(Acknowledgment::Majority)
+        .w_timeout(DB_TIME)
+        .build()
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub(super) enum Failure {
@@ -139,41 +158,53 @@ impl Store {
     }
 
     pub async fn get(&self, scope: Scope, plan_id: Uuid) -> Result<Option<Draft>, Failure> {
-        let options = CollectionOptions::builder()
-            .read_concern(ReadConcern::majority())
-            .selection_criteria(mongodb::options::SelectionCriteria::ReadPreference(
-                mongodb::options::ReadPreference::Primary,
-            ))
-            .build();
         Ok(self
             .0
-            .collection_with_options::<Draft>(DRAFTS, options)
+            .collection_with_options::<Draft>(DRAFTS, primary_majority())
             .find_one(doc! {"_id": scoped_key(scope, "planId", plan_id)})
-            .max_time(std::time::Duration::from_secs(3))
+            .max_time(DB_TIME)
             .await?)
     }
 
     pub async fn record(&self, event: &AuthorizedPlan) -> Result<(), Failure> {
+        let mut session = self.0.client().start_session().await?;
+        session
+            .start_transaction()
+            .read_concern(ReadConcern::snapshot())
+            .write_concern(majority_write())
+            .max_commit_time(DB_TIME)
+            .await?;
+
+        if let Err(failure) = self.apply(event, &mut session).await {
+            // No commit was sent. Await abort rather than starting cleanup on session drop.
+            session.abort_transaction().await?;
+            return Err(failure);
+        }
+        // This also commits the read-only replay path: a snapshot read is majority
+        // committed when its transaction commits with majority write concern.
+        confirm_commit(&mut session).await
+    }
+
+    async fn apply(
+        &self,
+        event: &AuthorizedPlan,
+        session: &mut ClientSession,
+    ) -> Result<(), Failure> {
         let drafts = self.0.collection::<Draft>(DRAFTS);
         let inbox = self.0.collection::<Receipt>(INBOX);
         let draft_key = scoped_key(event.scope, "planId", event.plan.plan_id);
         let receipt_key = scoped_key(event.scope, "messageId", event.message_id);
         let receipt = Receipt::of(event);
 
-        let mut session = self.0.client().start_session().await?;
-        session
-            .start_transaction()
-            .read_concern(ReadConcern::snapshot())
-            .write_concern(WriteConcern::majority())
-            .await?;
-
         let stored_receipt = inbox
             .find_one(doc! {"_id": &receipt_key})
-            .session(&mut session)
+            .max_time(DB_TIME)
+            .session(&mut *session)
             .await?;
         let stored_draft = drafts
             .find_one(doc! {"_id": &draft_key})
-            .session(&mut session)
+            .max_time(DB_TIME)
+            .session(&mut *session)
             .await?;
         let apply = decide(
             &event.plan,
@@ -185,19 +216,16 @@ impl Store {
             self.0
                 .collection::<Document>(DRAFTS)
                 .insert_one(record(draft_key, &Draft::new(event))?)
-                .session(&mut session)
+                .session(&mut *session)
                 .await?;
         }
         if apply != Apply::None {
             self.0
                 .collection::<Document>(INBOX)
                 .insert_one(record(receipt_key, &receipt)?)
-                .session(&mut session)
+                .session(session)
                 .await?;
         }
-        // A racing insert, write conflict or uncertain commit can be retried by the worker.
-        // MongoDB aborts any still-active transaction when the session is dropped.
-        session.commit_transaction().await?;
         Ok(())
     }
 
@@ -207,16 +235,43 @@ impl Store {
         delivery_count: i64,
         reason: &'static str,
     ) -> Result<(), Failure> {
-        self.0
-            .collection::<Document>(QUARANTINE)
-            .update_one(
-                doc! {"_id": format!("{STREAM}:{stream_sequence}")},
+        let key = doc! {"_id": format!("{STREAM}:{stream_sequence}")};
+        let quarantine = self
+            .0
+            .collection_with_options::<Document>(QUARANTINE, primary_majority());
+        quarantine
+            .find_one_and_update(
+                key.clone(),
                 doc! {"$setOnInsert": quarantine_record(delivery_count, reason)},
             )
             .upsert(true)
-            .write_concern(WriteConcern::majority())
+            .max_time(DB_TIME)
+            .write_concern(majority_write())
             .await?;
-        Ok(())
+        // On replay $setOnInsert can be a no-op. Prove the reference is visible
+        // to a majority read, not just matched by the upsert on this primary.
+        quarantine
+            .find_one(key)
+            .projection(doc! {"_id": 1})
+            .max_time(DB_TIME)
+            .await?
+            .map(|_| ())
+            .ok_or(Failure::Unavailable)
+    }
+}
+
+async fn confirm_commit(session: &mut ClientSession) -> Result<(), Failure> {
+    let mut delay = Duration::from_secs(1);
+    loop {
+        match session.commit_transaction().await {
+            // A write concern timeout or lost reply may have left the draft committed.
+            // Retry only this commit, on the same session, not the business operation.
+            Err(error) if error.contains_label(UNKNOWN_TRANSACTION_COMMIT_RESULT) => {
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(8));
+            }
+            result => return result.map_err(Failure::from),
+        }
     }
 }
 
