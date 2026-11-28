@@ -12,7 +12,10 @@ pub(super) async fn connect(owner: &str) -> (Database, JetStream) {
     fn port(name: &str) -> NonZeroU16 {
         std::env::var(name)
             .ok()
-            .and_then(|value| value.parse().ok())
+            .and_then(|value| {
+                let port: NonZeroU16 = value.parse().ok()?;
+                (port.to_string() == value).then_some(port)
+            })
             .unwrap_or_else(|| panic!("{name} must name a disposable loopback port"))
     }
 
@@ -23,10 +26,7 @@ pub(super) async fn connect(owner: &str) -> (Database, JetStream) {
     ))
     .await
     .expect("local receipt test Mongo settings")
-    .database(&format!(
-        "{owner}_receipt_transport_test_{}",
-        Uuid::new_v4().simple()
-    ));
+    .database(&format!("{owner}_receipt_wire_{}", Uuid::new_v4().simple()));
     let broker = Connection::connect(
         &format!("nats://127.0.0.1:{nats}"),
         ConnectOptions::new()

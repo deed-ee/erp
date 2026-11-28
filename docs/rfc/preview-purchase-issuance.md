@@ -56,3 +56,14 @@ cargo test --locked -p procurement mongo_persists_gaps_replay_conflicts_and_boun
 ```
 
 Inventory checks concurrent admission and all-or-none rollback. Procurement checks gap and replay behavior after reopening the store, rejecting a conflicting lot without advancing the last verified prefix, and bounded continuation. These do not test a deployed broker consumer, role grants, the cross-service request, or complete process recovery.
+
+An optional transport proof passes the actual Inventory-committed receipt envelopes to Procurement using `erp4us-messaging` and isolated JetStream. For this proof only, use a dedicated replica set and an **empty, disposable JetStream instance** with no credentials or external exposure; set the dynamic loopback ports explicitly. Never point it at the ERP stack or a shared broker:
+
+```sh
+export RECEIPT_TRANSPORT_TEST_MONGO_PORT='<loopback port>'
+export RECEIPT_TRANSPORT_TEST_NATS_PORT='<loopback port>'
+cargo test --locked -p inventory receipt_transport_publish_committed_inventory_outbox -- --ignored &&
+  cargo test --locked -p procurement receipt_transport_observe_inventory_facts_and_exact_replay -- --ignored
+```
+
+The producer fixture sends committed lots in reverse receipt order; the consumer fixture reopens its store during the gap, applies the contiguous prefix, and checks that an exact-body broker replay creates no second effect. It deletes only the marked test stream on success. Stop the disposable stack afterward. This does not prove deployed broker principals, automatic relay lifecycle, cross-service OIDC, or operator authority.
