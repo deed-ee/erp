@@ -41,6 +41,12 @@ export class ArticleApi {
   readonly canReadProposal = computed(() => this.grant()?.permissions.includes('procurement.proposal.read') ?? false);
   readonly canReadPurchaseOrders = computed(() => this.grant()?.permissions.includes('procurement.purchase-order.read') ?? false);
   readonly freshCredential = computed(() => !this.credentialExpired() && this.hasCredential());
+  readonly canDiscoverReceiptSource = computed(() => this.freshCredential()
+    && (this.grant()?.permissions.includes('procurement.purchase-order.receipt-source.read') ?? false));
+  readonly canReadReceiptAllocation = computed(() => this.freshCredential()
+    && (this.grant()?.permissions.includes('inventory.purchase-receipt.read') ?? false));
+  readonly canPostPurchaseReceipt = computed(() => this.freshCredential()
+    && (this.grant()?.permissions.includes('inventory.purchase-receipt.post') ?? false));
   readonly canIssuePurchaseOrders = computed(() => this.freshCredential() && this.canReadPurchaseOrders()
     && (this.grant()?.permissions.includes('procurement.purchase-order.issue') ?? false));
   readonly canEditProposalTerms = computed(() => this.canReadProposal() && this.canReadPartners()

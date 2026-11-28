@@ -1,4 +1,4 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LucideListChecks, LucideRefreshCw } from '@lucide/angular';
@@ -6,6 +6,7 @@ import { ArticleApi, isArticleId } from './article-api';
 import type { Message } from './messages';
 import { Preferences } from './preferences';
 import { ProcurementHandoffPanel } from './procurement-handoff';
+import { PurchaseReceiptPanel } from './purchase-receipt';
 import { Feedback, PageHeading } from './ui';
 
 interface Reservation {
@@ -13,11 +14,14 @@ interface Reservation {
   unit: string; requested: string; reserved: string; outstanding: string; source_event_id: string;
 }
 interface PlanRow { sku: string; revision: string | null; requested: string; reserved: string; uncovered: string }
-interface MaterialPlan { id: string; production: PlanRow[]; materials: PlanRow[] }
-interface Access { path: string; headers: Record<string, string>; signal: AbortSignal }
+interface MaterialPlan { id: string; order_id: string; line_id: string; production: PlanRow[]; materials: PlanRow[] }
+interface Access {
+  order: string; line: string; path: string; headers: Record<string, string>; signal: AbortSignal;
+  context: ReturnType<ArticleApi['scopedContext']>;
+}
 
 @Component({
-  imports: [RouterLink, LucideListChecks, LucideRefreshCw, Feedback, PageHeading, ProcurementHandoffPanel],
+  imports: [RouterLink, LucideListChecks, LucideRefreshCw, Feedback, PageHeading, ProcurementHandoffPanel, PurchaseReceiptPanel],
   template: `
     <erp-page-heading [title]="t()('reservationLink')" [description]="t()('reservationIntro')" />
     <a routerLink="/sales/orders">{{ t()('salesOrders') }}</a>
@@ -64,6 +68,9 @@ interface Access { path: string; headers: Record<string, string>; signal: AbortS
                 [orderId]="row.order_id" [lineId]="row.line_id" [planId]="stored.id"
                 [hasShortages]="hasShortages(stored)" />
             }
+            @if (receivingPlan(); as context) {
+              <erp-purchase-receipt [orderId]="context.order" [lineId]="context.line" [planId]="context.plan" />
+            }
           } @else if (api.canCreateMaterialPlan() && reservation()?.outstanding !== '0') {
             <button type="button" class="primary" (click)="planMaterials()" [disabled]="planBusy()">
               <svg lucideListChecks aria-hidden="true"></svg>{{ t()('materialPlanCreate') }}
@@ -87,12 +94,22 @@ export class OrderReservation {
   readonly plan = signal<MaterialPlan | null>(null);
   readonly planMessage = signal<Message | null>(null);
   readonly planBusy = signal(false);
+  private readonly receiptBasis = signal<Access | null>(null);
+  readonly receivingPlan = computed(() => {
+    const access = this.receiptBasis(), plan = this.plan(), row = this.reservation(), params = this.params();
+    if (!access || access.signal.aborted || access.context !== this.api.scopedContext() || !this.api.freshCredential()
+      || params?.get('orderId') !== access.order || params?.get('lineId') !== access.line
+      || plan?.order_id !== access.order || plan.line_id !== access.line
+      || row?.order_id !== access.order || row.line_id !== access.line) return null;
+    return {order: access.order, line: access.line, plan: plan.id};
+  });
   private access?: Access;
 
   constructor() {
     effect(onCleanup => {
       this.refresh();
       const params = this.params();
+      const context = this.api.scopedContext();
       const allowed = this.api.canReadReservation();
       const canReadPlan = this.api.canReadMaterialPlan();
       const headers = this.api.requestHeaders();
@@ -100,6 +117,7 @@ export class OrderReservation {
       this.reservation.set(null);
       this.message.set(null);
       this.plan.set(null);
+      this.receiptBasis.set(null);
       this.planMessage.set(null);
       this.planBusy.set(false);
       if (!allowed) return;
@@ -111,7 +129,7 @@ export class OrderReservation {
       }
       const control = new AbortController();
       onCleanup(() => control.abort());
-      this.access = { path: `/v1/inventory/reservations/${order}/${line}`, headers, signal: control.signal };
+      this.access = { order, line, path: `/v1/inventory/reservations/${order}/${line}`, headers, signal: control.signal, context };
       this.message.set('busy');
       void this.load(this.access, canReadPlan);
     });
@@ -159,7 +177,8 @@ export class OrderReservation {
     }
   }
 
-  private async readPlan({path, headers, signal}: Access, method: 'GET' | 'POST') {
+  private async readPlan(access: Access, method: 'GET' | 'POST') {
+    const {path, headers, signal} = access;
     this.planBusy.set(true);
     this.planMessage.set('busy');
     try {
@@ -170,6 +189,7 @@ export class OrderReservation {
       const plan: MaterialPlan | null = response.ok ? await response.json() : null;
       if (!signal.aborted) {
         this.plan.set(plan);
+        this.receiptBasis.set(plan ? access : null);
         this.planMessage.set(plan || (method === 'GET' && response.status === 404) ? null
           : response.status === 409 ? 'materialPlanConflict' : 'unavailable');
       }
