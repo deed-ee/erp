@@ -11,6 +11,14 @@
 - Definition of done: focused working change, meaningful domain and integration tests (including negative authorization/scope and messaging replay tests when applicable), contract checks, updated docs, and a reviewable diff. Run relevant checks and state exactly what ran or was blocked. Never weaken tests or bypass checks to get CI to pass.
 - Do not choose a license, make a release, change visibility or make consequential trust, branding or architecture decisions without approval. Follow [CONTRIBUTING.md](CONTRIBUTING.md) and the [RFC process](GOVERNANCE.md#rfc-process).
 
+## Start with the user's decision
+
+- Design around what someone needs to accomplish, not around CRUD screens, tables, or service boundaries. State the actor, the question or task, the desired outcome, and what would prevent it. Keep lists and tables available for comparison, bulk work and detailed evidence; do not make users reconcile several views to get the first useful answer.
+- Lead with the answer, then show evidence and the next permitted step. For the [proposed build-blocker experience](https://github.com/erp4us-org/erp4us/issues/126), “Why can't I build this product?” should identify a concrete blocker such as 12 missing end plates, distinguish 20 needed from 8 actually reserved for the order, show the path through the affected assembly, and link to the authorized facts. Expected, received and allocated are different; missing or stale evidence is not proof of readiness.
+- Design toward a [global workspace input](https://github.com/erp4us-org/erp4us/issues/85): one entry point to find records, ask domain questions, and start permitted workflows. Show the interpreted scope, filters or time range and ask when intent is ambiguous. Give the same useful answer through direct navigation, with a keyboard- and screen-reader-accessible path. Neither path may require AI, voice or a mandatory provider. A question or recommendation does not purchase, book, post or approve anything. Writes remain distinct, explicitly intended actions under the same owner-side rules for people and agents.
+- Use diagrams and icons when they explain a relationship, quantity or decision, not just to decorate a result. A dependency path or a capacity view needs equivalent text, meaningful labels and a non-color way to identify its states.
+- In the smallest workflow proof, show that the intended role can reach a correct, evidence-backed decision, recognize uncertainty or a denied step, and act without re-entering data. Check a counterexample that does not need the proposed objects, such as a service project with no warehouse. Label examples and prototypes as such; do not use them as capability claims.
+
 In the Angular UI, pair each button's visible translated action label with a relevant icon. Hide decorative icons from assistive technology; retain native button and keyboard behavior.
 
 ## Hand off work
