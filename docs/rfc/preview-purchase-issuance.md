@@ -14,6 +14,8 @@ Illustrative preview: the saved five-line NovaMotion purchase draft totals `1882
 
 Procurement implements the scoped receipt-source route below without provisioning a receiver grant. The other [Procurement](../../contracts/openapi/procurement-v1.yaml) and [Inventory](../../contracts/openapi/inventory-v1.yaml) receipt operations and the [messaging contract](../specifications/nats-messaging.md#proposed-inventory-purchase-receipt-posted-v1) are not deployed. Existing issuance, material-plan reads and handoff are unchanged. This is the local [PUR-001](../requirements/catalog/PUR.yaml) / [INV-001](../requirements/catalog/INV.yaml) waiting-plan case, not general receiving.
 
+Inventory's test-only adapter stores the current intent for the verified actor and selected Sales and purchase lines separately from the immutable result of each confirmed lot. Before confirmation it stores only the intent, not a reservation, stock movement, or outbox fact. Confirmation writes the result and the physical effects in the same majority transaction. Reopening or replaying the current intent uses the local record; a later lot must acknowledge the confirmed receipt explicitly and leaves that receipt unchanged. This adapter is not a live HTTP route or an authorization proof.
+
 ### Discover and verify the issued source
 
 `GET /v1/procurement/proposals/by-plan/{plan_id}/purchase-orders/receipt-source` selects the single issued batch by verified tenant, organization and plan ID. It returns only the plan ID and 1–32 immutable tuples unique by purchase order ID and purchase line ID, each with SKU, revision (including explicit null), `EA` and exact ordered pieces. From an authorized plan view the receiver can use this GET to choose a tuple without asking the buyer for IDs or getting the commercial purchase-order read grant. There is no wider search, cost, supplier, approver, internal audit or receipt status data. Neither a draft nor a foreign batch is visible through this read.
@@ -54,10 +56,11 @@ The test-only persistence proofs use separate, randomly named databases on a **d
 export INVENTORY_RECEIPT_TEST_MONGO_URI='<dedicated replica-set URI>'
 export PROCUREMENT_RECEIPT_TEST_MONGO_URI="$INVENTORY_RECEIPT_TEST_MONGO_URI"
 cargo test --locked -p inventory mongo_competing_lots_and_rollback_keep_all_effects_atomic -- --ignored
+cargo test --locked -p inventory mongo_recovers_the_same_lot_until_deliberately_advancing_the_current_intent -- --ignored
 cargo test --locked -p procurement mongo_persists_gaps_replay_conflicts_and_bounded_continuation -- --ignored
 ```
 
-Inventory checks concurrent admission and all-or-none rollback. Procurement checks gap and replay behavior after reopening the store, rejecting a conflicting lot without advancing the last verified prefix, and bounded continuation. These do not test a deployed broker consumer, role grants, the cross-service request, or complete process recovery.
+Inventory checks concurrent admission and all-or-none rollback. Its separate recovery test reconnects a fresh MongoDB client, checks that concurrent preparation creates one intent and no physical effects, and confirms or replays that exact lot. It also checks isolation from another actor and scope, and requires explicit acknowledgment before the second lot can be confirmed. Procurement checks gap and replay behavior after reopening the store, rejecting a conflicting lot without advancing the last verified prefix, and bounded continuation. These commands do not test a deployed broker consumer, role grants, the cross-service request, or browser recovery.
 
 An optional transport proof passes the actual Inventory-committed receipt envelopes to Procurement using `erp4us-messaging` and isolated JetStream. For this proof only, use a dedicated replica set and an **empty, disposable JetStream instance** with no credentials or external exposure; set the dynamic loopback ports explicitly. Never point it at the ERP stack or a shared broker:
 
