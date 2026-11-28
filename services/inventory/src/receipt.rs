@@ -336,3 +336,5 @@ mod tests;
 
 #[cfg(test)]
 mod mongo;
+#[cfg(test)]
+mod source;
