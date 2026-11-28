@@ -288,8 +288,17 @@ jobs:
           docker tag erp4us-ci-diagnostics erp4us-ci-identity-diagnostics
           docker tag erp4us-ci-article-delivery erp4us-ci-identity-article-delivery
           docker tag erp4us-ci-sales erp4us-ci-identity-sales
+          # Only the HTTP owner uses the proof image; seed and workers use the normal image.
+          docker tag erp4us-ci-inventory erp4us-ci-identity-inventory
           docker tag erp4us-ci-procurement erp4us-ci-identity-procurement
           preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml -f compose.procurement-approvals.yaml -f tests/integration/compose.receiving-proof.yaml "$@"; }
+          preview --profile seed config --format json | jq -e '
+            .services as $services
+            | ($services.inventory.image == "erp4us-ci-inventory-receiving-proof:latest")
+              and (["inventory-seed", "inventory-consumer-init", "inventory-worker", "inventory-plan-relay"]
+                | all(.[]; $services[.].image == "erp4us-ci-identity-inventory"))
+          ' >/dev/null
+          docker image inspect erp4us-ci-inventory-receiving-proof:latest erp4us-ci-identity-inventory:latest >/dev/null
           preview up -d preview-identity
           python3 scripts/preview-identity.py configure
           preview up --no-build -d --wait nats
