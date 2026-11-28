@@ -103,6 +103,47 @@ fn test_database(client: &Client, name: &str) -> Database {
     )
 }
 
+const RECEIPT_TEST_DB_PREFIX: &str = "inventory_receipt_test_";
+
+fn is_receipt_fixture_database(name: &str) -> bool {
+    name.strip_prefix(RECEIPT_TEST_DB_PREFIX)
+        .and_then(|suffix| Uuid::try_parse(suffix).ok().map(|id| (suffix, id)))
+        .is_some_and(|(suffix, id)| id.get_version_num() == 4 && id.simple().to_string() == suffix)
+}
+
+async fn receipt_fixture() -> (String, Database, bool) {
+    let uri = std::env::var("INVENTORY_RECEIPT_TEST_MONGO_URI").expect("dedicated test Mongo URI");
+    let client = Client::with_uri_str(&uri)
+        .await
+        .expect("valid test Mongo settings");
+    // The managed container provides a database-scoped readWrite user. It
+    // removes the container itself, so no database-drop grant is needed.
+    let managed = client.default_database();
+    let name = match &managed {
+        Some(db) if is_receipt_fixture_database(db.name()) => db.name().to_owned(),
+        Some(_) => panic!("managed Mongo fixture requires a generated receipt test database"),
+        None => format!("{RECEIPT_TEST_DB_PREFIX}{}", Uuid::new_v4().simple()),
+    };
+    (uri, test_database(&client, &name), managed.is_none())
+}
+
+#[test]
+fn accepts_only_generated_names_for_a_managed_receipt_database() {
+    assert!(is_receipt_fixture_database(&format!(
+        "{RECEIPT_TEST_DB_PREFIX}{}",
+        Uuid::new_v4().simple()
+    )));
+    for name in [
+        "inventory",
+        "admin",
+        "inventory_receipt_test_",
+        "inventory_receipt_test_00000000000000000000000000000000",
+        "inventory_receipt_test_dcd810bb-f4f6-4613-81c2-9b92c57d2ec4",
+    ] {
+        assert!(!is_receipt_fixture_database(name));
+    }
+}
+
 async fn seed_waiting_endplates(db: &Database, command: Command, component: &Document) {
     db.collection::<Document>("material_plans")
         .insert_one(plan_record(command))
@@ -459,14 +500,7 @@ async fn posting_deadline_keeps_an_in_flight_task_alive_and_bounded() {
 #[tokio::test]
 #[ignore = "requires INVENTORY_RECEIPT_TEST_MONGO_URI for a dedicated disposable replica set"]
 async fn mongo_competing_lots_and_rollback_keep_all_effects_atomic() {
-    let uri = std::env::var("INVENTORY_RECEIPT_TEST_MONGO_URI").expect("dedicated test Mongo URI");
-    let client = Client::with_uri_str(&uri)
-        .await
-        .expect("valid test Mongo settings");
-    let db = test_database(
-        &client,
-        &format!("inventory_receipt_test_{}", Uuid::new_v4().simple()),
-    );
+    let (_, db, drop_database) = receipt_fixture().await;
     let store = Store::open(&db).await.unwrap();
     let plans = db.collection::<Document>("material_plans");
     let reservations = db.collection::<Document>("reservations");
@@ -733,16 +767,15 @@ async fn mongo_competing_lots_and_rollback_keep_all_effects_atomic() {
             .unwrap(),
         2
     );
-    db.drop().await.unwrap();
+    if drop_database {
+        db.drop().await.unwrap();
+    }
 }
 
 #[tokio::test]
 #[ignore = "requires INVENTORY_RECEIPT_TEST_MONGO_URI for a dedicated disposable replica set"]
 async fn mongo_recovers_the_same_lot_until_deliberately_advancing_the_current_intent() {
-    let uri = std::env::var("INVENTORY_RECEIPT_TEST_MONGO_URI").expect("dedicated test Mongo URI");
-    let client = Client::with_uri_str(&uri).await.unwrap();
-    let db_name = format!("inventory_receipt_test_{}", Uuid::new_v4().simple());
-    let db = test_database(&client, &db_name);
+    let (uri, db, drop_database) = receipt_fixture().await;
     let store = Store::open(&db).await.unwrap();
     let sample = command(SCOPE, 11, "6");
     let destination = stock(sample, "NM-ENDPLATE");
@@ -808,7 +841,7 @@ async fn mongo_recovers_the_same_lot_until_deliberately_advancing_the_current_in
 
     // Lose the browser's reply and reconstruct the store with a new client.
     let reconnected = Client::with_uri_str(&uri).await.unwrap();
-    let store = Store::open(&test_database(&reconnected, &db_name))
+    let store = Store::open(&test_database(&reconnected, db.name()))
         .await
         .unwrap();
     let pending = store.reopen(sample.selection()).await.unwrap().unwrap();
@@ -999,7 +1032,9 @@ async fn mongo_recovers_the_same_lot_until_deliberately_advancing_the_current_in
             .unwrap(),
         1
     );
-    db.drop().await.unwrap();
+    if drop_database {
+        db.drop().await.unwrap();
+    }
 }
 
 #[tokio::test]

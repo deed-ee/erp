@@ -2,6 +2,12 @@
 
 Master Data is an OAuth resource server. It verifies RS256 access tokens against one operator-selected OIDC issuer and resource audience. It does not issue tokens, authenticate passwords or trust scopes from client input. Its local integration fixture uses a throwaway signing key to exercise the same verification path; it is not an IdP.
 
+## Provider and directory choices
+
+The integration boundary is OIDC/OAuth, not Keycloak. The optional loopback preview uses Keycloak as the reference provider so the browser tests exercise real sign-in. An installation can use another compatible provider after verifying its tokens, subject bindings, scopes and key rotation. Entra ID is one candidate, not a verified integration: the issued access-token format and audience must meet the verifier's contract. An LDAP directory can instead sit behind an OIDC provider that supports LDAP federation; erp4us does not bind to LDAP or infer business permissions from directory membership.
+
+The [preview image scan](../../.github/workflows/preview-identity-image.yml) covers the pinned reference image, not the OIDC protocol. It is independent of the backend domain and database proofs and must remain in place while that image is shipped.
+
 ## Use a self-hosted OIDC provider
 
 1. In a provider such as Keycloak, provision a dedicated realm under HTTPS and set up an OAuth client for the application (Authorization Code with PKCE for browser clients; client credentials for a separate, least-privilege service account). In Keycloak, use an **Audience** protocol mapper on the calling client's scope: set the custom audience to `erp4us-master-data`, enable it for access tokens, and leave it off for ID tokens. Do not reuse the interactive client ID as the API audience.

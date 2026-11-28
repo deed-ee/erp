@@ -50,7 +50,7 @@ An authorized operator can reconcile a gap by comparing against Inventory's comm
 
 Runtime proof still needs two competing receipts, changed retry intent, missing grants, receiver separation, cross-tenant and cross-organization denies, same-actor OIDC forwarding, source and broker outages, lost response with re-login and intent recovery, and out-of-order delivery without duplicate movement or allocation. Any operator gap-repair privilege needs separate review; it is not part of the ordinary receiver's durable retry. No new service, deployed grants, supplier transmission, receipt corrections or production acceptance are implied by these contracts.
 
-The test-only persistence proofs use separate, randomly named databases on a **dedicated disposable MongoDB replica set**, not the browser preview or an existing deployment. To run both against that isolated replica set:
+The Rust CI job runs the two Inventory persistence proofs with `python3 tests/integration/inventory_receipt.py`. The runner uses the pinned MongoDB image, starts one authenticated loopback fixture at a time, grants access only to its generated database, and stops the fixture afterward. It needs no Keycloak server or browser. For manual Inventory and Procurement proofs against an already running **dedicated disposable MongoDB replica set**, use a URI without a default database so each proof creates its own randomly named database. Never use a browser preview or an existing deployment:
 
 ```sh
 export INVENTORY_RECEIPT_TEST_MONGO_URI='<dedicated replica-set URI>'
