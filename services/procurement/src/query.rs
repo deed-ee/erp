@@ -1,5 +1,7 @@
 use crate::{
-    Scope,
+    Scope, approval_store,
+    budget_approvals::{self, Approval},
+    budget_policy::{JsonObject, Policy},
     drafts::{Draft, Status, Store},
     material_plan::{Bom, BuyRow},
     partners, required,
@@ -18,7 +20,7 @@ use serde::Serialize;
 use std::{env, future::Future, io, sync::Arc, time::Duration};
 use tokio::{
     sync::Semaphore,
-    time::{Instant, timeout, timeout_at},
+    time::{Instant, timeout_at},
 };
 use uuid::Uuid;
 
@@ -26,6 +28,7 @@ const LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 const SAVE_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_OPERATIONS: usize = 16;
 const TERMS_BODY_LIMIT: usize = 16 * 1024;
+const APPROVAL_BODY_LIMIT: usize = 2 * 1024;
 const READ_PERMISSION: &str = "procurement.proposal.read";
 const WRITE_TERMS_PERMISSION: &str = "procurement.proposal.terms.write";
 const READ_PARTNERS_PERMISSION: &str = "master-data.partner.read";
@@ -34,6 +37,8 @@ const READ_PARTNERS_PERMISSION: &str = "master-data.partner.read";
 struct Api {
     store: Store,
     terms: terms_store::Store,
+    approvals: approval_store::Store,
+    budget_policy: Option<Arc<Policy>>,
     auth: Auth,
     operations: Arc<Semaphore>,
 }
@@ -114,6 +119,18 @@ impl From<partners::Failure> for StatusCode {
             partners::Failure::Unauthenticated => Self::UNAUTHORIZED,
             partners::Failure::Forbidden => Self::FORBIDDEN,
             partners::Failure::Unavailable => Self::SERVICE_UNAVAILABLE,
+        }
+    }
+}
+
+impl From<budget_approvals::Failure> for StatusCode {
+    fn from(error: budget_approvals::Failure) -> Self {
+        match error {
+            budget_approvals::Failure::Invalid => Self::BAD_REQUEST,
+            budget_approvals::Failure::Forbidden => Self::FORBIDDEN,
+            budget_approvals::Failure::NotFound => Self::NOT_FOUND,
+            budget_approvals::Failure::Conflict => Self::CONFLICT,
+            budget_approvals::Failure::Unavailable => Self::SERVICE_UNAVAILABLE,
         }
     }
 }
@@ -237,12 +254,10 @@ async fn save_terms(
         };
         let saved = bound.snapshot(revision, &suppliers, identity.actor)?;
         before(deadline)?;
-        if api.terms.append(scope, &saved).await.is_err() {
-            // If a unique index or an uncertain commit raced us, recover only
-            // a majority-visible result. Otherwise leave the outcome unknown.
-            return resolve_race(&api.terms, scope, plan_id, &command).await;
+        match api.terms.append(scope, &command, saved, deadline).await? {
+            terms_store::Save::Created(terms) => Ok((StatusCode::CREATED, Json(terms))),
+            terms_store::Save::Replay(terms) => Ok((StatusCode::OK, Json(terms))),
         }
-        Ok((StatusCode::CREATED, Json(saved.terms)))
     })
     .await
 }
@@ -259,15 +274,77 @@ async fn resolve_race(
     }
 }
 
+async fn latest_approval(
+    State(api): State<Api>,
+    headers: HeaderMap,
+    Path(plan): Path<String>,
+) -> Result<Json<Approval>, StatusCode> {
+    let identity = authorize(&api.auth, &headers, READ_PERMISSION)?;
+    let plan_id = plan_id(&plan)?;
+    let deadline = Instant::now() + LOOKUP_TIMEOUT;
+    bounded(&api.operations, deadline, async move {
+        let result = api
+            .approvals
+            .get(
+                &api.terms,
+                api.budget_policy.as_deref(),
+                identity.into(),
+                plan_id,
+                deadline,
+            )
+            .await?;
+        Ok(Json(result))
+    })
+    .await
+}
+
+async fn record_approval(
+    State(api): State<Api>,
+    Path(plan): Path<String>,
+    request: Request,
+) -> Result<(StatusCode, Json<Approval>), StatusCode> {
+    authorize(&api.auth, request.headers(), READ_PERMISSION)?;
+    let plan_id = plan_id(&plan)?;
+    let headers = request.headers().clone();
+    let Json(JsonObject(intent)) =
+        Json::<JsonObject<budget_approvals::Intent>>::from_request(request, &api)
+            .await
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let command = intent.authorizing_operation()?;
+    let identity = authorize(&api.auth, &headers, command.permission())?;
+    if identity.actor.is_nil() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let deadline = Instant::now() + SAVE_TIMEOUT;
+    bounded(&api.operations, deadline, async move {
+        match api
+            .approvals
+            .append(
+                &api.terms,
+                api.budget_policy.as_deref(),
+                identity,
+                plan_id,
+                &command,
+                deadline,
+            )
+            .await?
+        {
+            approval_store::Saved::Created(result) => Ok((StatusCode::CREATED, Json(result))),
+            approval_store::Saved::Replay(result) => Ok((StatusCode::OK, Json(result))),
+        }
+    })
+    .await
+}
+
 pub(super) async fn serve() -> io::Result<()> {
     let auth = Auth::load(
         &required("ERP4US_IDENTITY_POLICY")?,
         &required("ERP4US_ISSUER_JWKS")?,
     )?;
+    let budget_policy = budget_approvals::load_policy()?.map(Arc::new);
     let store = Store::open().await?;
-    let terms = timeout(LOOKUP_TIMEOUT, store.open_terms())
-        .await
-        .map_err(|_| io::Error::other("Timed out initializing Procurement terms indexes"))??;
+    let terms = store.open_terms().await?;
+    let approvals = store.open_approvals().await?;
     let ready = store.clone();
     let operations = Arc::new(Semaphore::new(MAX_OPERATIONS));
     let ready_operations = operations.clone();
@@ -304,6 +381,12 @@ pub(super) async fn serve() -> io::Result<()> {
                     .post(save_terms)
                     .layer(DefaultBodyLimit::max(TERMS_BODY_LIMIT)),
             )
+            .route(
+                "/v1/procurement/proposals/by-plan/{plan_id}/approval",
+                get(latest_approval)
+                    .post(record_approval)
+                    .layer(DefaultBodyLimit::max(APPROVAL_BODY_LIMIT)),
+            )
             .layer(middleware::from_fn(
                 |request: Request, next: Next| async move {
                     let mut response = next.run(request).await;
@@ -320,6 +403,8 @@ pub(super) async fn serve() -> io::Result<()> {
             .with_state(Api {
                 store,
                 terms,
+                approvals,
+                budget_policy,
                 auth,
                 operations,
             }),
@@ -333,6 +418,21 @@ mod tests {
     use crate::material_plan::tests::{read, sample};
     use mongodb::bson::{DateTime, doc, from_document, to_document};
     use serde_json::json;
+    use tokio::time::timeout;
+
+    #[test]
+    fn approval_failures_map_to_contract_status_without_outcome_leaks() {
+        use budget_approvals::Failure::*;
+        for (failure, code) in [
+            (Invalid, StatusCode::BAD_REQUEST),
+            (Forbidden, StatusCode::FORBIDDEN),
+            (NotFound, StatusCode::NOT_FOUND),
+            (Conflict, StatusCode::CONFLICT),
+            (Unavailable, StatusCode::SERVICE_UNAVAILABLE),
+        ] {
+            assert_eq!(StatusCode::from(failure), code);
+        }
+    }
 
     #[tokio::test]
     async fn deadline_leaves_in_flight_work_running_and_bounded() {

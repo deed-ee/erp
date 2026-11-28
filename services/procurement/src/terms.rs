@@ -10,7 +10,7 @@ use uuid::Uuid;
 const MAX_UNIT_CENTS: u64 = 999_999_999; // Same EUR unit price cap as Sales.
 const MAX_LINES: usize = 32;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Failure {
     Invalid,
     Conflict,
@@ -137,14 +137,23 @@ struct Line {
 #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(super) struct Terms {
     #[serde(with = "canonical_id")]
-    proposal_id: Uuid,
+    pub proposal_id: Uuid,
     #[serde(with = "canonical_id")]
-    plan_id: Uuid,
+    pub plan_id: Uuid,
     status: Status,
     pub revision: i32,
     currency: Currency,
     lines: Vec<Line>,
     total: Cents,
+}
+
+impl Terms {
+    pub(super) fn budget_amount(&self) -> (&'static str, u64, String) {
+        let currency = match self.currency {
+            Currency::Eur => "EUR",
+        };
+        (currency, self.total.0, self.total.to_string())
+    }
 }
 
 #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -154,7 +163,7 @@ pub(super) struct Saved {
     command_id: Uuid,
     expected_revision: i32,
     #[serde(with = "canonical_id")]
-    actor_id: Uuid,
+    pub actor_id: Uuid,
     saved_at: DateTime,
     schema_version: i32,
     pub terms: Terms,

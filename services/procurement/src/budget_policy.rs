@@ -1,12 +1,12 @@
 //! Amount-based stages from a trusted deployment policy. No I/O or authorization.
 
 use crate::{Scope, material_plan::canonical_id};
-use serde::{Deserialize, Deserializer, de};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use std::{fmt, marker::PhantomData};
 use uuid::Uuid;
 
 const CURRENCY: &str = "EUR";
-const MAX_STAGES: usize = 8;
+pub(super) const MAX_STAGES: usize = 8;
 const MAX_KEY_BYTES: usize = 32;
 const MAX_THRESHOLD_EURO_DIGITS: usize = 15;
 
@@ -48,7 +48,7 @@ struct StageDocument {
 
 // Derived struct deserializers also accept positional arrays. Require objects
 // without collecting into a JSON map first (which would erase duplicate fields).
-struct JsonObject<T>(T);
+pub(super) struct JsonObject<T>(pub T);
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for JsonObject<T> {
     fn deserialize<D: Deserializer<'de>>(input: D) -> Result<Self, D::Error> {
@@ -87,6 +87,17 @@ pub(super) struct Stage {
     minimum_cents: u64,
 }
 
+/// Canonical policy content, independent of JSON formatting. Scope and policy
+/// identity are stored separately with the decision; include even stages that
+/// do not apply to its total so a reused revision cannot count old approvals.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub(super) struct PolicySnapshot {
+    schema_version: i32,
+    currency: String,
+    require_distinct_approvers: bool,
+    ordered_thresholds_in_cents: Vec<(String, u64)>,
+}
+
 impl Stage {
     pub(super) fn key(&self) -> &str {
         &self.key
@@ -112,6 +123,19 @@ pub(super) struct CompletedStage<'a> {
 }
 
 impl Policy {
+    pub(super) fn snapshot(&self) -> PolicySnapshot {
+        PolicySnapshot {
+            schema_version: 1,
+            currency: CURRENCY.to_owned(),
+            require_distinct_approvers: self.require_distinct_approvers,
+            ordered_thresholds_in_cents: self
+                .stages
+                .iter()
+                .map(|stage| (stage.key.clone(), stage.minimum_cents))
+                .collect(),
+        }
+    }
+
     /// Parse only the operator's configured document. Absence never supplies a default.
     pub(super) fn parse(input: Option<&[u8]>) -> Result<Self, Failure> {
         let input = input.ok_or(Failure::MissingPolicy)?;
@@ -132,8 +156,8 @@ impl Policy {
         }) in document.stages
         {
             let minimum_cents = threshold_cents(&minimum_amount).ok_or(Failure::InvalidPolicy)?;
-            if !valid_key(&key)
-                || stages.iter().any(|stage| stage.key == key)
+            let permission = stage_permission(&key).ok_or(Failure::InvalidPolicy)?;
+            if stages.iter().any(|stage| stage.key == key)
                 || match stages.last() {
                     None => minimum_cents != 0,
                     Some(previous) => minimum_cents <= previous.minimum_cents,
@@ -142,7 +166,7 @@ impl Policy {
                 return Err(Failure::InvalidPolicy);
             }
             stages.push(Stage {
-                permission: format!("procurement.approval.{key}"),
+                permission,
                 key,
                 minimum_cents,
             });
@@ -255,12 +279,13 @@ impl Requirements<'_> {
     }
 }
 
-fn valid_key(key: &str) -> bool {
-    key.len() <= MAX_KEY_BYTES
+pub(super) fn stage_permission(key: &str) -> Option<String> {
+    let valid = key.len() <= MAX_KEY_BYTES
         && key.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
         && key
             .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
+    valid.then(|| format!("procurement.approval.{key}"))
 }
 
 fn threshold_cents(value: &str) -> Option<u64> {

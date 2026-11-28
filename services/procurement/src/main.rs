@@ -1,5 +1,6 @@
 //! Procurement draft runtime and the trusted local stdin fixture adapter.
-#[cfg(test)]
+mod approval_store;
+mod budget_approvals;
 mod budget_policy;
 mod consumer;
 mod drafts;

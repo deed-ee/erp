@@ -157,6 +157,10 @@ impl Store {
         crate::terms_store::Store::open(&self.0).await
     }
 
+    pub(super) async fn open_approvals(&self) -> io::Result<crate::approval_store::Store> {
+        crate::approval_store::Store::open(&self.0).await
+    }
+
     pub async fn get(&self, scope: Scope, plan_id: Uuid) -> Result<Option<Draft>, Failure> {
         Ok(self
             .0
