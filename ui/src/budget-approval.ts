@@ -7,7 +7,7 @@ import { Feedback } from './ui';
 
 type StageState = 'pending' | 'approved';
 interface Stage {key: string; state: StageState}
-interface Approval {
+export interface BudgetApproval {
   proposal_id: string; plan_id: string; terms_revision: number;
   policy_id: string; policy_revision: number; currency: 'EUR'; total: string;
   state: StageState; stages: Stage[];
@@ -15,6 +15,7 @@ interface Approval {
 interface Access {
   path: string; plan: string; proposal: string; revision: number;
   headers: Record<string, string>; signal: AbortSignal;
+  context: ReturnType<ArticleApi['scopedContext']>; refresh: number;
 }
 const stageKey = /^[a-z][a-z0-9-]{0,31}(?![\s\S])/;
 
@@ -35,9 +36,9 @@ const stageKey = /^[a-z][a-z0-9-]{0,31}(?![\s\S])/;
           }
         </ol>
         @if (approval.state === 'approved') {
-          <p>{{ t()('budgetApprovalComplete') }}</p>
+          <p>{{ t()(api.canReadPurchaseOrders() ? 'budgetApprovalReady' : 'budgetApprovalComplete') }}</p>
         } @else if (next(); as stage) {
-          @if (canApprove(stage.key)) {
+          @if (!locked() && canApprove(stage.key)) {
             <button type="button" (click)="approve()" [disabled]="busy() || stale()">
               <svg lucideCheck aria-hidden="true"></svg>{{ t()('budgetApproveStage') }}: {{ name(stage.key) }}
             </button>
@@ -54,20 +55,26 @@ export class BudgetApprovalPanel {
   readonly planId = input.required<string>();
   readonly proposalId = input.required<string>();
   readonly termsRevision = input.required<number>();
+  readonly locked = input(false);
   readonly api = inject(ArticleApi);
   readonly t = inject(Preferences).t;
-  readonly current = signal<Approval | null>(null);
+  readonly current = signal<BudgetApproval | null>(null);
   readonly busy = signal(false);
   readonly stale = signal(false);
   readonly message = signal<Message | null>(null);
   readonly reload = signal(0);
   readonly next = computed(() => this.current()?.stages.find(stage => stage.state === 'pending'));
+  readonly approved = computed(() => {
+    const approval = this.current();
+    return approval?.state === 'approved' && !this.busy() && !this.stale() && !this.message()
+      && this.isCurrent(this.access) ? approval : null;
+  });
   private access?: Access;
   private retry?: {intent: string; id: string};
 
   constructor() {
     effect(onCleanup => {
-      this.reload();
+      const refresh = this.reload(), context = this.api.scopedContext();
       const plan = this.planId(), proposal = this.proposalId(), revision = this.termsRevision();
       const allowed = this.api.canReadProposal();
       const headers = this.api.requestHeaders();
@@ -82,7 +89,7 @@ export class BudgetApprovalPanel {
       onCleanup(() => control.abort());
       this.access = {
         path: `/v1/procurement/proposals/by-plan/${plan}/approval`,
-        plan, proposal, revision, headers, signal: control.signal,
+        plan, proposal, revision, headers, signal: control.signal, context, refresh,
       };
       void this.update(this.access);
     });
@@ -100,7 +107,8 @@ export class BudgetApprovalPanel {
 
   approve() {
     const stage = this.next(), approval = this.current(), access = this.access;
-    if (!stage || !approval || !access || this.busy() || this.stale() || !this.canApprove(stage.key)) return;
+    if (!stage || !approval || !this.isCurrent(access) || this.locked() || this.busy() || this.stale()
+      || !this.canApprove(stage.key)) return;
     const intent = {
       terms_revision: access.revision, policy_id: approval.policy_id,
       policy_revision: approval.policy_revision, stage_key: stage.key,
@@ -108,6 +116,12 @@ export class BudgetApprovalPanel {
     const key = JSON.stringify(intent);
     if (this.retry?.intent !== key) this.retry = {intent: key, id: crypto.randomUUID()};
     void this.update(access, JSON.stringify({command_id: this.retry.id, ...intent}));
+  }
+
+  private isCurrent(access?: Access): access is Access {
+    return !!access && !access.signal.aborted && access.context === this.api.scopedContext()
+      && access.refresh === this.reload() && access.plan === this.planId() && access.proposal === this.proposalId()
+      && access.revision === this.termsRevision();
   }
 
   private async update(access: Access, body?: string) {
@@ -121,7 +135,7 @@ export class BudgetApprovalPanel {
         signal: AbortSignal.any([signal, AbortSignal.timeout(body === undefined ? 6000 : 10000)]),
         cache: 'no-store', redirect: 'error',
       });
-      if (signal.aborted) return;
+      if (!this.isCurrent(access)) return;
       if (response.status === 403) {
         this.message.set('budgetApprovalDenied');
       } else if (response.status === 409) {
@@ -130,13 +144,15 @@ export class BudgetApprovalPanel {
       } else if (!response.ok) {
         this.message.set('budgetApprovalUnavailable');
       } else {
-        const approval: Approval = await response.json();
-        if (signal.aborted) return;
+        const approval: BudgetApproval = await response.json();
+        if (!this.isCurrent(access)) return;
         if (approval.plan_id !== access.plan || approval.proposal_id !== access.proposal
           || !isArticleId(approval.policy_id) || approval.currency !== 'EUR'
           || !Number.isSafeInteger(approval.policy_revision) || approval.policy_revision < 1
           || !Array.isArray(approval.stages) || approval.stages.length < 1 || approval.stages.length > 8
-          || approval.stages.some(stage => !stageKey.test(stage.key) || !['pending', 'approved'].includes(stage.state))
+          || approval.stages.some(stage => !stage || typeof stage.key !== 'string'
+            || !stageKey.test(stage.key) || !['pending', 'approved'].includes(stage.state))
+          || new Set(approval.stages.map(stage => stage.key)).size !== approval.stages.length
           || approval.state !== (approval.stages.every(stage => stage.state === 'approved') ? 'approved' : 'pending')) {
           throw new Error('Invalid budget approval view');
         }
@@ -150,9 +166,9 @@ export class BudgetApprovalPanel {
         this.message.set(null);
       }
     } catch {
-      if (!signal.aborted) this.message.set('budgetApprovalUnavailable');
+      if (this.isCurrent(access)) this.message.set('budgetApprovalUnavailable');
     } finally {
-      if (!signal.aborted) this.busy.set(false);
+      if (this.isCurrent(access)) this.busy.set(false);
     }
   }
 }

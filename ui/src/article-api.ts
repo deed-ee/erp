@@ -21,6 +21,9 @@ export class ArticleApi {
   private readonly verifiedPlatform = signal<string[]>([]);
   private readonly selected = signal(0);
   private readonly sessionVersion = signal(0);
+  private readonly credentialExpired = signal(false);
+  private expiresAt = Infinity;
+  private expiryTimer?: ReturnType<typeof setTimeout>;
   private pending?: AbortController;
   readonly hasCredential = computed(() => Boolean(this.credential()));
   readonly grants = this.verifiedGrants.asReadonly();
@@ -36,6 +39,10 @@ export class ArticleApi {
     && (this.grant()?.permissions.includes('inventory.material-plan.create') ?? false));
   readonly canSendMaterialPlan = computed(() => this.grant()?.permissions.includes('inventory.material-plan.send') ?? false);
   readonly canReadProposal = computed(() => this.grant()?.permissions.includes('procurement.proposal.read') ?? false);
+  readonly canReadPurchaseOrders = computed(() => this.grant()?.permissions.includes('procurement.purchase-order.read') ?? false);
+  readonly freshCredential = computed(() => !this.credentialExpired() && this.hasCredential());
+  readonly canIssuePurchaseOrders = computed(() => this.freshCredential() && this.canReadPurchaseOrders()
+    && (this.grant()?.permissions.includes('procurement.purchase-order.issue') ?? false));
   readonly canEditProposalTerms = computed(() => this.canReadProposal() && this.canReadPartners()
     && (this.grant()?.permissions.includes('procurement.proposal.terms.write') ?? false));
   readonly canCreateSalesDraft = computed(() => this.canReadPartners() && this.canPlan()
@@ -45,12 +52,14 @@ export class ArticleApi {
   readonly canReadHealth = computed(() => this.diagnosticsPermissions().includes('platform.health.read'));
   readonly canReadRuntime = computed(() => this.diagnosticsPermissions().includes('platform.runtime.read'));
   readonly canReadLogs = computed(() => this.diagnosticsPermissions().includes('platform.logs.read'));
-  readonly diagnosticsContext = computed(() => [this.sessionVersion(), this.selected()] as const);
+  readonly credentialGeneration = this.sessionVersion.asReadonly();
+  readonly scopedContext = computed(() => [this.sessionVersion(), this.selected()] as const);
+  readonly diagnosticsContext = this.scopedContext;
 
   setCredential(value: string) {
     if (!isLoopback() || !value.trim()) return false;
     this.clearCredential();
-    this.credential.set(value.trim());
+    this.setSessionToken(value.trim());
     void this.readGrants(value.trim());
     return true;
   }
@@ -58,7 +67,7 @@ export class ArticleApi {
   async acceptAccessToken(token: string): Promise<boolean> {
     if (!isLoopback() || !token.trim()) return false;
     this.clearCredential();
-    this.credential.set(token);
+    this.setSessionToken(token);
     if (await this.readGrants(token)) return true;
     if (this.credential() === token) this.clearCredential();
     return false;
@@ -66,11 +75,34 @@ export class ArticleApi {
 
   clearCredential() {
     this.pending?.abort();
+    clearTimeout(this.expiryTimer);
+    this.expiresAt = Infinity;
+    this.credentialExpired.set(false);
     this.sessionVersion.update(version => version + 1);
     this.credential.set('');
     this.verifiedGrants.set([]);
     this.verifiedPlatform.set([]);
     this.selected.set(0);
+  }
+  credentialStillCurrent() { return this.hasCredential() && Date.now() < this.expiresAt; }
+
+  private setSessionToken(token: string) {
+    this.credential.set(token);
+    // Only suppress expired-token UI. The server still verifies the token and
+    // grants; claims read here never grant access. Opaque fixture tokens work too.
+    try {
+      const part = token.split('.')[1];
+      const {exp} = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+      if (typeof exp !== 'number' || !Number.isSafeInteger(exp) || !Number.isSafeInteger(exp * 1000)) return;
+      this.expiresAt = exp * 1000;
+      this.watchExpiry();
+    } catch { /* No local expiry information. */ }
+  }
+
+  private watchExpiry() {
+    const delay = this.expiresAt - Date.now();
+    if (delay <= 0) this.credentialExpired.set(true);
+    else this.expiryTimer = setTimeout(() => this.watchExpiry(), Math.min(delay, 2_147_483_647));
   }
   selectGrant(index: number) {
     if (this.grants()[index]) this.selected.set(index);

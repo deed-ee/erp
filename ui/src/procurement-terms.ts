@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { LucideArrowRight, LucideRefreshCw, LucideSave } from '@lucide/angular';
 import { ArticleApi, isArticleId } from './article-api';
 import { BudgetApprovalPanel } from './budget-approval';
@@ -7,7 +7,9 @@ import { Preferences } from './preferences';
 import { Feedback } from './ui';
 
 interface Shortage { sku: string; revision: string | null; unit: string; pieces: string }
-export interface PurchaseDraft { proposal_id: string; plan_id: string; status: 'draft'; lines: Shortage[] }
+export interface PurchaseDraft {
+  proposal_id: string; plan_id: string; order_id: string; line_id: string; status: 'draft'; lines: Shortage[];
+}
 interface Supplier { id: string; code: string; name: string }
 interface Edit { supplier_id: string; unit_price: string }
 interface Terms {
@@ -16,6 +18,7 @@ interface Terms {
 }
 interface Access {
   draft: PurchaseDraft; headers: Record<string, string>; signal: AbortSignal; canEdit: boolean;
+  context: ReturnType<ArticleApi['scopedContext']>; refresh: number;
 }
 const empty = { supplier_id: '', unit_price: '' };
 const cents = /^(?:0|[1-9][0-9]{0,6})\.[0-9]{2}(?![\s\S])/;
@@ -42,9 +45,10 @@ const cents = /^(?:0|[1-9][0-9]{0,6})\.[0-9]{2}(?![\s\S])/;
           </tbody>
         </table>
         <erp-budget-approval
-          [planId]="terms.plan_id" [proposalId]="terms.proposal_id" [termsRevision]="terms.revision" />
+          [planId]="terms.plan_id" [proposalId]="terms.proposal_id" [termsRevision]="terms.revision"
+          [locked]="locked() || busy()" />
       }
-      @if (api.canEditProposalTerms() && loaded()) {
+      @if (api.canEditProposalTerms() && loaded() && !locked()) {
         <form (submit)="save($event)">
           <fieldset [disabled]="busy()">
             <legend>{{ t()('editPurchaseTerms') }}</legend>
@@ -98,6 +102,7 @@ const cents = /^(?:0|[1-9][0-9]{0,6})\.[0-9]{2}(?![\s\S])/;
 })
 export class ProcurementTermsPanel {
   readonly draft = input.required<PurchaseDraft>();
+  readonly locked = input(false);
   readonly api = inject(ArticleApi);
   readonly t = inject(Preferences).t;
   readonly stored = signal<Terms | null>(null);
@@ -110,6 +115,14 @@ export class ProcurementTermsPanel {
   readonly loadingSuppliers = signal(false);
   readonly conflict = signal(false);
   readonly reload = signal(0);
+  private readonly budget = viewChild(BudgetApprovalPanel);
+  readonly approved = computed(() => {
+    const saved = this.stored(), approval = this.budget()?.approved();
+    return saved && approval && this.isCurrent(this.access) && !this.busy() && !this.conflict()
+      && approval.plan_id === saved.plan_id && approval.proposal_id === saved.proposal_id
+      && approval.terms_revision === saved.revision && approval.currency === saved.currency
+      && approval.total === saved.total ? approval : null;
+  });
   readonly complete = computed(() => this.draft().lines.every(line => {
     const edit = this.edit(line);
     return cents.test(edit.unit_price) && this.suppliers().some(supplier => supplier.id === edit.supplier_id);
@@ -126,7 +139,7 @@ export class ProcurementTermsPanel {
 
   constructor() {
     effect(onCleanup => {
-      this.reload();
+      const refresh = this.reload(), context = this.api.scopedContext();
       const draft = this.draft();
       const headers = this.api.requestHeaders();
       const canEdit = this.api.canEditProposalTerms();
@@ -144,7 +157,7 @@ export class ProcurementTermsPanel {
       if (!this.api.canReadProposal() || !isArticleId(draft.plan_id)) return;
       const controller = new AbortController();
       onCleanup(() => controller.abort());
-      this.access = {draft, headers, signal: controller.signal, canEdit};
+      this.access = {draft, headers, signal: controller.signal, canEdit, context, refresh};
       void this.load(this.access);
     });
   }
@@ -156,14 +169,17 @@ export class ProcurementTermsPanel {
   }
 
   more(cursor: string) {
-    if (this.access && !this.loadingSuppliers() && cursor === this.next()) void this.loadSuppliers(this.access, cursor);
+    if (this.isCurrent(this.access) && !this.locked() && !this.loadingSuppliers() && cursor === this.next()) {
+      void this.loadSuppliers(this.access, cursor);
+    }
   }
 
   async save(event: Event) {
     event.preventDefault();
     const access = this.access;
-    if (!access || !access.canEdit || !this.loaded() || this.busy() || !this.complete() || !this.dirty() || this.conflict()) return;
-    const { signal, draft } = access;
+    if (!this.isCurrent(access) || !access.canEdit || this.locked() || !this.loaded() || this.busy() || !this.complete()
+      || !this.dirty() || this.conflict()) return;
+    const { draft } = access;
     const intent = {
       expected_revision: this.stored()?.revision ?? 0,
       lines: draft.lines.map(line => ({sku:line.sku, revision:line.revision, ...this.edit(line)})),
@@ -176,7 +192,7 @@ export class ProcurementTermsPanel {
       const response = await this.request(access, this.path(draft.plan_id), JSON.stringify({
         command_id:this.pending.id, ...intent,
       }));
-      if (signal.aborted) return;
+      if (!this.isCurrent(access)) return;
       if (response.status === 409) {
         this.conflict.set(true);
         this.message.set('purchaseTermsConflict');
@@ -184,16 +200,21 @@ export class ProcurementTermsPanel {
         this.message.set('purchaseTermsInvalid');
       } else {
         const terms = await this.readTerms(response, draft);
-        if (signal.aborted) return;
+        if (!this.isCurrent(access)) return;
         this.stored.set(terms);
         this.pending = undefined;
         this.message.set('purchaseTermsSaved');
       }
     } catch {
-      if (!signal.aborted) this.message.set('unavailable');
+      if (this.isCurrent(access)) this.message.set('unavailable');
     } finally {
-      if (!signal.aborted) this.busy.set(false);
+      if (this.isCurrent(access)) this.busy.set(false);
     }
+  }
+
+  private isCurrent(access?: Access): access is Access {
+    return !!access && !access.signal.aborted && access.context === this.api.scopedContext()
+      && access.refresh === this.reload() && access.draft === this.draft();
   }
 
   private path(plan: string) { return `/v1/procurement/proposals/by-plan/${plan}/terms`; }
@@ -219,10 +240,10 @@ export class ProcurementTermsPanel {
   private async load(access: Access) {
     try {
       const response = await this.request(access, this.path(access.draft.plan_id));
-      if (access.signal.aborted) return;
+      if (!this.isCurrent(access)) return;
       if (response.status !== 404) {
         const stored = await this.readTerms(response, access.draft);
-        if (access.signal.aborted) return;
+        if (!this.isCurrent(access)) return;
         this.stored.set(stored);
         this.edits.set(Object.fromEntries(stored.lines.map(line => [this.label(line), {
           supplier_id:line.supplier.id, unit_price:line.unit_price,
@@ -232,7 +253,7 @@ export class ProcurementTermsPanel {
       this.loaded.set(true);
       if (access.canEdit) await this.loadSuppliers(access);
     } catch {
-      if (!access.signal.aborted) this.message.set('unavailable');
+      if (this.isCurrent(access)) this.message.set('unavailable');
     }
   }
 
@@ -244,14 +265,14 @@ export class ProcurementTermsPanel {
       const response = await this.request(access, `/v1/partners?${parameters}`);
       if (!response.ok) throw new Error('Suppliers unavailable');
       const page: { items: Supplier[]; next_after: string | null } = await response.json();
-      if (access.signal.aborted) return;
+      if (!this.isCurrent(access)) return;
       this.suppliers.update(previous => [...new Map([...previous, ...page.items]
         .map(supplier => [supplier.id, supplier])).values()]);
       this.next.set(page.next_after);
     } catch {
-      if (!access.signal.aborted) this.message.set('unavailable');
+      if (this.isCurrent(access)) this.message.set('unavailable');
     } finally {
-      if (!access.signal.aborted) this.loadingSuppliers.set(false);
+      if (this.isCurrent(access)) this.loadingSuppliers.set(false);
     }
   }
 }
