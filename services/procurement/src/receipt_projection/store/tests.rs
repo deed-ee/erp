@@ -1,8 +1,12 @@
 use super::*;
 use crate::{receipt_wire, receipt_wire::tests::fixture};
-use erp4us_messaging::HeaderMap;
+use erp4us_messaging::{Contract, Delivery, HeaderMap, Scope as SubjectScope, consumer, stream};
+use futures_util::StreamExt;
 use mongodb::Client;
 use serde_json::{Value, json};
+
+#[path = "../../../../../tests/integration/receipt_transport.rs"]
+mod transport;
 
 struct Sample {
     scope: Scope,
@@ -366,4 +370,165 @@ async fn mongo_persists_gaps_replay_conflicts_and_bounded_continuation() {
         u64::from(last + 2)
     );
     db.drop().await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires disposable loopback Mongo replica set and the Inventory transport publisher's JetStream"]
+async fn receipt_transport_observe_inventory_facts_and_exact_replay() {
+    let (db, jetstream) = transport::connect("procurement").await;
+    // Fixture authorization and issued line are independent of the received envelope.
+    // This proof does not issue an order or grant authority to receive.
+    let scope = Scope {
+        tenant_id: Uuid::from_u128(1),
+        organization_id: Uuid::from_u128(2),
+    };
+    let key = LineKey {
+        tenant_id: scope.tenant_id,
+        organization_id: scope.organization_id,
+        plan_id: Uuid::from_u128(6),
+        purchase_order_id: Uuid::from_u128(9),
+        purchase_line_id: Uuid::from_u128(10),
+        sku: "NM-ENDPLATE",
+        revision: None,
+        unit: "EA",
+    };
+    let issued = IssuedLine::new(scope, key, "12").unwrap();
+    let subject = ReceiptPosted::ROUTE
+        .subject(1, SubjectScope::Tenant(scope.tenant_id), 1)
+        .unwrap();
+    let Delivery::JetStream(name) = ReceiptPosted::DELIVERY else {
+        panic!("the receipt contract requires JetStream");
+    };
+    let ops = jetstream.operations();
+    let stream = ops.get_stream(name).await.unwrap();
+    let info = stream.cached_info();
+    assert_eq!(
+        info.config.description.as_deref(),
+        Some(transport::STREAM_MARKER)
+    );
+    assert_eq!(
+        info.config.subjects.as_slice(),
+        std::slice::from_ref(&subject)
+    );
+    assert_eq!(info.config.storage, stream::StorageType::Memory);
+    assert_eq!(info.state.messages, 2);
+    let consumer = stream
+        .create_consumer(consumer::pull::Config {
+            filter_subject: subject,
+            ack_policy: consumer::AckPolicy::Explicit,
+            max_ack_pending: 1,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let mut deliveries = consumer.messages().await.unwrap();
+    let original = stream.get_raw_message(1).await.unwrap();
+    let mut store = Store::open(&db).await.unwrap();
+    let unknown = View {
+        state: Observation::Unknown,
+        projected_at: None,
+    };
+    assert_eq!(store.read(issued).await.unwrap(), unknown);
+    let mut completed = None;
+    for (broker_sequence, lot, receipt, expected) in [
+        (1, 2, 12, Admission::Staged),
+        (2, 1, 11, Admission::Staged),
+        (3, 2, 12, Admission::Replay),
+    ] {
+        if expected == Admission::Replay {
+            let ack = jetstream.replay::<ReceiptPosted>(&original).await.unwrap();
+            assert_eq!(ack.sequence, broker_sequence);
+            assert!(!ack.duplicate);
+        }
+        let delivery = timeout(transport::WAIT, deliveries.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(delivery.info().unwrap().stream_sequence, broker_sequence);
+        let headers = delivery.headers.as_ref().unwrap();
+        let decode = |scope| {
+            receipt_wire::decode(scope, delivery.subject.as_str(), headers, &delivery.payload)
+        };
+        let event = decode(scope).unwrap();
+        assert_eq!(event.payload.receipt_sequence, lot);
+        assert_eq!(event.payload.receipt_id, Uuid::from_u128(receipt));
+        assert_eq!(event.payload.pieces, "6");
+        let message_id = event.message_id.to_string();
+        let dedup_id = if expected == Admission::Replay {
+            assert_eq!(delivery.subject, original.subject);
+            assert_eq!(delivery.payload, original.payload);
+            format!("replay-1-{message_id}")
+        } else {
+            message_id
+        };
+        assert_eq!(headers.get("Nats-Msg-Id").unwrap().as_str(), dedup_id);
+        if broker_sequence == 1 {
+            for foreign in [
+                Scope {
+                    tenant_id: Uuid::from_u128(81),
+                    ..scope
+                },
+                Scope {
+                    organization_id: Uuid::from_u128(82),
+                    ..scope
+                },
+            ] {
+                assert!(decode(foreign).is_none());
+            }
+            for other in [
+                LineKey {
+                    purchase_order_id: Uuid::from_u128(83),
+                    ..key
+                },
+                LineKey {
+                    purchase_line_id: Uuid::from_u128(84),
+                    ..key
+                },
+            ] {
+                let unrelated = IssuedLine::new(scope, other, "12").unwrap();
+                assert_eq!(
+                    store.record(unrelated, scope, &event).await.unwrap(),
+                    Admission::NotForLine
+                );
+            }
+        }
+        assert_eq!(store.record(issued, scope, &event).await.unwrap(), expected);
+        timeout(transport::WAIT, delivery.double_ack())
+            .await
+            .unwrap()
+            .unwrap();
+        match broker_sequence {
+            1 => {
+                assert_eq!(store.read(issued).await.unwrap(), unknown);
+                // Reopen before filling the gap to prove staging is durable.
+                drop(store);
+                store = Store::open(&db).await.unwrap();
+                assert_eq!(store.read(issued).await.unwrap(), unknown);
+            }
+            2 => {
+                let view = store.read(issued).await.unwrap();
+                assert_eq!(view.state, observed(12, 0, 2));
+                assert!(view.projected_at.is_some());
+                completed = Some(view);
+            }
+            _ => assert_eq!(Some(store.read(issued).await.unwrap()), completed),
+        }
+    }
+    assert_eq!(
+        db.collection::<Document>(INBOX)
+            .count_documents(doc! {})
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        db.collection::<Document>(SUMMARIES)
+            .count_documents(doc! {})
+            .await
+            .unwrap(),
+        1
+    );
+    db.drop().await.unwrap();
+    ops.delete_stream(name).await.unwrap();
 }

@@ -1,8 +1,11 @@
 use super::*;
 use crate::{netting::Item, preview::Warehouse};
-use erp4us_messaging::Envelope;
+use erp4us_messaging::{Contract, Delivery, Envelope, stream};
 use mongodb::{Client, bson, bson::Bson};
 use serde_json::{Value, json};
+
+#[path = "../../../../../tests/integration/receipt_transport.rs"]
+mod transport;
 
 const SCOPE: erp4us_identity::Scope = erp4us_identity::Scope {
     tenant: Uuid::from_u128(1),
@@ -60,6 +63,33 @@ fn plan_record(command: Command) -> Document {
         },
         "handoff": {"pending": false, "envelope": "original handoff stays unchanged"},
     }
+}
+
+async fn seed_waiting_endplates(db: &Database, command: Command, component: &Document) {
+    db.collection::<Document>("material_plans")
+        .insert_one(plan_record(command))
+        .await
+        .unwrap();
+    db.collection::<Document>("reservations")
+        .insert_one(doc! {
+            "_id": sales_key(command.sales), "schemaVersion": SCHEMA, "materialPlanId": PLAN.to_string(),
+            "sourceEventId": SOURCE_EVENT.to_string(), "reserved": 0, "outstanding": 10,
+            "stock": Warehouse { tenant: SCOPE.tenant, organization: SCOPE.organization, id: WAREHOUSE }
+                .stock_key("NM-1000", Some("A")),
+        })
+        .await
+        .unwrap();
+    db.collection::<Document>("balances")
+        .insert_one(doc! {"_id": component, "schemaVersion": SCHEMA, "available": 0, "expected": 0})
+        .await
+        .unwrap();
+    db.collection::<Document>(LEDGER)
+        .insert_one(doc! {
+            "_id": {"stock": component, "kind": "preview-opening"},
+            "schemaVersion": SCHEMA, "quantity": 8,
+        })
+        .await
+        .unwrap();
 }
 
 fn saved_fixture() -> Saved {
@@ -325,24 +355,9 @@ async fn mongo_competing_lots_and_rollback_keep_all_effects_atomic() {
     let issued = source(first, &destination.item);
     let historical = plan_record(first);
     let sales = sales_key(first.sales);
-    plans.insert_one(historical.clone()).await.unwrap();
-    reservations.insert_one(doc! {
-        "_id": &sales, "schemaVersion": SCHEMA, "materialPlanId": PLAN.to_string(),
-        "sourceEventId": SOURCE_EVENT.to_string(), "reserved": 0, "outstanding": 10,
-        "stock": Warehouse { tenant: SCOPE.tenant, organization: SCOPE.organization, id: WAREHOUSE }
-            .stock_key("NM-1000", Some("A")),
-    }).await.unwrap();
-    for key in [component.clone(), stock_key(&screws)] {
-        balances
-            .insert_one(doc! {"_id": key, "schemaVersion": SCHEMA, "available": 0, "expected": 0})
-            .await
-            .unwrap();
-    }
-    ledger
-        .insert_one(doc! {
-            "_id": {"stock": &component, "kind": "preview-opening"},
-            "schemaVersion": SCHEMA, "quantity": 8,
-        })
+    seed_waiting_endplates(&db, first, &component).await;
+    balances
+        .insert_one(doc! {"_id": stock_key(&screws), "schemaVersion": SCHEMA, "available": 0, "expected": 0})
         .await
         .unwrap();
     assert_eq!(store.replay(first).await.unwrap(), None);
@@ -549,4 +564,76 @@ async fn mongo_competing_lots_and_rollback_keep_all_effects_atomic() {
         2
     );
     db.drop().await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires disposable loopback Mongo replica set and empty JetStream; run before Procurement transport test"]
+async fn receipt_transport_publish_committed_inventory_outbox() {
+    let (db, jetstream) = transport::connect("inventory").await;
+    let ops = jetstream.operations();
+    assert_eq!(
+        ops.query_account().await.unwrap().streams,
+        0,
+        "the proof must start with an empty, disposable JetStream"
+    );
+    let store = Store::open(&db).await.unwrap();
+    let first = command(SCOPE, 11, "6");
+    let second = command(SCOPE, 12, "6");
+    let destination = stock(first, "NM-ENDPLATE");
+    let issued = source(first, &destination.item);
+    seed_waiting_endplates(&db, first, &stock_key(&destination)).await;
+    let mut committed = Vec::new();
+    for command in [first, second] {
+        let Post::Created(saved) = store
+            .post(command, &issued, &destination, ActorKind::User)
+            .await
+            .unwrap()
+        else {
+            panic!("expected a new committed lot");
+        };
+        let row = store
+            .majority_read(RECEIPTS)
+            .find_one(doc! {
+                "_id": receipt_key(command), "outbox.pending": true,
+                "outbox.messageId": saved.message_id.to_string(),
+            })
+            .projection(doc! {"_id": 0, "outbox.envelope": 1})
+            .await
+            .unwrap()
+            .unwrap();
+        let body = row
+            .get_document("outbox")
+            .unwrap()
+            .get_str("envelope")
+            .unwrap();
+        let event: Envelope<fact::Posted> = serde_json::from_str(body).unwrap();
+        assert_eq!(event.message_id, saved.message_id);
+        // JetStream::publish must send the same body, not a reconstructed fixture.
+        assert_eq!(serde_json::to_string(&event).unwrap(), body);
+        committed.push(event);
+    }
+    db.drop().await.unwrap();
+
+    let Delivery::JetStream(name) = fact::Posted::DELIVERY else {
+        panic!("the owner contract requires JetStream");
+    };
+    ops.create_stream(stream::Config {
+        name: name.into(),
+        description: Some(transport::STREAM_MARKER.into()),
+        subjects: vec![committed[0].subject().unwrap()],
+        storage: stream::StorageType::Memory,
+        max_messages: 3,
+        max_age: Duration::from_secs(900),
+        max_message_size: 8 * 1024,
+        discard: stream::DiscardPolicy::New,
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+    // Deliver the second physical lot first. Separate test processes share only this stream.
+    for (sequence, event) in (1..).zip(committed.iter().rev()) {
+        let ack = jetstream.publish(event).await.unwrap();
+        assert_eq!(ack.sequence, sequence);
+        assert!(!ack.duplicate);
+    }
 }
