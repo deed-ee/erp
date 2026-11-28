@@ -111,6 +111,61 @@ paths:
         '404': { description: No proposal for that plan in the authorized scope }
         '409': { description: 'Stale or exhausted terms revision, or changed intent under an already saved command ID' }
         '503': { description: 'Procurement storage or supplier verification unavailable, or write outcome uncertain' }
+  /v1/procurement/proposals/by-plan/{plan_id}/approval:
+    x-preview-proposed: true
+    parameters:
+      - in: header
+        name: X-Erp4us-Tenant
+        required: true
+        schema: { type: string, format: uuid }
+      - in: header
+        name: X-Erp4us-Organization
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: plan_id
+        required: true
+        schema: { $ref: '#/components/schemas/Id' }
+    get:
+      operationId: getDraftBudgetApproval
+      description: >
+        Requires procurement.proposal.read. Reports required stages and decisions for the exact current terms
+        and configured policy. Old decisions never count toward revised terms or policy. A completed approval
+        does not place a purchase order or reserve a budget balance. The policy is not editable here.
+      responses:
+        '200': { $ref: '#/components/responses/BudgetApproval' }
+        '400': { description: Invalid scope selectors or plan reference }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing scoped read grant }
+        '404': { description: No saved proposal terms for the plan in the authorized scope }
+        '503': { description: No applicable policy or approval storage is unavailable }
+    post:
+      operationId: recordBudgetApprovalStage
+      description: >
+        Requires the proposal read grant and the exact procurement.approval.<stage_key> grant in the
+        verified scope. Records a positive approval of the next required stage only. The verified terms
+        editor cannot approve; the configured policy may also require different actors among stages.
+        The caller names the reviewed versions but cannot supply amounts, approvers, grants or stage thresholds.
+        Approval after all stages is distinct from explicitly issuing a purchase order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApproveBudgetStage' }
+      responses:
+        '201': { $ref: '#/components/responses/BudgetApproval' }
+        '200':
+          description: Original stage result on an authorized identical command retry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetApproval' }
+        '400': { description: Malformed scope selectors or command }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing grant or actor is not permitted by the separation rule }
+        '404': { description: No saved proposal terms in the authorized scope }
+        '409':
+          description: 'Reviewed terms or policy changed, stage is not the next eligible stage, or command ID was used with different intent'
+        '503': { description: 'No applicable policy, storage unavailable, or write outcome uncertain' }
 components:
   securitySchemes:
     AccessToken: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -121,6 +176,11 @@ components:
         WWW-Authenticate:
           required: true
           schema: { type: string, const: Bearer }
+    BudgetApproval:
+      description: Versioned result of the scoped budget approval
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BudgetApproval' }
   schemas:
     Id:
       type: string
@@ -232,3 +292,39 @@ components:
               unit_price: { $ref: '#/components/schemas/UnitPrice' }
               line_total: { $ref: '#/components/schemas/Amount' }
         total: { $ref: '#/components/schemas/Amount' }
+    ApprovalStageKey: { type: string, pattern: '^[a-z][a-z0-9-]{0,31}(?![\s\S])' }
+    PositiveRevision: { type: integer, minimum: 1, maximum: 2147483647 }
+    ApproveBudgetStage:
+      type: object
+      additionalProperties: false
+      required: [command_id, terms_revision, policy_id, policy_revision, stage_key]
+      properties:
+        command_id: { $ref: '#/components/schemas/CanonicalId' }
+        terms_revision: { $ref: '#/components/schemas/PositiveRevision' }
+        policy_id: { $ref: '#/components/schemas/CanonicalId' }
+        policy_revision: { $ref: '#/components/schemas/PositiveRevision' }
+        stage_key: { $ref: '#/components/schemas/ApprovalStageKey' }
+    BudgetApproval:
+      type: object
+      additionalProperties: false
+      required: [proposal_id, plan_id, terms_revision, policy_id, policy_revision, currency, total, state, stages]
+      properties:
+        proposal_id: { $ref: '#/components/schemas/Id' }
+        plan_id: { $ref: '#/components/schemas/Id' }
+        terms_revision: { $ref: '#/components/schemas/PositiveRevision' }
+        policy_id: { $ref: '#/components/schemas/Id' }
+        policy_revision: { $ref: '#/components/schemas/PositiveRevision' }
+        currency: { type: string, const: EUR }
+        total: { $ref: '#/components/schemas/Amount' }
+        state: { type: string, enum: [pending, approved] }
+        stages:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, state]
+            properties:
+              key: { $ref: '#/components/schemas/ApprovalStageKey' }
+              state: { type: string, enum: [pending, approved] }
