@@ -54,6 +54,9 @@ erp-command-bar { display: block; flex: 1 1 40rem; min-width: 0; max-width: 48re
 .command-status:empty { margin: 0; }
 .command-panel h2 { margin-block-start: .35rem; }
 .command-evidence { font-size: .88rem; margin-block-end: 0; align-items: baseline; }
+.command-matches { list-style: none; display: grid; gap: .35rem; padding: 0; margin-block: .55rem; }
+.command-matches .button { justify-content: start; }
+.exact-filter { white-space: pre-wrap; }
 .shell-body { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: stretch; }
 .rail, .secondary { background: var(--nav); border-inline-end: 1px solid var(--edge); }
 .rail { min-inline-size: 10.5rem; display: flex; flex-direction: column; padding: var(--space-3) var(--space-2); gap: var(--space-3); }

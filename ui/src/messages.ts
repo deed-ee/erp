@@ -18,7 +18,7 @@ const en = {
   credentialCleared: 'Session credential cleared.', register: 'Register product', lookup: 'Find by article ID',
   retrieve: 'Retrieve article', sku: 'SKU', name: 'Name', id: 'Article ID', skuHint: '1–32 characters: A–Z, digits or hyphens.',
   listUnavailable: 'Product browsing is not available yet',
-  listHint: 'Use an exact SKU or article ID. Browsing and name search are not available.',
+  listHint: 'Use an exact SKU or article ID here, or search for an exact name in global search.',
   registerIntro: 'Create a new article in the fixed local demo scope.', general: 'General information',
   save: 'Save product', cancel: 'Cancel', discard: 'Discard unsaved product changes?',
   details: 'Product details', revision: 'Revision', backToProducts: 'Back to products',
@@ -34,7 +34,11 @@ const en = {
   commandNoMatches: 'No article matches this filter in the selected scope.',
   commandInterpretation: 'Interpreted as', commandScope: 'Scope', commandSource: 'Source',
   clarificationRequired: 'Enter one article ID or one exact SKU.',
-  unsupportedQuery: 'This search supports exact article IDs and SKUs only. It cannot change records.',
+  unsupportedQuery: 'This search supports exact article IDs, SKUs and article names. It cannot change records.',
+  'masterData.article.findByName': 'Find article by exact name',
+  commandNameRequired: 'Enter one exact article name. Use double quotes to preserve spaces at the beginning or end.',
+  commandChooseArticle: 'Several articles have this name. Choose an article by SKU.',
+  commandMoreMatches: 'Only the first five matches are shown. Enter its exact SKU to find another article.',
   executionError: 'The service returned an unexpected response. No result can be shown.',
   invalidSku: 'Enter an exact SKU: 1–32 letters, digits or hyphens.'
 };
@@ -58,7 +62,7 @@ const de: typeof en = {
   credentialCleared: 'Sitzungszugang gelöscht.', register: 'Produkt anlegen', lookup: 'Über Artikel-ID finden',
   retrieve: 'Artikel abrufen', sku: 'SKU', name: 'Bezeichnung', id: 'Artikel-ID', skuHint: '1–32 Zeichen: A–Z, Ziffern oder Bindestrich.',
   listUnavailable: 'Die Produktliste ist noch nicht verfügbar',
-  listHint: 'Nutze eine exakte SKU oder Artikel-ID. Eine Liste und die Suche nach Bezeichnung sind nicht verfügbar.',
+  listHint: 'Nutze hier eine exakte SKU oder Artikel-ID. Eine exakte Bezeichnung kannst du in der globalen Suche eingeben.',
   registerIntro: 'Lege einen Artikel im festen lokalen Demo-Kontext an.', general: 'Allgemeine Informationen',
   save: 'Produkt speichern', cancel: 'Abbrechen', discard: 'Nicht gespeicherte Produktänderungen verwerfen?',
   details: 'Produktdetails', revision: 'Revision', backToProducts: 'Zurück zu Produkten',
@@ -74,7 +78,11 @@ const de: typeof en = {
   commandNoMatches: 'Im ausgewählten Kontext entspricht kein Artikel diesem Filter.',
   commandInterpretation: 'Verstanden als', commandScope: 'Kontext', commandSource: 'Quelle',
   clarificationRequired: 'Gib genau eine Artikel-ID oder eine exakte SKU ein.',
-  unsupportedQuery: 'Die Suche unterstützt nur exakte Artikel-IDs und SKUs. Sie ändert keine Datensätze.',
+  unsupportedQuery: 'Die Suche unterstützt exakte Artikel-IDs, SKUs und Artikelbezeichnungen. Sie ändert keine Datensätze.',
+  'masterData.article.findByName': 'Artikel per exakter Bezeichnung finden',
+  commandNameRequired: 'Gib eine exakte Artikelbezeichnung ein. Anführungszeichen erhalten Leerzeichen am Anfang oder Ende.',
+  commandChooseArticle: 'Mehrere Artikel haben diese Bezeichnung. Wähle einen Artikel anhand seiner SKU.',
+  commandMoreMatches: 'Nur die ersten fünf Treffer werden angezeigt. Gib die exakte SKU ein, um einen anderen Artikel zu finden.',
   executionError: 'Der Dienst hat unerwartet geantwortet. Es kann kein Ergebnis angezeigt werden.',
   invalidSku: 'Gib eine exakte SKU ein: 1–32 Buchstaben, Ziffern oder Bindestriche.'
 };

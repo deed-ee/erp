@@ -29,6 +29,20 @@
           "de": ["finde artikel mit sku", "zeige mir den artikel mit sku", "finde produkt nach sku", "zeige produkt"]
         }
       }
+    },
+    "findByName": {
+      "kind": "query",
+      "operationId": "findArticlesByName",
+      "permission": "master-data.article.read",
+      "labelKey": "masterData.article.findByName",
+      "discovery": {
+        "authorizationOperationId": "discoverArticleNameLookup",
+        "parameter": "name",
+        "phrases": {
+          "en": ["find article named", "show articles named"],
+          "de": ["finde artikel mit bezeichnung", "zeige artikel namens"]
+        }
+      }
     }
   }
 }

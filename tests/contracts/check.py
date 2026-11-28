@@ -124,6 +124,23 @@ for ref in manifest["entities"]:
 for path in manifest["health"].values():
     assert api["paths"][path]["get"]["security"] == []
 
+name_matches = validator("article-name-matches-v1.json")
+name_item = {"id": str(uuid4()), "sku": "MOTOR-A", "name": "Drive  housing", "revision": 1}
+name_matches.validate({"matches": [], "hasMore": False})
+name_matches.validate({"matches": [name_item], "hasMore": False})
+valid_group = [{**name_item, "id": str(uuid4()), "sku": f"MOTOR-{i}"} for i in range(5)]
+name_matches.validate({"matches": valid_group, "hasMore": True})
+for invalid_matches in (
+    {"matches": valid_group + [name_item], "hasMore": False},
+    {"matches": [], "hasMore": True},
+    {"matches": [{"sku": "MOTOR-A"}], "hasMore": False},
+    {"matches": [{**name_item, "name": " \u0085"}], "hasMore": False},
+):
+    assert not name_matches.is_valid(invalid_matches)
+assert operations["findArticlesByName"][2]["responses"]["200"]["content"]["application/json"]["schema"] == {
+    "$ref": "../schemas/article-name-matches-v1.json"
+}
+
 command = validator("register-article-v1.json")
 previous_article = load(Path(__file__).with_name("fixtures") / "article-reader-v1.json")
 command.validate(previous_article["request"])

@@ -4,7 +4,9 @@ import subprocess
 import sys
 from tempfile import TemporaryFile
 import time
+import unicodedata
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -189,6 +191,45 @@ def verify_restore(compose, path, article, payload):
             subprocess.run([*target, "down", "-v"], env=target_env, check=True)
 
 
+def verify_name_lookup(reader, writer, separate_writer):
+    endpoint = "/v1/articles:find-by-name"
+    marker = uuid4().hex[:12].upper()
+    name = f"Servo  Gehäuse {marker}"
+    foreign_only_name = f"Private part {marker}"
+    local_scope = (TENANT, ORGANIZATION)
+
+    def register(sku, label, bearer, scope):
+        status, _, result = request("/v1/articles:register", json.dumps({"sku": sku, "name": label}).encode(),
+                                    bearer, scope)
+        assert status == 201
+        return {key: result[key] for key in ("id", "sku", "name", "revision")}
+
+    records = [register(f"NAME-{marker}-{i}", name, writer, local_scope) for i in reversed(range(6))]
+    path = f"{endpoint}?{urlencode({'name': name})}"
+    status, headers, entity = request(endpoint, bearer=reader, method="HEAD")
+    assert status == 204 and headers["Cache-Control"] == "no-store" and entity is None
+    for scope in ((TENANT, OTHER_ORGANIZATION), (OTHER_TENANT, EXTERNAL_ORGANIZATION)):
+        foreign = register(f"A-FOREIGN-{marker}", name, separate_writer, scope)
+        register(f"B-FOREIGN-{marker}", foreign_only_name, separate_writer, scope)
+        assert request(endpoint, bearer=reader, scope=scope, method="HEAD")[0] == 403
+        assert request(path, bearer=reader, scope=scope)[0] == 403
+        assert request(path, bearer=writer, scope=scope)[2] == {"matches": [foreign], "hasMore": False}
+    for address, method in ((endpoint, "HEAD"), (path, "GET")):
+        assert request(address, bearer=None, method=method)[0] == 401
+        assert request(address, bearer=separate_writer, method=method)[0] == 403
+    assert request(path, b"{}", reader)[0] == 405
+    for query in ("", "?name=", "?name=%20", "?name=A%0A", "?name=A&name=B", "?name=A&limit=100",
+                  "?name%5B%24regex%5D=%2E", f"?name={'A' * 121}"):
+        assert request(endpoint + query, bearer=reader)[0] == 400
+    for unequal in (name.lower(), name.replace("  ", " "), unicodedata.normalize("NFD", name), foreign_only_name):
+        status, _, entity = request(f"{endpoint}?{urlencode({'name': unequal})}", bearer=reader)
+        assert status == 200 and entity == {"matches": [], "hasMore": False}
+    status, headers, entity = request(path, bearer=reader)
+    expected = {"matches": list(reversed(records))[:5], "hasMore": True}
+    assert status == 200 and headers["Cache-Control"] == "no-store" and entity == expected
+    return path, expected
+
+
 def main():
     compose = [os.environ["COMPOSE_BIN"]] if "COMPOSE_BIN" in os.environ else ["docker", "compose"]
     wait_until_ready()
@@ -262,11 +303,13 @@ def main():
     status, headers, problem = request(collection, payload, writer)
     assert status == problem["status"] == 409
     assert headers.get_content_type() == "application/problem+json"
+    name_path, name_result = verify_name_lookup(reader, writer, separate_writer)
     if "--restart" in sys.argv:
         subprocess.run([*compose, "restart", "master-data"], check=True)
         wait_until_ready()
         assert request(path, bearer=token())[2] == body
         assert request(sku_path, bearer=token(subject="synthetic-reader"))[2] == body
+        assert request(name_path, bearer=token(subject="synthetic-reader"))[2] == name_result
     if "--outbox" in sys.argv:
         verify_outbox(compose, body, traceparent)
     if "--units" in sys.argv:

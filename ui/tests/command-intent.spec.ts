@@ -23,3 +23,19 @@ test('never resolves missing, multiple or unsupported inputs to a write', () => 
     expect(resolveCommand(input)).toEqual({ kind: 'unsupportedQuery' });
   }
 });
+
+test('resolves exact names without changing case, Unicode, punctuation or internal spaces', () => {
+  const name = ' Geh\u0061\u0308use  Type? ';
+  for (const input of [`Find   article named "${name}"`, `FINDE ARTIKEL MIT BEZEICHNUNG "${name}"`]) {
+    expect(resolveCommand(input)).toEqual({
+      kind: 'lookup', lookup: { operationId: 'findArticlesByName', filter: { name } }
+    });
+  }
+  expect(resolveCommand('Show articles named Gearbox')).toEqual({
+    kind: 'lookup', lookup: { operationId: 'findArticlesByName', filter: { name: 'Gearbox' } }
+  });
+  for (const input of ['find article named', 'find article named "Unclosed', 'find article named " "',
+    `find article named "${'🧰'.repeat(121)}"`, 'find article named Control\nHere']) {
+    expect(resolveCommand(input)).toEqual({ kind: 'clarificationRequired', parameter: 'name' });
+  }
+});

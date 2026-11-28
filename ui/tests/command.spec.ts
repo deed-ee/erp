@@ -9,8 +9,8 @@ const otherOrganization = '8af68084-19d6-4e31-8203-f9f4708b9bee';
 const otherTenant = 'a260610d-ebcf-4bb7-b871-9d221ace30a8';
 const externalOrganization = '2886c61e-85d8-4688-813a-b59c6641f9f8';
 
-async function seed(page: Page, subject: string, tenantId: string, organizationId: string) {
-  const record = { sku: `FIND-${randomUUID().slice(0, 8).toUpperCase()}`, name: 'Synthetic service kit' };
+async function seed(page: Page, subject: string, tenantId: string, organizationId: string,
+  record = { sku: `FIND-${randomUUID().slice(0, 8).toUpperCase()}`, name: 'Synthetic service kit' }) {
   const response = await page.request.post('/v1/articles:register', {
     data: record,
     headers: {
@@ -100,22 +100,88 @@ test('unauthorized discovery and results stay hidden; changing credential clears
   await page.getByLabel('Demo token').fill(demoToken('synthetic-registration'));
   const discovery = page.waitForResponse(response =>
     response.url().endsWith('/v1/articles:find-by-sku') && response.request().method() === 'HEAD');
+  const nameDiscovery = page.waitForResponse(response =>
+    response.url().endsWith('/v1/articles:find-by-name') && response.request().method() === 'HEAD');
   // Dispatch both events in one browser task, before the credential effect can render.
   await page.getByRole('main').locator('form').evaluate((form: HTMLFormElement) => {
     form.requestSubmit();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
   });
-  expect((await discovery).status()).toBe(403);
+  expect((await Promise.all([discovery, nameDiscovery])).map(response => response.status())).toEqual([403, 403]);
   await expect(page.getByRole('button', { name: 'Find article by SKU' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Find article by exact name' })).toHaveCount(0);
   const query = page.getByRole('searchbox', { name: 'Global search' });
   await query.fill('PRIVATE-ARTICLE');
   await query.press('Enter');
   const results = page.getByRole('region', { name: 'Search results' });
   await expect(results.getByRole('status')).toHaveText(/Access denied/);
   await expect(results.getByRole('link')).toHaveCount(0);
+  await query.fill('Find article named Private article');
+  const nameRead = page.waitForResponse(response =>
+    new URL(response.url()).pathname.endsWith('/v1/articles:find-by-name') && response.request().method() === 'GET');
+  await query.press('Enter');
+  expect((await nameRead).status()).toBe(403);
+  await expect(results.getByRole('status')).toHaveText(/Access denied/);
+  await expect(results.getByRole('link')).toHaveCount(0);
   await page.getByRole('button', { name: 'Clear session credential' }).click();
   await expect(query).toBeEmpty();
   await expect(results).toHaveCount(0);
+});
+
+test('live exact name lookup asks the user to choose a scoped SKU when names repeat', async ({ page }) => {
+  const marker = randomUUID().slice(0, 8).toUpperCase();
+  const name = ` Werkstück  Kühlung ${marker} `;
+  const records = [];
+  for (let index = 5; index >= 0; index -= 1) {
+    records.unshift(await seed(page, 'synthetic-writer', tenant, organization, {
+      name, sku: `NAME-${marker}-${index}`
+    }));
+  }
+  const foreign = await seed(page, 'synthetic-registration', tenant, otherOrganization, {
+    name, sku: `A-FOREIGN-${marker}`
+  });
+  const single = await seed(page, 'synthetic-writer', tenant, organization, {
+    name: `Single ${marker}?`, sku: `SINGLE-${marker}`
+  });
+  await page.goto('/');
+  await setDemoAccess(page, demoToken('synthetic-reader'));
+  await page.keyboard.press('Control+k');
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  await expect(query).toBeFocused();
+  const suggestion = page.getByRole('button', { name: 'Find article by exact name' });
+  await expect(suggestion).toBeVisible();
+  await suggestion.press('Enter');
+  await expect(query).toHaveValue('find article named ');
+  await query.press('Enter');
+  const answer = page.getByRole('region', { name: 'Search results' });
+  await expect(answer.getByRole('status')).toHaveText(/Enter one exact article name/);
+  await query.fill(`Find article named "${single.name}"`);
+  await query.press('Enter');
+  await expect(answer.getByRole('status')).toHaveText('One matching article');
+  await expect(answer).toContainText(single.sku);
+  await query.fill(`Find article named "${name.toLowerCase()}"`);
+  await query.press('Enter');
+  await expect(answer.getByRole('status')).toHaveText(/No article matches/);
+  await expect(answer.getByRole('link')).toHaveCount(0);
+
+  await page.locator('.user-preferences > summary').click();
+  await page.getByLabel('Language', { exact: true }).selectOption('de');
+  await page.keyboard.press('Meta+k');
+  const deQuery = page.getByRole('searchbox', { name: 'Globale Suche' });
+  await deQuery.fill(`Finde Artikel mit Bezeichnung "${name}"`);
+  await deQuery.press('Enter');
+  const deAnswer = page.getByRole('region', { name: 'Suchergebnisse' });
+  await expect(deAnswer.getByRole('status')).toHaveText(/Wähle einen Artikel anhand seiner SKU/);
+  await expect(deAnswer).toContainText('Nur die ersten fünf Treffer werden angezeigt.');
+  await expect(deAnswer.getByRole('link')).toHaveText(records.slice(0, 5).map(record => `Artikel öffnen ${record.sku}`));
+  await expect(deAnswer).not.toContainText(foreign.sku);
+  await expect(page).toHaveURL(/\/local-access$/);
+  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(scan.violations).toEqual([]);
+  await deAnswer.getByRole('link', { name: `Artikel öffnen ${records[3].sku}` }).press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/products/${records[3].id}$`));
+  await expect(page.getByRole('main')).toBeFocused();
+  await expect(page.getByRole('main')).toContainText(records[3].sku);
 });
 
 test('clarifies known queries, refuses unsupported writes and distinguishes errors from no matches', async ({ page }) => {

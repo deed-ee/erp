@@ -23,6 +23,8 @@
   - A scoped user can discover a supported read from the global input and reach the same fact from the owning
     workspace. A user without the read grant receives neither the suggestion nor result. Interpret supported
     English and German lookup filters without a provider; do not infer any stock fact from an Article record.
+  - When several articles share an exact name, return bounded candidates under the same grant, expose the
+    applied name filter, and ask the user to choose by SKU. Do not silently pick one or disclose other scopes.
   scenarios:
   - SC-05
   - SC-06
@@ -38,13 +40,14 @@
   contracts:
   - contracts/openapi/master-data-v1.yaml
   - contracts/entities/article-v1.json
+  - contracts/schemas/article-name-matches-v1.json
   tests:
   - tests/integration/smoke.py
   - ui/tests/command.spec.ts
   evidence: []
   questions:
   - How should a client refresh stale discovery?
-  revision: 2
+  revision: 3
 - id: AI-002
   title: Bind preview and approval to execution
   description: Bind an approved agent write to actor, arguments, revision and expiry.

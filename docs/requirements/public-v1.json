@@ -10,7 +10,7 @@
       "status": "proposed",
       "priority": "P1",
       "milestone": "M0",
-      "revision": 2,
+      "revision": 3,
       "scenarios": [
         "SC-05",
         "SC-06"

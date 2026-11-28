@@ -1,6 +1,6 @@
 use crate::{
     auth::{Auth, Denial, Permission},
-    domain::{Article, RegisterArticle, Scope, valid_sku},
+    domain::{Article, ArticleNameMatch, RegisterArticle, Scope, valid_article_name, valid_sku},
     partners,
     store::{InsertError, Store},
 };
@@ -31,6 +31,15 @@ pub(crate) fn router(store: Store, auth: Auth) -> Router {
         .route(
             "/v1/articles:find-by-sku",
             get(find_by_sku)
+                .head(|| async { StatusCode::NO_CONTENT })
+                .layer(middleware::from_fn_with_state(
+                    (auth.clone(), Permission::Read),
+                    authorize,
+                )),
+        )
+        .route(
+            "/v1/articles:find-by-name",
+            get(find_by_name)
                 .head(|| async { StatusCode::NO_CONTENT })
                 .layer(middleware::from_fn_with_state(
                     (auth.clone(), Permission::Read),
@@ -208,6 +217,39 @@ async fn find_by_sku(
         return problem(StatusCode::BAD_REQUEST, "Invalid SKU");
     }
     article_response(store.find_by_sku(scope, &sku).await, "find_article_by_sku")
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NameQuery {
+    name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NameMatches {
+    matches: Vec<ArticleNameMatch>,
+    has_more: bool,
+}
+
+async fn find_by_name(
+    State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
+    query: Result<Query<NameQuery>, QueryRejection>,
+) -> Response {
+    let Ok(Query(NameQuery { name })) = query else {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "Provide exactly one Article name parameter",
+        );
+    };
+    if !valid_article_name(&name) {
+        return problem(StatusCode::BAD_REQUEST, "Invalid Article name");
+    }
+    match store.find_by_name(scope, &name).await {
+        Ok((matches, has_more)) => Json(NameMatches { matches, has_more }).into_response(),
+        Err(error) => unavailable("find_articles_by_name", error),
+    }
 }
 
 fn article_response(result: mongodb::error::Result<Option<Article>>, operation: &str) -> Response {
