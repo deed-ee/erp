@@ -12,25 +12,25 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-const MAX_BODY_BYTES: usize = 7 * 1024;
+pub(super) const MAX_BODY_BYTES: usize = 7 * 1024;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct ReceiptPosted {
+pub(super) struct ReceiptPosted {
     #[serde(with = "canonical_id")]
-    receipt_id: Uuid,
+    pub receipt_id: Uuid,
     #[serde(with = "canonical_id")]
-    plan_id: Uuid,
+    pub plan_id: Uuid,
     #[serde(with = "canonical_id")]
-    purchase_order_id: Uuid,
+    pub purchase_order_id: Uuid,
     #[serde(with = "canonical_id")]
-    purchase_line_id: Uuid,
-    sku: String,
+    pub purchase_line_id: Uuid,
+    pub sku: String,
     #[serde(deserialize_with = "required_revision")]
-    revision: Option<String>,
-    unit: String,
-    pieces: String,
-    receipt_sequence: u32,
+    pub revision: Option<String>,
+    pub unit: String,
+    pub pieces: String,
+    pub receipt_sequence: u32,
 }
 
 impl Contract for ReceiptPosted {
@@ -64,7 +64,7 @@ impl Contract for ReceiptPosted {
 
 /// `scope` must come from the consumer's trusted tenant + organization policy.
 /// This is message validation, not establishment of an Inventory broker identity.
-fn decode(
+pub(super) fn decode(
     scope: Scope,
     subject: &str,
     headers: &HeaderMap,
@@ -101,14 +101,14 @@ fn decode(
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use serde_json::json;
 
     const FIXTURE: &str =
         include_str!("../../../contracts/examples/nats/inventory-purchase-receipt-posted-v1.json");
 
-    fn fixture() -> (Scope, String, HeaderMap, Value) {
+    pub(crate) fn fixture() -> (Scope, String, HeaderMap, Value) {
         let mut sample: Value = serde_json::from_str(FIXTURE).unwrap();
         let event = sample["envelope"].take();
         let scope = Scope {

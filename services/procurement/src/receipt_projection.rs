@@ -13,11 +13,12 @@
 
 use crate::{
     Scope,
-    material_plan::{revision, sku},
+    material_plan::{pieces as valid_pieces, revision, sku},
+    receipt_wire::{MAX_BODY_BYTES, ReceiptPosted},
 };
+use erp4us_messaging::Envelope;
 use uuid::Uuid;
 
-const MAX_PIECES: u32 = 1_000_000;
 const MAX_SEQUENCE: u32 = 1_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,17 +64,10 @@ enum Invalid {
 }
 
 fn positive_pieces(value: &str) -> Result<u32, Invalid> {
-    if !(1..=7).contains(&value.len())
-        || value.starts_with('0')
-        || !value.bytes().all(|byte| byte.is_ascii_digit())
-    {
+    if !valid_pieces(value) {
         return Err(Invalid::Pieces);
     }
-    value
-        .parse()
-        .ok()
-        .filter(|&pieces| pieces <= MAX_PIECES)
-        .ok_or(Invalid::Pieces)
+    value.parse().map_err(|_| Invalid::Pieces)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -111,7 +105,7 @@ impl<'a> VerifiedReceipt<'a> {
             || id.receipt_id.is_nil()
             || id.message_id == id.receipt_id
             || !(1..=MAX_SEQUENCE).contains(&id.sequence)
-            || owner_content.is_empty()
+            || !(1..=MAX_BODY_BYTES).contains(&owner_content.len())
         {
             return Err(Invalid::Identity);
         }
@@ -121,6 +115,32 @@ impl<'a> VerifiedReceipt<'a> {
             pieces: positive_pieces(pieces)?,
             owner_content,
         })
+    }
+
+    /// Convert the decoded owner wire shape. The consumer still must authorize
+    /// the publication principal, and compare the result to the issued line.
+    fn from_decoded(
+        scope: Scope,
+        event: &'a Envelope<ReceiptPosted>,
+        owner_content: &'a [u8],
+    ) -> Result<Self, Invalid> {
+        let row = &event.payload;
+        let line = LineKey {
+            tenant_id: event.tenant_id.ok_or(Invalid::Scope)?,
+            organization_id: event.organization_id.ok_or(Invalid::Scope)?,
+            plan_id: row.plan_id,
+            purchase_order_id: row.purchase_order_id,
+            purchase_line_id: row.purchase_line_id,
+            sku: &row.sku,
+            revision: row.revision.as_deref(),
+            unit: &row.unit,
+        };
+        let id = Identity {
+            message_id: event.message_id,
+            receipt_id: row.receipt_id,
+            sequence: row.receipt_sequence,
+        };
+        Self::from_verified(scope, line, id, &row.pieces, owner_content)
     }
 }
 
@@ -348,6 +368,32 @@ mod tests {
             Admission::Staged
         );
         projection.apply_next(fact).unwrap();
+    }
+
+    #[test]
+    fn independently_decoded_receipt_and_operator_replay_leave_one_observed_effect() {
+        let (scope, subject, mut headers, fixture) = crate::receipt_wire::tests::fixture();
+        let bytes = serde_json::to_vec(&fixture).unwrap();
+        let event = crate::receipt_wire::decode(scope, &subject, &headers, &bytes).unwrap();
+        let normalized = serde_json::to_vec(&event).unwrap();
+        let fact = VerifiedReceipt::from_decoded(scope, &event, &normalized).unwrap();
+        let line = LineKey {
+            sku: "NM-ENDPLATE",
+            revision: None,
+            ..fact.line
+        };
+        let mut projection = Projection::new(line, "12").unwrap();
+        stage_and_apply(&mut projection, fact);
+
+        headers.insert(
+            "Nats-Msg-Id",
+            format!("replay-38-{}", event.message_id).as_str(),
+        );
+        let replay = crate::receipt_wire::decode(scope, &subject, &headers, &bytes).unwrap();
+        let normalized_replay = serde_json::to_vec(&replay).unwrap();
+        let replay = VerifiedReceipt::from_decoded(scope, &replay, &normalized_replay).unwrap();
+        assert_eq!(projection.stage(replay, existing(fact)), Admission::Replay);
+        assert_eq!(projection.observation(), observed(6, 6, 1));
     }
 
     #[test]
