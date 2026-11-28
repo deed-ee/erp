@@ -96,7 +96,7 @@ for kind, example in config.items():
 
 assert (manifest_path.parent / manifest["openapi"]).resolve() == OPENAPI
 api = yaml.safe_load(OPENAPI.read_text())
-operations = {op["operationId"]: method for path in api["paths"].values()
+operations = {op["operationId"]: (url, method, op) for url, path in api["paths"].items()
               for method, op in path.items() if isinstance(op, dict) and "operationId" in op}
 for ref in manifest["entities"]:
     entity_path = (manifest_path.parent / ref).resolve()
@@ -104,9 +104,42 @@ for ref in manifest["entities"]:
     validator("semantic-entity-v1.json").validate(entity)
     assert (entity_path.parent / entity["schema"]).resolve() in schemas
     for operation in entity["operations"].values():
-        assert operations[operation["operationId"]] == {"command": "post", "query": "get"}[operation["kind"]]
+        url, method, op = operations[operation["operationId"]]
+        assert method == {"command": "post", "query": "get"}[operation["kind"]]
+        if "discovery" not in operation:
+            continue
+        assert entity["entity"] in manifest["capabilities"]
+        discovery = operation["discovery"]
+        discovery_url, discovery_method, discovery_op = operations[discovery["authorizationOperationId"]]
+        assert discovery_url == url and discovery_method == "head" and "204" in discovery_op["responses"]
+        assert op.get("security", api["security"]) == discovery_op.get("security", api["security"]) == api["security"]
+        parameter, = op["parameters"]
+        assert parameter["in"] == "query" and parameter["required"] and parameter["name"] == discovery["parameter"]
+        assert all(phrase == " ".join(phrase.lower().split()) for phrases in discovery["phrases"].values()
+                   for phrase in phrases)
+        bad = deepcopy(entity)
+        entry = next(value for value in bad["operations"].values() if "discovery" in value)
+        entry["kind"] = "command"
+        assert not validator("semantic-entity-v1.json").is_valid(bad)
 for path in manifest["health"].values():
     assert api["paths"][path]["get"]["security"] == []
+
+name_matches = validator("article-name-matches-v1.json")
+name_item = {"id": str(uuid4()), "sku": "MOTOR-A", "name": "Drive  housing", "revision": 1}
+name_matches.validate({"matches": [], "hasMore": False})
+name_matches.validate({"matches": [name_item], "hasMore": False})
+valid_group = [{**name_item, "id": str(uuid4()), "sku": f"MOTOR-{i}"} for i in range(5)]
+name_matches.validate({"matches": valid_group, "hasMore": True})
+for invalid_matches in (
+    {"matches": valid_group + [name_item], "hasMore": False},
+    {"matches": [], "hasMore": True},
+    {"matches": [{"sku": "MOTOR-A"}], "hasMore": False},
+    {"matches": [{**name_item, "name": " \u0085"}], "hasMore": False},
+):
+    assert not name_matches.is_valid(invalid_matches)
+assert operations["findArticlesByName"][2]["responses"]["200"]["content"]["application/json"]["schema"] == {
+    "$ref": "../schemas/article-name-matches-v1.json"
+}
 
 command = validator("register-article-v1.json")
 previous_article = load(Path(__file__).with_name("fixtures") / "article-reader-v1.json")

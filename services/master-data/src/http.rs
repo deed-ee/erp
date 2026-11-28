@@ -1,18 +1,21 @@
 use crate::{
     auth::{Auth, Denial, Permission},
-    domain::{Article, RegisterArticle, Scope},
+    domain::{Article, ArticleNameMatch, RegisterArticle, Scope, valid_article_name, valid_sku},
     partners,
     store::{InsertError, Store},
 };
 use axum::{
     Extension, Json, Router,
-    extract::{DefaultBodyLimit, Path, Request, State, rejection::JsonRejection},
+    extract::{
+        DefaultBodyLimit, Path, Query, Request, State,
+        rejection::{JsonRejection, QueryRejection},
+    },
     http::{HeaderValue, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -24,6 +27,24 @@ pub(crate) fn router(store: Store, auth: Auth) -> Router {
                 (auth.clone(), Permission::Register),
                 authorize,
             )),
+        )
+        .route(
+            "/v1/articles:find-by-sku",
+            get(find_by_sku)
+                .head(|| async { StatusCode::NO_CONTENT })
+                .layer(middleware::from_fn_with_state(
+                    (auth.clone(), Permission::Read),
+                    authorize,
+                )),
+        )
+        .route(
+            "/v1/articles:find-by-name",
+            get(find_by_name)
+                .head(|| async { StatusCode::NO_CONTENT })
+                .layer(middleware::from_fn_with_state(
+                    (auth.clone(), Permission::Read),
+                    authorize,
+                )),
         )
         .route(
             "/v1/articles/{id}",
@@ -175,10 +196,67 @@ async fn find(
     let Ok(id) = Uuid::parse_str(&id) else {
         return problem(StatusCode::BAD_REQUEST, "Invalid article ID");
     };
-    match store.get(scope, id).await {
+    article_response(store.get(scope, id).await, "find_article")
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SkuQuery {
+    sku: String,
+}
+
+async fn find_by_sku(
+    State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
+    query: Result<Query<SkuQuery>, QueryRejection>,
+) -> Response {
+    let Ok(Query(SkuQuery { sku })) = query else {
+        return problem(StatusCode::BAD_REQUEST, "Provide exactly one SKU parameter");
+    };
+    if !valid_sku(&sku) {
+        return problem(StatusCode::BAD_REQUEST, "Invalid SKU");
+    }
+    article_response(store.find_by_sku(scope, &sku).await, "find_article_by_sku")
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NameQuery {
+    name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NameMatches {
+    matches: Vec<ArticleNameMatch>,
+    has_more: bool,
+}
+
+async fn find_by_name(
+    State(store): State<Store>,
+    Extension(scope): Extension<Scope>,
+    query: Result<Query<NameQuery>, QueryRejection>,
+) -> Response {
+    let Ok(Query(NameQuery { name })) = query else {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "Provide exactly one Article name parameter",
+        );
+    };
+    if !valid_article_name(&name) {
+        return problem(StatusCode::BAD_REQUEST, "Invalid Article name");
+    }
+    match store.find_by_name(scope, &name).await {
+        Ok((matches, has_more)) => Json(NameMatches { matches, has_more }).into_response(),
+        Err(error) => unavailable("find_articles_by_name", error),
+    }
+}
+
+fn article_response(result: mongodb::error::Result<Option<Article>>, operation: &str) -> Response {
+    match result {
         Ok(Some(article)) => Json(ArticleView::from(article)).into_response(),
         Ok(None) => problem(StatusCode::NOT_FOUND, "Article not found"),
-        Err(error) => unavailable("find_article", error),
+        Err(error) => unavailable(operation, error),
     }
 }
 

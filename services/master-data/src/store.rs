@@ -1,12 +1,15 @@
-use crate::domain::{Article, Scope};
+use crate::domain::{ARTICLE_NAME_MATCH_LIMIT, Article, ArticleNameMatch, Scope};
 use crate::units::Unit;
 use mongodb::{
     Client, Collection, Database, IndexModel,
     bson::{Document, doc},
     error::{Error, ErrorKind, WriteFailure},
-    options::IndexOptions,
+    options::{Collation, Hint, IndexOptions},
 };
+use std::time::Duration;
 use uuid::Uuid;
+
+const ARTICLE_NAME_INDEX: &str = "article_scope_name_sku_v1";
 
 #[derive(Clone)]
 pub(crate) struct Store {
@@ -55,6 +58,19 @@ impl Store {
                         IndexOptions::builder()
                             .name("article_scope_sku_v1".to_owned())
                             .unique(true)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .await?;
+        articles
+            .create_index(
+                IndexModel::builder()
+                    .keys(doc! { "tenant_id": 1, "organization_id": 1, "name": 1, "sku": 1 })
+                    .options(
+                        IndexOptions::builder()
+                            .name(ARTICLE_NAME_INDEX.to_owned())
+                            .collation(Self::binary_collation())
                             .build(),
                     )
                     .build(),
@@ -168,9 +184,54 @@ impl Store {
         self.articles.find_one(Self::scoped_id(scope, id)).await
     }
 
+    pub(crate) async fn find_by_sku(
+        &self,
+        scope: Scope,
+        sku: &str,
+    ) -> mongodb::error::Result<Option<Article>> {
+        let mut selector = Self::scope_selector(scope);
+        selector.insert("sku", sku);
+        self.articles.find_one(selector).await
+    }
+
+    pub(crate) async fn find_by_name(
+        &self,
+        scope: Scope,
+        name: &str,
+    ) -> mongodb::error::Result<(Vec<ArticleNameMatch>, bool)> {
+        let mut selector = Self::scope_selector(scope);
+        selector.insert("name", name);
+        let mut cursor = self
+            .articles
+            .clone_with_type::<ArticleNameMatch>()
+            .find(selector)
+            .projection(doc! { "_id": 1, "sku": 1, "name": 1, "revision": 1 })
+            .sort(doc! { "sku": 1 })
+            .collation(Self::binary_collation())
+            .hint(Hint::Name(ARTICLE_NAME_INDEX.to_owned()))
+            .max_time(Duration::from_secs(2))
+            .limit((ARTICLE_NAME_MATCH_LIMIT + 1) as i64)
+            .await?;
+        let mut matches = Vec::with_capacity(ARTICLE_NAME_MATCH_LIMIT);
+        while matches.len() < ARTICLE_NAME_MATCH_LIMIT && cursor.advance().await? {
+            matches.push(cursor.deserialize_current()?);
+        }
+        let has_more = matches.len() == ARTICLE_NAME_MATCH_LIMIT && cursor.advance().await?;
+        Ok((matches, has_more))
+    }
+
+    fn binary_collation() -> Collation {
+        Collation::builder().locale("simple").build()
+    }
+
     fn scoped_id(scope: Scope, id: Uuid) -> Document {
+        let mut selector = Self::scope_selector(scope);
+        selector.insert("_id", id.to_string());
+        selector
+    }
+
+    fn scope_selector(scope: Scope) -> Document {
         doc! {
-            "_id": id.to_string(),
             "tenant_id": scope.tenant.to_string(),
             "organization_id": scope.organization.to_string(),
         }

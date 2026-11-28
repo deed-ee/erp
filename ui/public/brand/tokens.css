@@ -22,6 +22,7 @@
   color-scheme: light;
   --bg: #f4f6f8;
   --surface: #ffffff;
+  --surface-elevated: #f8fafc;
   --nav: #f8fafc;
   --ink: #182230;
   --muted: #526379;
@@ -41,6 +42,7 @@
   color-scheme: dark;
   --bg: #11151b;
   --surface: #1a2029;
+  --surface-elevated: #22303b;
   --nav: #151b23;
   --ink: #e7ebf0;
   --muted: #a4b2c4;
@@ -61,6 +63,7 @@
     color-scheme: dark;
     --bg: #11151b;
     --surface: #1a2029;
+    --surface-elevated: #22303b;
     --nav: #151b23;
     --ink: #e7ebf0;
     --muted: #a4b2c4;

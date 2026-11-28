@@ -202,6 +202,10 @@
   acceptance:
   - 'Save a two-company filter, revoke one grant, reopen on a phone and desktop: rows, facets and counts contain
     only allowed records; keyboard focus reaches contextual help.'
+  - Replacing or clearing the active credential invalidates in-flight results and discovery. A delayed response or
+    result from an earlier scope must not reappear. No credential, query or result is stored as a display preference.
+  - Narrow a displayed name result by SKU with a fresh owner-authorized read. After expiry, reset or a credential change,
+    reject the follow-up. Do not treat an unshown candidate or a stale revision as a confirmed match.
   scenarios:
   - SC-05
   - SC-08
@@ -209,10 +213,13 @@
   refines: *id003
   issues:
   - 3
+  - 85
   prs: []
   contracts: []
-  tests: []
+  tests:
+  - ui/tests/command.spec.ts
+  - ui/tests/article-follow-up.spec.ts
   evidence: []
   questions:
   - May users share layouts without sharing their data?
-  revision: 1
+  revision: 3

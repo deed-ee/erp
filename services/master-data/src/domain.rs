@@ -35,21 +35,25 @@ pub(crate) struct Article {
     pub(crate) name: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub(crate) struct ArticleNameMatch {
+    #[serde(rename(deserialize = "_id"), with = "uuid::serde::hyphenated")]
+    pub(crate) id: Uuid,
+    pub(crate) sku: String,
+    pub(crate) name: String,
+    pub(crate) revision: u32,
+}
+
+pub(crate) const ARTICLE_NAME_MATCH_LIMIT: usize = 5;
+
 impl Article {
     pub(crate) fn register(scope: Scope, command: RegisterArticle) -> Result<Self, &'static str> {
         let sku = command.sku;
-        if !(1..=32).contains(&sku.len())
-            || !sku
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'-')
-        {
+        if !valid_sku(&sku) {
             return Err("SKU must have 1–32 uppercase ASCII letters, digits or hyphens");
         }
         let name = command.name;
-        if !(1..=120).contains(&name.chars().count())
-            || name.chars().any(|c| c.is_ascii_control())
-            || name.trim().is_empty()
-        {
+        if !valid_article_name(&name) {
             return Err("Name must have 1–120 characters, no ASCII controls, and cannot be blank");
         }
         Ok(Self {
@@ -64,6 +68,19 @@ impl Article {
             name,
         })
     }
+}
+
+pub(crate) fn valid_sku(sku: &str) -> bool {
+    (1..=32).contains(&sku.len())
+        && sku
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'-')
+}
+
+pub(crate) fn valid_article_name(name: &str) -> bool {
+    (1..=120).contains(&name.chars().count())
+        && !name.chars().any(|c| c.is_ascii_control())
+        && !name.trim().is_empty()
 }
 
 #[cfg(test)]

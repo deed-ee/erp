@@ -22,6 +22,12 @@ test('keyboard navigation, focus, fixed demo context and persistent preferences'
   await expect(panelTitle).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(help).toBeFocused();
+  const rail = page.getByRole('navigation', { name: 'Modules' });
+  const mainNavigation = rail.getByRole('button', { name: 'Menu' });
+  await mainNavigation.press('Enter');
+  await expect(mainNavigation).toHaveAttribute('aria-pressed', 'true');
+  await expect(rail.getByRole('link', { name: 'Master data' })).toBeVisible();
+  await page.locator('.user-preferences > summary').press('Enter');
   await page.getByLabel('Language', { exact: true }).selectOption('de');
   await page.getByLabel('Farbschema').selectOption('dark');
   await page.getByLabel('Anzeigedichte').selectOption('compact');
@@ -31,6 +37,7 @@ test('keyboard navigation, focus, fixed demo context and persistent preferences'
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
   await expect(page.getByRole('navigation', { name: 'Stammdaten' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Menü' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('cancelled navigation preserves unsubmitted edits', async ({ page }) => {

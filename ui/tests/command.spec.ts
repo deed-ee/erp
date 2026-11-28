@@ -1,0 +1,432 @@
+import { randomUUID } from 'node:crypto';
+import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { articleContextLifetimeMs } from '../src/article-follow-up';
+import { demoToken, setDemoAccess } from './demo-access';
+
+const tenant = 'ddcae139-c1e8-47d2-8b48-349cb6f30ce5';
+const organization = '3e793fb5-75a7-45f6-8f66-45a58fcec674';
+const otherOrganization = '8af68084-19d6-4e31-8203-f9f4708b9bee';
+const otherTenant = 'a260610d-ebcf-4bb7-b871-9d221ace30a8';
+const externalOrganization = '2886c61e-85d8-4688-813a-b59c6641f9f8';
+
+async function seed(page: Page, subject: string, tenantId: string, organizationId: string,
+  record = { sku: `FIND-${randomUUID().slice(0, 8).toUpperCase()}`, name: 'Synthetic service kit' }) {
+  const response = await page.request.post('/v1/articles:register', {
+    data: record,
+    headers: {
+      Authorization: `Bearer ${demoToken(subject)}`, 'X-Erp4us-Tenant': tenantId,
+      'X-Erp4us-Organization': organizationId
+    }
+  });
+  expect(response.status()).toBe(201);
+  const article: { id: string } = await response.json();
+  return { ...record, id: article.id };
+}
+
+test('live scoped lookup in English and German, with a direct route to the same article', async ({ page }) => {
+  const own = await seed(page, 'synthetic-writer', tenant, organization);
+  const foreignStock = [
+    await seed(page, 'synthetic-registration', tenant, otherOrganization),
+    await seed(page, 'synthetic-registration', otherTenant, externalOrganization)
+  ];
+  const requests: string[] = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname.startsWith('/v1/')) requests.push(request.method());
+  });
+  await page.goto('/');
+  await setDemoAccess(page, demoToken('synthetic-reader'));
+  await page.getByRole('link', { name: 'Open products' }).click();
+  await page.keyboard.press('Control+k');
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  await expect(query).toBeFocused();
+  const suggestion = page.getByRole('button', { name: 'Find article by SKU' });
+  await query.fill('find art');
+  await expect(suggestion).toBeVisible();
+  await suggestion.press('Enter');
+  await expect(query).toBeFocused();
+  await expect(query).toHaveValue('find article with sku ');
+  await query.fill(`Show me the article with SKU ${own.sku.toLowerCase()}?`);
+  await query.press('Enter');
+  const answer = page.getByRole('region', { name: 'Search results' });
+  await expect(answer.getByRole('status')).toHaveText('One matching article');
+  await expect(answer.getByRole('heading', { name: own.name })).toBeVisible();
+  await expect(answer).toContainText(own.sku);
+  await expect(answer).toContainText('Interpreted as');
+  await expect(answer).toContainText('Fixed demo scope');
+  await expect(answer).toContainText('Master data');
+  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(scan.violations).toEqual([]);
+  await answer.getByRole('link', { name: 'Open article' }).press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/products/${own.id}$`));
+  await expect(page.getByRole('main')).toBeFocused();
+  await expect(page.getByRole('heading', { name: own.name })).toBeVisible();
+
+  await page.getByRole('navigation', { name: 'Master data' }).getByRole('link', { name: 'Products', exact: true }).click();
+  const main = page.getByRole('main');
+  await main.getByLabel('SKU', { exact: true }).fill(own.sku);
+  await main.getByRole('button', { name: 'Search', exact: true }).press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/products/${own.id}$`));
+  await expect(page.getByRole('heading', { name: own.name })).toBeVisible();
+
+  await page.locator('.user-preferences > summary').click();
+  await page.getByLabel('Language', { exact: true }).selectOption('de');
+  await page.keyboard.press('Meta+k');
+  const deQuery = page.getByRole('searchbox', { name: 'Globale Suche' });
+  await expect(deQuery).toBeFocused();
+  await expect(deQuery).toHaveAttribute('placeholder', 'Frage stellen, suchen oder eine Aktion ausführen …');
+  await deQuery.fill(`Zeige mir den Artikel mit SKU ${own.sku}`);
+  await deQuery.press('Enter');
+  const deAnswer = page.getByRole('region', { name: 'Suchergebnisse' });
+  await expect(deAnswer.getByRole('status')).toHaveText('Ein passender Artikel');
+  await expect(deAnswer.getByRole('heading', { name: own.name })).toBeVisible();
+  for (const foreign of foreignStock) {
+    await deQuery.fill(foreign.sku);
+    await deQuery.press('Enter');
+    await expect(deAnswer.getByRole('status')).toHaveText('Im ausgewählten Kontext entspricht kein Artikel diesem Filter.');
+    await expect(deAnswer.getByRole('link')).toHaveCount(0);
+  }
+  await deQuery.fill(own.id);
+  await deQuery.press('Enter');
+  await expect(deAnswer.getByRole('status')).toHaveText('Ein passender Artikel');
+  await expect(deAnswer).toContainText('Über Artikel-ID finden');
+  await deQuery.press('Escape');
+  await expect(deAnswer).toHaveCount(0);
+  await expect(deQuery).toBeEmpty();
+  expect(requests.every(method => method === 'HEAD' || method === 'GET')).toBe(true);
+});
+
+test('unauthorized discovery and results stay hidden; changing credential clears the input', async ({ page }) => {
+  await page.goto('/local-access');
+  await page.getByLabel('Demo token').fill(demoToken('synthetic-registration'));
+  const discovery = page.waitForResponse(response =>
+    response.url().endsWith('/v1/articles:find-by-sku') && response.request().method() === 'HEAD');
+  const nameDiscovery = page.waitForResponse(response =>
+    response.url().endsWith('/v1/articles:find-by-name') && response.request().method() === 'HEAD');
+  // Dispatch both events in one browser task, before the credential effect can render.
+  await page.getByRole('main').locator('form').evaluate((form: HTMLFormElement) => {
+    form.requestSubmit();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+  });
+  expect((await Promise.all([discovery, nameDiscovery])).map(response => response.status())).toEqual([403, 403]);
+  await expect(page.getByRole('button', { name: 'Find article by SKU' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Find article by exact name' })).toHaveCount(0);
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  await query.fill('PRIVATE-ARTICLE');
+  await query.press('Enter');
+  const results = page.getByRole('region', { name: 'Search results' });
+  await expect(results.getByRole('status')).toHaveText(/Access denied/);
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await query.fill('Find article named Private article');
+  const nameRead = page.waitForResponse(response =>
+    new URL(response.url()).pathname.endsWith('/v1/articles:find-by-name') && response.request().method() === 'GET');
+  await query.press('Enter');
+  expect((await nameRead).status()).toBe(403);
+  await expect(results.getByRole('status')).toHaveText(/Access denied/);
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Clear session credential' }).click();
+  await expect(query).toBeEmpty();
+  await expect(results).toHaveCount(0);
+});
+
+test('live exact name lookup offers the same scoped SKU choices in global search and Products', async ({ page }) => {
+  const marker = randomUUID().slice(0, 8).toUpperCase();
+  const name = ` Werkstück  Kühlung ${marker} `;
+  const records = [];
+  for (let index = 5; index >= 0; index -= 1) {
+    records.unshift(await seed(page, 'synthetic-writer', tenant, organization, {
+      name, sku: `NAME-${marker}-${index}`
+    }));
+  }
+  const foreign = await seed(page, 'synthetic-registration', tenant, otherOrganization, {
+    name, sku: `A-FOREIGN-${marker}`
+  });
+  const single = await seed(page, 'synthetic-writer', tenant, organization, {
+    name: `Single ${marker}?`, sku: `SINGLE-${marker}`
+  });
+  await page.goto('/');
+  await setDemoAccess(page, demoToken('synthetic-reader'));
+  await page.keyboard.press('Control+k');
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  await expect(query).toBeFocused();
+  const suggestion = page.getByRole('button', { name: 'Find article by exact name' });
+  await expect(suggestion).toBeVisible();
+  await suggestion.press('Enter');
+  await expect(query).toHaveValue('find article named ');
+  await query.press('Enter');
+  const answer = page.getByRole('region', { name: 'Search results' });
+  await expect(answer.getByRole('status')).toHaveText(/Enter one exact article name/);
+  await query.fill(`Find article named "${single.name}"`);
+  await query.press('Enter');
+  await expect(answer.getByRole('status')).toHaveText('One matching article');
+  await expect(answer).toContainText(single.sku);
+  await query.fill(`Find article named "${name.toLowerCase()}"`);
+  await query.press('Enter');
+  await expect(answer.getByRole('status')).toHaveText(/No article matches/);
+  await expect(answer.getByRole('link')).toHaveCount(0);
+
+  await page.locator('.user-preferences > summary').click();
+  await page.getByLabel('Language', { exact: true }).selectOption('de');
+  await page.keyboard.press('Meta+k');
+  const deQuery = page.getByRole('searchbox', { name: 'Globale Suche' });
+  await deQuery.fill(`Finde Artikel mit Bezeichnung "${name}"`);
+  await deQuery.press('Enter');
+  const deAnswer = page.getByRole('region', { name: 'Suchergebnisse' });
+  await expect(deAnswer.getByRole('status')).toHaveText(/Wähle einen Artikel anhand seiner SKU/);
+  await expect(deAnswer).toContainText('Nur die ersten fünf Treffer werden angezeigt.');
+  await expect(deAnswer.getByRole('link')).toHaveText(records.slice(0, 5).map(record => `Artikel öffnen ${record.sku}`));
+  await expect(deAnswer).not.toContainText(foreign.sku);
+  await expect(page).toHaveURL(/\/local-access$/);
+  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(scan.violations).toEqual([]);
+  await deAnswer.getByRole('link', { name: `Artikel öffnen ${records[3].sku}` }).press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/products/${records[3].id}$`));
+  await expect(page.getByRole('main')).toBeFocused();
+  await expect(page.getByRole('main')).toContainText(records[3].sku);
+
+  await page.getByRole('navigation', { name: 'Stammdaten' }).getByRole('link', { name: 'Produkte', exact: true }).click();
+  const products = page.getByRole('main');
+  const direct = products.getByRole('search', { name: 'Artikel per exakter Bezeichnung finden' });
+  const field = direct.getByRole('textbox', { name: 'Bezeichnung', exact: true });
+  await field.fill(name);
+  const directRead = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/v1/articles:find-by-name' && response.request().method() === 'GET');
+  await field.press('Enter');
+  const directResponse = await directRead;
+  expect(directResponse.status()).toBe(200);
+  expect(new URL(directResponse.url()).searchParams.get('name')).toBe(name);
+  const directAnswer = products.getByRole('region', { name: 'Suchergebnisse' });
+  await expect(directAnswer.getByRole('status')).toHaveText(/Wähle einen Artikel anhand seiner SKU/);
+  await expect(directAnswer.getByRole('link')).toHaveText(records.slice(0, 5).map(record => `Artikel öffnen ${record.sku}`));
+  await expect(directAnswer).toContainText('Nur die ersten fünf Treffer werden angezeigt.');
+  await expect(directAnswer).not.toContainText(foreign.sku);
+  await expect(deQuery).toBeEmpty();
+  await expect(page).toHaveURL(/\/products$/);
+  await directAnswer.getByRole('link', { name: `Artikel öffnen ${records[3].sku}` }).press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/products/${records[3].id}$`));
+  await expect(products).toBeFocused();
+});
+
+test('direct name lookup distinguishes invalid input, access denial and no scoped matches', async ({ page }) => {
+  await page.goto('/products');
+  const main = page.getByRole('main');
+  const form = main.getByRole('search', { name: 'Find article by exact name' });
+  const field = form.getByRole('textbox', { name: 'Name', exact: true });
+  const results = main.getByRole('region', { name: 'Search results' });
+  await form.getByRole('button', { name: 'Search by name' }).press('Enter');
+  await expect(field).toBeFocused();
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  await expect(results.getByRole('status')).toHaveText(/Enter a non-blank name/);
+
+  const unknown = `Missing part ${randomUUID()}`;
+  await field.fill(unknown);
+  await field.press('Enter');
+  await expect(results.getByRole('status')).toHaveText('Set a local demo credential first.');
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await setDemoAccess(page, demoToken('synthetic-registration'));
+  await page.getByRole('link', { name: 'Open products' }).click();
+  await field.fill(unknown);
+  await field.press('Enter');
+  await expect(results.getByRole('status')).toHaveText(/Access denied/);
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await expect(results.getByText('Interpreted as')).toHaveCount(0);
+
+  await setDemoAccess(page, demoToken('synthetic-reader'));
+  await page.getByRole('link', { name: 'Open products' }).click();
+  await expect(field).toBeEmpty();
+  await expect(results).toHaveCount(0);
+  await field.fill(unknown);
+  await field.press('Enter');
+  await expect(results.getByRole('status')).toHaveText('No article matches this filter in the selected scope.');
+  await expect(results.getByRole('link')).toHaveCount(0);
+});
+
+test('a name follow-up narrows only displayed SKUs with a fresh authorized read', async ({ page }) => {
+  const marker = randomUUID().slice(0, 8).toUpperCase();
+  const name = `Drive module ${marker}`;
+  const own = await seed(page, 'synthetic-writer', tenant, organization, { name, sku: `FOLLOW-${marker}-A` });
+  await seed(page, 'synthetic-writer', tenant, organization, { name, sku: `FOLLOW-${marker}-B` });
+  const foreign = await seed(page, 'synthetic-registration', tenant, otherOrganization, {
+    name, sku: `FOLLOW-${marker}-X`
+  });
+  await page.goto('/');
+  await setDemoAccess(page, demoToken('synthetic-reader'));
+  await page.keyboard.press('Control+k');
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  const results = page.getByRole('region', { name: 'Search results' });
+  const ask = async (input: string) => { await query.fill(input); await query.press('Enter'); };
+  const skuReads: string[] = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (request.method() === 'GET' && url.pathname === '/v1/articles:find-by-sku') skuReads.push(url.searchParams.get('sku')!);
+  });
+  await ask(`Find article named "${name}"`);
+  await expect(results.getByRole('link')).toHaveCount(2);
+  await expect(results.getByText('Continuing from exact name')).toBeVisible();
+  await ask(`Only SKU ${foreign.sku}`);
+  await expect(results.getByRole('status')).toHaveText(/not one of the shown matches/);
+  expect(skuReads).toEqual([]);
+
+  const freshRead = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/v1/articles:find-by-sku' && url.searchParams.get('sku') === own.sku;
+  });
+  await ask(`Nur SKU ${own.sku.toLowerCase()}`);
+  expect((await freshRead).status()).toBe(200);
+  await expect(results.getByRole('status')).toHaveText('One matching article');
+  await expect(results.getByText('Continuing from exact name')).toBeVisible();
+  await expect(results).toContainText(own.sku);
+  await expect(results.getByRole('link')).toHaveAttribute('href', `/products/${own.id}`);
+
+  await results.getByRole('button', { name: 'Clear search context' }).press('Enter');
+  await expect(query).toBeFocused();
+  await expect(query).toBeEmpty();
+  await expect(results).toHaveCount(0);
+  await ask(`Only SKU ${own.sku}`);
+  await expect(results.getByRole('status')).toHaveText(/Run an exact-name search/);
+  expect(skuReads).toEqual([own.sku]);
+});
+
+test('an expired or changed Article name context cannot produce a follow-up answer', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/');
+  await setDemoAccess(page, 'synthetic-fixture');
+  const article = { id: randomUUID(), sku: 'PART-1', name: 'Synthetic module', revision: 3 };
+  let skuReads = 0;
+  await page.route('**/v1/**', async route => {
+    if (route.request().method() === 'HEAD') return route.fulfill({ status: 204 });
+    if (new URL(route.request().url()).pathname === '/v1/articles:find-by-name') {
+      return route.fulfill({ json: { matches: [article], hasMore: false } });
+    }
+    skuReads++;
+    return route.fulfill({ json: { ...article, name: 'Different name from the owner' } });
+  });
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  const results = page.getByRole('region', { name: 'Search results' });
+  const ask = async (input: string) => { await query.fill(input); await query.press('Enter'); };
+  await ask('Find article named "Synthetic module"');
+  await expect(results.getByRole('status')).toHaveText('One matching article');
+  await results.getByRole('button', { name: 'Clear search context' }).focus();
+  await page.clock.fastForward(articleContextLifetimeMs + 1000);
+  await expect(results.getByRole('status')).toHaveText(/search context expired/);
+  await expect(query).toBeFocused();
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await ask('Only SKU PART-1');
+  await expect(results.getByRole('status')).toHaveText(/Run an exact-name search/);
+  expect(skuReads).toBe(0);
+
+  await ask('Find article named "Synthetic module"');
+  await expect(results.getByRole('status')).toHaveText('One matching article');
+  await ask('Only SKU PART-1');
+  await expect(results.getByRole('status')).toHaveText(/no longer matches the earlier result/);
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await expect(results.getByText('Different name from the owner')).toHaveCount(0);
+  expect(skuReads).toBe(1);
+});
+
+test('editing the direct name field discards a pending answer', async ({ page }) => {
+  await page.goto('/');
+  await setDemoAccess(page, 'synthetic-fixture');
+  await page.getByRole('link', { name: 'Open products' }).click();
+  let release!: () => void;
+  let markFinished!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const finished = new Promise<void>(resolve => { markFinished = resolve; });
+  await page.route(url => url.pathname === '/v1/articles:find-by-name', async route => {
+    const name = new URL(route.request().url()).searchParams.get('name');
+    await pending;
+    try {
+      await route.fulfill({ json: { matches: [{ id: randomUUID(), sku: 'OLDER', name, revision: 1 }], hasMore: false } });
+    } catch { /* The browser may reject a response after aborting the old read. */ }
+    finally { markFinished(); }
+  });
+  const products = page.getByRole('main');
+  const field = products.getByRole('textbox', { name: 'Name', exact: true });
+  const results = products.getByRole('region', { name: 'Search results' });
+  const request = page.waitForRequest(value => new URL(value.url()).pathname === '/v1/articles:find-by-name');
+  await field.fill('Older drive');
+  await field.press('Enter');
+  await request;
+  await expect(results.getByRole('status')).toHaveText('Request in progress …');
+  await field.fill('Current drive');
+  await expect(results).toHaveCount(0);
+  release();
+  await finished;
+  await expect(results).toHaveCount(0);
+  await expect(field).toHaveValue('Current drive');
+});
+
+test('clarifies known queries, refuses unsupported writes and distinguishes errors from no matches', async ({ page }) => {
+  await page.goto('/');
+  await setDemoAccess(page, 'synthetic-fixture');
+  const methods: string[] = [];
+  await page.route('**/v1/**', async route => {
+    const method = route.request().method();
+    methods.push(method);
+    if (method === 'HEAD') return route.fulfill({ status: 204 });
+    const { searchParams } = new URL(route.request().url());
+    switch (searchParams.get('sku')) {
+      case 'MISSING': return route.fulfill({ status: 404 });
+      case 'OFFLINE': return route.fulfill({ status: 503 });
+      default: return route.fulfill({ json: { id: randomUUID(), sku: 'WRONG-LOOKUP', name: 'Do not render', revision: 1 } });
+    }
+  });
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  const status = page.getByRole('region', { name: 'Search results' }).getByRole('status');
+  const ask = async (text: string) => { await query.fill(text); await query.press('Enter'); };
+  await ask('Find article with SKU');
+  await expect(status).toHaveText('Enter one article ID or one exact SKU.');
+  await ask('Find article with SKU X or Y');
+  await expect(status).toHaveText('Enter one article ID or one exact SKU.');
+  await ask('Create a sales order');
+  await expect(status).toHaveText(/cannot change records/);
+  expect(methods).toContain('HEAD');
+  expect(methods.filter(method => method !== 'HEAD')).toEqual([]);
+  await ask('MISSING');
+  await expect(status).toHaveText(/No article matches/);
+  await ask('OFFLINE');
+  await expect(status).toHaveText(/Check the local API/);
+  await ask('UNEXPECTED');
+  await expect(status).toHaveText(/unexpected response/);
+  await expect(page.getByText('Do not render')).toHaveCount(0);
+});
+
+test('a late read does not replace a newer answer or restore cleared context', async ({ page }) => {
+  await page.goto('/');
+  await setDemoAccess(page, 'synthetic-fixture');
+  let release!: () => void;
+  let markSeen!: () => void;
+  let markFinished!: () => void;
+  const seen = new Promise<void>(resolve => { markSeen = resolve; });
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const finished = new Promise<void>(resolve => { markFinished = resolve; });
+  await page.route('**/v1/articles:find-by-sku*', async route => {
+    if (route.request().method() === 'HEAD') return route.fulfill({ status: 204 });
+    const sku = new URL(route.request().url()).searchParams.get('sku');
+    if (sku === 'OLD') {
+      markSeen();
+      await pending;
+      try { await route.fulfill({ json: { id: randomUUID(), sku, name: 'Stale article', revision: 1 } }); }
+      catch { /* An aborted browser request may no longer accept the delayed response. */ }
+      finally { markFinished(); }
+    } else {
+      await route.fulfill({ json: { id: randomUUID(), sku, name: 'Current article', revision: 1 } });
+    }
+  });
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  const results = page.getByRole('region', { name: 'Search results' });
+  await query.fill('OLD');
+  await query.press('Enter');
+  await seen;
+  await expect(results.getByRole('status')).toHaveText(/Request in progress/);
+  await query.fill('NEW');
+  await query.press('Enter');
+  await expect(results.getByRole('heading', { name: 'Current article' })).toBeVisible();
+  release();
+  await finished;
+  await expect(results.getByRole('heading', { name: 'Current article' })).toBeVisible();
+  await expect(results.getByText('Stale article')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Clear session credential' }).click();
+  await expect(query).toBeEmpty();
+  await expect(results).toHaveCount(0);
+});

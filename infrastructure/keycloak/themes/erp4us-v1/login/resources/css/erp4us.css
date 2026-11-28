@@ -1,0 +1,118 @@
+/* Presentation only. The provider retains its templates, inputs and actions. */
+.login-pf #keycloak-bg {
+    --erp-canvas: #f4f6f8;
+    --erp-ink: #182230;
+    --erp-edge: #dde3ea;
+    --erp-primary: #216f76;
+    --erp-primary-hover: #1c6268;
+    --erp-on-primary: #fff;
+    --erp-focus: #216f76;
+    background: var(--erp-canvas);
+    min-block-size: 100vh;
+    height: auto;
+}
+
+.login-pf.pf-v5-theme-dark #keycloak-bg {
+    --erp-canvas: #111820;
+    --erp-ink: #e7ebf0;
+    --erp-edge: #33414d;
+    --erp-primary: #65b8c1;
+    --erp-primary-hover: #83c8cc;
+    --erp-on-primary: #111820;
+    --erp-focus: #78c5ca;
+}
+
+#keycloak-bg .pf-v5-c-login {
+    display: grid;
+    grid-template: "entry" auto / minmax(0, 1fr);
+    min-block-size: 100svh;
+    padding: clamp(1rem, 4vw, 3rem);
+}
+
+#keycloak-bg .pf-v5-c-login__container {
+    grid-area: entry;
+    place-self: center;
+    inline-size: min(100%, 34rem);
+    min-inline-size: 0;
+    max-inline-size: none;
+    grid-template: "header" auto "main" auto / minmax(0, 1fr);
+    gap: 1rem;
+}
+
+#keycloak-bg .pf-v5-c-login__header {
+    margin: 0;
+}
+
+#keycloak-bg #kc-header-wrapper {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    color: var(--erp-ink) !important; /* Override the parent's forced light title. */
+    font: 700 1.65rem/1.2 system-ui, sans-serif;
+    text-transform: none;
+    letter-spacing: -.04em;
+}
+
+#keycloak-bg #kc-header-wrapper::before {
+    content: "";
+    flex: none;
+    inline-size: 2.4rem;
+    block-size: 2.4rem;
+    background: url("../img/erp4us-symbol.svg") no-repeat center / contain;
+}
+
+#keycloak-bg .pf-v5-c-login__main {
+    border: 1px solid var(--erp-edge);
+    border-radius: .75rem;
+    box-shadow: 0 6px 22px rgb(16 24 40 / 13%);
+    overflow-wrap: anywhere;
+}
+
+#keycloak-bg .pf-v5-c-login__main-header {
+    border-block-start: .2rem solid var(--erp-primary);
+    border-start-start-radius: .7rem;
+    border-start-end-radius: .7rem;
+}
+
+#keycloak-bg .pf-v5-c-login__main-header,
+#keycloak-bg .pf-v5-c-login__main-body {
+    padding-inline: clamp(1rem, 5vw, 2rem);
+}
+
+#keycloak-bg #kc-page-title {
+    font-size: clamp(1.3rem, 3.4vw, 1.65rem);
+}
+
+#keycloak-bg .pf-v5-c-button.pf-m-primary {
+    --pf-v5-c-button--m-primary--BackgroundColor: var(--erp-primary);
+    --pf-v5-c-button--m-primary--hover--BackgroundColor: var(--erp-primary-hover);
+    --pf-v5-c-button--m-primary--focus--BackgroundColor: var(--erp-primary);
+    --pf-v5-c-button--m-primary--active--BackgroundColor: var(--erp-primary-hover);
+    --pf-v5-c-button--m-primary--Color: var(--erp-on-primary);
+    --pf-v5-c-button--m-primary--hover--Color: var(--erp-on-primary);
+    --pf-v5-c-button--m-primary--focus--Color: var(--erp-on-primary);
+    --pf-v5-c-button--m-primary--active--Color: var(--erp-on-primary);
+}
+
+#keycloak-bg :is(a, button, input, select):focus-visible,
+#keycloak-bg .pf-v5-c-form-control:has(:focus-visible) {
+    outline: 2px solid var(--erp-focus);
+    outline-offset: 2px;
+}
+
+@media (min-width: 56rem) {
+    #keycloak-bg .pf-v5-c-login {
+        grid-template: "entry network" auto / minmax(0, 1fr) minmax(0, 1fr);
+        gap: clamp(1.5rem, 5vw, 5rem);
+    }
+
+    #keycloak-bg .pf-v5-c-login::after {
+        content: "";
+        grid-area: network;
+        align-self: stretch;
+        min-block-size: 26rem;
+        background: #19252f url("../img/business-network.svg") no-repeat center / min(92%, 36rem) auto;
+        border: 1px solid #33414d;
+        border-radius: 1rem;
+    }
+}

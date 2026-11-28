@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scoped exact Article name matches v1",
+  "type": "object",
+  "required": ["matches", "hasMore"],
+  "properties": {
+    "matches": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["id", "sku", "name", "revision"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "sku": { "$ref": "register-article-v1.json#/properties/sku" },
+          "name": { "$ref": "register-article-v1.json#/properties/name" },
+          "revision": { "type": "integer", "minimum": 1, "maximum": 4294967295 }
+        }
+      }
+    },
+    "hasMore": { "type": "boolean" }
+  },
+  "if": { "properties": { "hasMore": { "const": true } } },
+  "then": { "properties": { "matches": { "minItems": 5 } } }
+}

@@ -1,21 +1,21 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { LucideArrowUpRight, LucideBoxes, LucideClipboardList, LucideStar } from '@lucide/angular';
+import { LucideArrowUpRight, LucideClipboardList, LucideKeyRound, LucideLogOut, LucidePackageSearch } from '@lucide/angular';
 import { ArticleApi } from './article-api';
 import { Preferences } from './preferences';
 import { Feedback, PageHeading } from './ui';
 
 @Component({
-  imports: [PageHeading, RouterLink, LucideArrowUpRight, LucideBoxes, LucideClipboardList, LucideStar],
+  imports: [PageHeading, RouterLink, LucideArrowUpRight, LucideClipboardList, LucidePackageSearch],
   template: `
     <p class="eyebrow">{{ t()('workspaceLabel') }}</p>
     <erp-page-heading [title]="t()('workspace')" [description]="t()('workspaceIntro')" />
-    <section class="feature">
-      <div class="feature-icon"><svg lucideBoxes aria-hidden="true"></svg></div>
+    <section class="feature" aria-labelledby="workspace-actions">
+      <div class="feature-icon"><svg lucidePackageSearch aria-hidden="true"></svg></div>
       <div>
-        <p class="eyebrow">{{ t()('masterData') }}</p>
-        <h2>{{ t()('products') }}</h2>
+        <p class="eyebrow">{{ t()('quickActions') }}</p>
+        <h2 id="workspace-actions">{{ t()('products') }}</h2>
         <p>{{ t()('productIntro') }}</p>
       </div>
       <a class="button primary" routerLink="/products">
@@ -27,10 +27,6 @@ import { Feedback, PageHeading } from './ui';
         <svg lucideClipboardList aria-hidden="true"></svg>
         <h2>{{ t()('tasks') }}</h2><p>{{ t()('tasksUnavailable') }}</p>
       </section>
-      <section class="card widget">
-        <svg lucideStar aria-hidden="true"></svg>
-        <h2>{{ t()('favorites') }}</h2><p>{{ t()('favoritesUnavailable') }}</p>
-      </section>
     </div>
   `
 })
@@ -39,7 +35,7 @@ export class Workspace {
 }
 
 @Component({
-  imports: [Feedback, PageHeading, ReactiveFormsModule, RouterLink],
+  imports: [Feedback, PageHeading, ReactiveFormsModule, RouterLink, LucideKeyRound, LucideLogOut],
   template: `
     <erp-page-heading [title]="t()('access')" [description]="t()('accessIntro')" />
     <section class="card form-width">
@@ -49,8 +45,10 @@ export class Workspace {
           autocomplete="off" aria-describedby="credential-hint">
         <small id="credential-hint">{{ t()('hint') }}</small>
         <div class="actions">
-          <button type="submit" class="primary">{{ t()('useCredential') }}</button>
-          <button type="button" [disabled]="!api.hasCredential()" (click)="clear()">{{ t()('clearCredential') }}</button>
+          <button type="submit" class="primary"><svg lucideKeyRound aria-hidden="true"></svg>{{ t()('useCredential') }}</button>
+          <button type="button" [disabled]="!api.hasCredential()" (click)="clear()">
+            <svg lucideLogOut aria-hidden="true"></svg>{{ t()('clearCredential') }}
+          </button>
         </div>
       </form>
       <erp-feedback [message]="notice() ? t()(notice()!) : ''" />

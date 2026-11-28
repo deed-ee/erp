@@ -1,18 +1,9 @@
-import { test, expect, type Page } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
+import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-
-async function setDemoAccess(page: Page, token: string) {
-  await page.getByRole('link', { name: 'Local demo access' }).click();
-  await page.getByLabel('Demo token').fill(token);
-  await page.getByRole('button', { name: 'Use for this session' }).press('Enter');
-  await expect(page.getByLabel('Demo token')).toBeEmpty();
-}
+import { demoToken, setDemoAccess } from './demo-access';
 
 test('real API: keyboard registration, duplicate recovery and retrieval after reload', async ({ page }) => {
-  const token = execFileSync('python3', ['tests/integration/identity_fixture.py', 'token'], {
-    cwd: '..', encoding: 'utf8',
-  }).trim();
+  const token = demoToken();
   await page.goto('/');
   await setDemoAccess(page, token);
   await page.getByRole('link', { name: 'Open products' }).click();
@@ -45,10 +36,7 @@ test('real API: keyboard registration, duplicate recovery and retrieval after re
 
   await page.goto(detailUrl);
   await expect(page.getByRole('status')).toHaveText('Set a local demo credential first.');
-  await page.getByRole('banner').getByRole('link', { name: 'Local demo access' }).click();
-  await expect(page.getByLabel('Demo token')).toBeEmpty();
-  await page.getByLabel('Demo token').fill(token);
-  await page.getByRole('button', { name: 'Use for this session' }).press('Enter');
+  await setDemoAccess(page, token);
   await page.getByRole('link', { name: 'Open products' }).click();
   await page.getByLabel('Article ID').fill(id);
   await page.getByRole('button', { name: 'Retrieve article' }).press('Enter');
@@ -68,7 +56,7 @@ test('lookup displays pending and API error states without inventing a record', 
   await page.getByRole('link', { name: 'Open products' }).click();
   await page.getByRole('button', { name: 'Retrieve article' }).click();
   await expect(page.getByLabel('Article ID')).toBeFocused();
-  await expect(page.getByRole('status')).toHaveText(/valid article ID/);
+  await expect(page.locator('#lookup-feedback').getByRole('status')).toHaveText(/valid article ID/);
   await page.getByLabel('Article ID').fill(randomUUID());
   await page.getByRole('button', { name: 'Retrieve article' }).click();
   await expect(page.getByRole('status')).toHaveText('Request in progress …');

@@ -21,6 +21,7 @@ export class Preferences {
   readonly theme = preference('theme', ['system', 'light', 'dark'], 'system');
   readonly density = preference('density', ['comfortable', 'compact'], 'comfortable');
   readonly secondary = preference('secondary', ['open', 'closed'], 'open');
+  readonly rail = preference('rail', ['open', 'closed'], 'open');
   readonly panel = preference('panel', ['open', 'closed'], 'closed');
   readonly t = computed(() => (key: Message) => messages[this.locale()][key] ?? messages.en[key]);
 

@@ -1,9 +1,12 @@
-import { Component, DestroyRef, ElementRef, inject, signal, viewChild, HostListener } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, signal, viewChild, HostListener } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, type CanDeactivateFn, Router, RouterLink } from '@angular/router';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucidePackageSearch, LucidePlus, LucideSearch } from '@lucide/angular';
-import { ArticleApi, type Article, isArticleId, isLoopback, type Result } from './article-api';
+import { ArticleApi, type Article, isLoopback, type Result } from './article-api';
+import { isArticleId, isArticleName, normalizeArticleSku } from './article-identifiers';
+import { ArticleLookupResultView } from './article-lookup-result';
+import { executeArticleLookup, type ArticleLookupResult } from './article-lookup';
 import { Preferences } from './preferences';
 import { Feedback, PageHeading, Section, type Crumb } from './ui';
 import type { Message } from './messages';
@@ -11,31 +14,67 @@ import type { Message } from './messages';
 const workspaceCrumb = [{ label: 'workspace', route: '/' }] as const satisfies readonly Crumb[];
 const productsCrumb = [...workspaceCrumb, { label: 'products', route: '/products' }] as const satisfies readonly Crumb[];
 
+type NameLookupState = {
+  version: number;
+} & ({ notice: 'busy' | 'invalidName'; answer?: never } | { answer: ArticleLookupResult; notice?: never });
+
 @Component({
   template: `<p>{{ t()('guideLookup') }}</p><p>{{ t()('guideRegister') }}</p>`
 })
 export class ProductGuide { readonly t = inject(Preferences).t; }
 
 @Component({
-  imports: [Feedback, PageHeading, Section, ReactiveFormsModule, RouterLink, LucidePackageSearch, LucidePlus, LucideSearch],
+  imports: [ArticleLookupResultView, Feedback, PageHeading, Section, ReactiveFormsModule, RouterLink,
+    LucidePackageSearch, LucidePlus, LucideSearch],
   template: `
     <erp-page-heading [title]="t()('products')" [description]="t()('productIntro')" [crumbs]="crumbs">
       <a class="button primary" routerLink="/products/new"><svg lucidePlus aria-hidden="true"></svg>{{ t()('register') }}</a>
     </erp-page-heading>
-    <erp-section [title]="t()('lookup')">
-      <form class="lookup-form" novalidate (submit)="$event.preventDefault(); lookup()">
-        <div><label for="id">{{ t()('id') }}</label>
-          <input #idInput id="id" [formControl]="id" required spellcheck="false"
-            [attr.aria-invalid]="invalid()" aria-describedby="lookup-feedback">
+    <erp-section [title]="t()('masterData.article.findByName')">
+      <form class="lookup-form" role="search" [attr.aria-label]="t()('masterData.article.findByName')"
+        novalidate (submit)="$event.preventDefault(); lookupName()" [attr.aria-busy]="nameSearch()?.notice === 'busy'">
+        <div>
+          <label for="lookup-name">{{ t()('name') }}</label>
+          <input #nameInput id="lookup-name" [formControl]="name" required maxlength="240"
+            autocomplete="off" spellcheck="false" [attr.aria-invalid]="nameSearch()?.notice === 'invalidName'"
+            [attr.aria-describedby]="nameSearch()?.notice === 'invalidName'
+              ? 'product-name-hint product-name-status' : 'product-name-hint'">
         </div>
-        <button type="submit"><svg lucideSearch aria-hidden="true"></svg>{{ t()('retrieve') }}</button>
+        <button type="submit"><svg lucideSearch aria-hidden="true"></svg>{{ t()('searchByName') }}</button>
       </form>
-      <erp-feedback id="lookup-feedback" tone="error" [message]="invalid() ? t()('invalidId') : ''" />
-      <div class="empty">
-        <svg lucidePackageSearch aria-hidden="true"></svg>
-        <h2>{{ t()('listUnavailable') }}</h2><p>{{ t()('listHint') }}</p>
-      </div>
+      <small id="product-name-hint">{{ t()('productNameHint') }}</small>
+      <erp-article-lookup-result class="product-lookup-result" statusId="product-name-status" [inSection]="true"
+        [attr.role]="nameSearch() ? 'region' : null" [attr.aria-label]="nameSearch() ? t()('commandResults') : null"
+        [notice]="nameSearch()?.notice ?? null" [answer]="nameSearch()?.answer ?? null" />
     </erp-section>
+    <div class="lookup-options">
+      <erp-section [title]="t()('masterData.article.findBySku')">
+        <form class="lookup-form" novalidate (submit)="$event.preventDefault(); lookupSku()" [attr.aria-busy]="skuStatus() === 'busy'">
+          <div><label for="lookup-sku">{{ t()('sku') }}</label>
+            <input #skuInput id="lookup-sku" [formControl]="sku" required maxlength="32"
+              spellcheck="false" autocomplete="off" [attr.aria-invalid]="skuStatus() === 'invalidSku'"
+              aria-describedby="sku-lookup-feedback">
+          </div>
+          <button type="submit"><svg lucideSearch aria-hidden="true"></svg>{{ t()('search') }}</button>
+        </form>
+        <erp-feedback id="sku-lookup-feedback" [tone]="skuStatus() === 'busy' ? 'neutral' : 'error'"
+          [message]="skuStatus() ? t()(skuStatus()!) : ''" />
+      </erp-section>
+      <erp-section [title]="t()('lookup')">
+        <form class="lookup-form" novalidate (submit)="$event.preventDefault(); lookup()">
+          <div><label for="id">{{ t()('id') }}</label>
+            <input #idInput id="id" [formControl]="id" required spellcheck="false"
+              [attr.aria-invalid]="invalid()" aria-describedby="lookup-feedback">
+          </div>
+          <button type="submit"><svg lucideSearch aria-hidden="true"></svg>{{ t()('retrieve') }}</button>
+        </form>
+        <erp-feedback id="lookup-feedback" tone="error" [message]="invalid() ? t()('invalidId') : ''" />
+      </erp-section>
+    </div>
+    <div class="empty">
+      <svg lucidePackageSearch aria-hidden="true"></svg>
+      <h2>{{ t()('listUnavailable') }}</h2>
+    </div>
   `
 })
 export class Products {
@@ -44,13 +83,77 @@ export class Products {
   readonly id = new FormControl('', { nonNullable: true });
   readonly idInput = viewChild.required<ElementRef<HTMLInputElement>>('idInput');
   readonly invalid = signal(false);
+  readonly sku = new FormControl('', { nonNullable: true });
+  readonly skuInput = viewChild.required<ElementRef<HTMLInputElement>>('skuInput');
+  readonly skuStatus = signal<Message | null>(null);
+  readonly name = new FormControl('', { nonNullable: true });
+  readonly nameInput = viewChild.required<ElementRef<HTMLInputElement>>('nameInput');
+  private readonly api = inject(ArticleApi);
   private readonly router = inject(Router);
+  private readonly nameState = signal<NameLookupState | null>(null);
+  readonly nameSearch = computed(() => {
+    const state = this.nameState();
+    return state?.version === this.api.credentialVersion() ? state : null;
+  });
+  private active?: AbortController;
+  private nameRequest?: AbortController;
+
+  constructor() {
+    const destroy = inject(DestroyRef);
+    destroy.onDestroy(() => {
+      this.active?.abort();
+      this.nameRequest?.abort();
+    });
+    this.sku.valueChanges.pipe(takeUntilDestroyed(destroy)).subscribe(() => {
+      this.active?.abort();
+      this.skuStatus.set(null);
+    });
+    this.name.valueChanges.pipe(takeUntilDestroyed(destroy)).subscribe(() => {
+      this.nameRequest?.abort();
+      this.nameState.set(null);
+    });
+  }
 
   lookup() {
     const id = this.id.value.trim();
     this.invalid.set(!isArticleId(id));
     if (this.invalid()) this.idInput().nativeElement.focus();
     else void this.router.navigate(['/products', id]);
+  }
+
+  async lookupSku() {
+    this.active?.abort();
+    const sku = normalizeArticleSku(this.sku.value);
+    if (!sku) {
+      this.skuStatus.set('invalidSku');
+      this.skuInput().nativeElement.focus();
+      return;
+    }
+    const controller = this.active = new AbortController();
+    const version = this.api.credentialVersion();
+    this.skuStatus.set('busy');
+    const result = await this.api.findBySku(sku, controller.signal);
+    if (controller.signal.aborted || version !== this.api.credentialVersion()) return;
+    if ('error' in result) this.skuStatus.set(result.error === 'missing' ? 'commandNoMatches' : result.error);
+    else if (result.article.sku !== sku) this.skuStatus.set('executionError');
+    else await this.router.navigate(['/products', result.article.id]);
+  }
+
+  async lookupName() {
+    this.nameRequest?.abort();
+    const name = this.name.value;
+    const version = this.api.credentialVersion();
+    if (!isArticleName(name)) {
+      this.nameState.set({ version, notice: 'invalidName' });
+      this.nameInput().nativeElement.focus();
+      return;
+    }
+    const controller = this.nameRequest = new AbortController();
+    this.nameState.set({ version, notice: 'busy' });
+    const answer = await executeArticleLookup(this.api, { operationId: 'findArticlesByName', filter: { name } }, controller.signal);
+    if (!controller.signal.aborted && version === this.api.credentialVersion()) {
+      this.nameState.set({ version, answer });
+    }
   }
 }
 
