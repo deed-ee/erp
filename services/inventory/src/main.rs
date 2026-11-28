@@ -18,6 +18,8 @@ mod material_plan;
 mod netting;
 mod preview;
 mod query;
+#[cfg(test)]
+mod receipt;
 
 #[derive(Deserialize)]
 #[serde(tag = "contract", deny_unknown_fields, rename_all_fields = "camelCase")]
