@@ -1,5 +1,5 @@
 use crate::{
-    Scope,
+    Scope, purchase_store,
     terms::{Command, Decision, Failure, Saved, Terms},
 };
 use futures_util::future::BoxFuture;
@@ -29,6 +29,7 @@ const RETRY_DELAY: Duration = Duration::from_millis(15);
 pub(super) struct Store {
     revisions: Collection<Saved>,
     guard: WriteGuard,
+    purchases: purchase_store::Store,
 }
 
 pub(super) fn scoped_plan(scope: Scope, plan_id: Uuid) -> Document {
@@ -62,6 +63,17 @@ pub(super) fn majority_collection() -> CollectionOptions {
         .build()
 }
 
+pub(super) async fn ensure_collection(db: &Database, name: &str) -> Result<(), MongoError> {
+    match db
+        .create_collection(name)
+        .write_concern(majority_write())
+        .await
+    {
+        Err(error) if matches!(&*error.kind, ErrorKind::Command(err) if err.code == 48) => Ok(()),
+        result => result,
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct WriteGuard(Database);
 
@@ -82,19 +94,10 @@ impl WriteGuard {
     async fn open(db: &Database) -> io::Result<Self> {
         // Initialize on upgrade as well as a fresh database; the guard has
         // only its built-in unique _id index.
-        let result = db
-            .create_collection(GUARDS)
-            .write_concern(majority_write())
-            .await;
-        match result {
-            Ok(()) => Ok(Self(db.clone())),
-            Err(error) if matches!(&*error.kind, ErrorKind::Command(err) if err.code == 48) => {
-                Ok(Self(db.clone()))
-            }
-            Err(_) => Err(io::Error::other(
-                "Cannot initialize Procurement proposal write guard",
-            )),
-        }
+        ensure_collection(db, GUARDS)
+            .await
+            .map_err(|_| io::Error::other("Cannot initialize Procurement proposal write guard"))?;
+        Ok(Self(db.clone()))
     }
 
     pub(super) async fn write<T: Send, F: Copy + Send, C: Sync>(
@@ -281,11 +284,16 @@ impl Store {
         Ok(Self {
             revisions: collection,
             guard,
+            purchases: purchase_store::Store::open(db).await?,
         })
     }
 
     pub(super) fn guard(&self) -> &WriteGuard {
         &self.guard
+    }
+
+    pub(super) fn purchases(&self) -> &purchase_store::Store {
+        &self.purchases
     }
 
     pub(super) async fn latest(
@@ -333,7 +341,19 @@ impl Store {
             .max_time(DB_TIMEOUT)
             .await
             .map_err(|_| Failure::Unavailable)?;
-        command.decide(latest.map_or(0, |terms| terms.revision), saved)
+        let decision = command.decide(latest.map_or(0, |terms| terms.revision), saved)?;
+        // Avoid new supplier lookups for issued plans. The actual freeze is
+        // checked again in append after taking the same guard as issuance.
+        if matches!(decision, Decision::Create(_))
+            && self
+                .purchases
+                .exists(scope, plan_id, None)
+                .await
+                .map_err(|_| Failure::Unavailable)?
+        {
+            return Err(Failure::Conflict);
+        }
+        Ok(decision)
     }
 
     pub(super) async fn append(
@@ -382,6 +402,13 @@ impl Store {
                         {
                             Decision::Replay(terms) => Ok(Some(terms)),
                             Decision::Create(revision) if revision == *proposed_revision => {
+                                if store
+                                    .purchases
+                                    .exists(*scope, *plan_id, Some(&mut *session))
+                                    .await?
+                                {
+                                    return Err(TransactionError::Rule(Failure::Conflict));
+                                }
                                 store
                                     .revisions
                                     .clone_with_type::<Document>()

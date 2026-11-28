@@ -83,7 +83,7 @@ fn pieces(value: &str) -> bool {
         && value.parse::<u32>().is_ok_and(|n| n <= 1_000_000)
 }
 
-fn canonical_uuid(value: &str) -> Option<Uuid> {
+pub(super) fn canonical_uuid(value: &str) -> Option<Uuid> {
     Uuid::try_parse(value)
         .ok()
         .filter(|id| !id.is_nil() && id.hyphenated().to_string() == value)

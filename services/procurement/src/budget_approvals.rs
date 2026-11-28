@@ -235,6 +235,17 @@ impl<'a> Review<'a> {
         Ok(self.result_at(prefix.len()))
     }
 
+    /// Validate the entire approval prefix before allowing its bound terms to
+    /// be used for issuance. `prefix` verifies each original result against
+    /// the current review, including the whole draft total and exact versions.
+    pub(super) fn approved_terms(&self, decisions: &[Record]) -> Result<(&'a Saved, u64), Failure> {
+        let prefix = self.prefix(decisions)?;
+        if prefix.len() != self.requirements.stages().len() {
+            return Err(Failure::Conflict);
+        }
+        Ok((self.terms, self.terms.terms.total().as_u64()))
+    }
+
     pub(super) fn decide(
         &self,
         decisions: &[Record],

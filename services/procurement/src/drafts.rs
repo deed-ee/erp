@@ -170,6 +170,20 @@ impl Store {
             .await?)
     }
 
+    pub(super) async fn get_in(
+        &self,
+        scope: Scope,
+        plan_id: Uuid,
+        session: &mut ClientSession,
+    ) -> Result<Option<Draft>, mongodb::error::Error> {
+        self.0
+            .collection::<Draft>(DRAFTS)
+            .find_one(doc! {"_id": scoped_key(scope, "planId", plan_id)})
+            .max_time(DB_TIME)
+            .session(session)
+            .await
+    }
+
     pub async fn record(&self, event: &AuthorizedPlan) -> Result<(), Failure> {
         let mut session = self.0.client().start_session().await?;
         session

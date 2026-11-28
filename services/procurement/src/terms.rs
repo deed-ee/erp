@@ -161,7 +161,6 @@ impl Terms {
         (currency, self.total.as_u64(), self.total.to_string())
     }
 
-    #[cfg(test)]
     pub(super) fn issuance_lines(
         &self,
     ) -> impl ExactSizeIterator<Item = (&BuyRow, &Supplier, Cents, Cents)> {
@@ -175,7 +174,6 @@ impl Terms {
         })
     }
 
-    #[cfg(test)]
     pub(super) fn total(&self) -> Cents {
         self.total
     }
@@ -195,7 +193,6 @@ pub(super) struct Saved {
 }
 
 impl Saved {
-    #[cfg(test)]
     pub(super) fn has_valid_revision(&self) -> bool {
         self.schema_version == 1
             && self.expected_revision >= 0

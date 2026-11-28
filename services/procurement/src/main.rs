@@ -6,8 +6,8 @@ mod consumer;
 mod drafts;
 mod material_plan;
 mod partners;
-#[cfg(test)]
 mod purchase_batch;
+mod purchase_store;
 mod query;
 mod store;
 mod terms;

@@ -3,8 +3,10 @@ use crate::{
     budget_approvals::{self, Approval},
     budget_policy::{JsonObject, Policy},
     drafts::{Draft, Status, Store},
-    material_plan::{Bom, BuyRow},
-    partners, required,
+    material_plan::{Bom, BuyRow, canonical_uuid},
+    partners,
+    purchase_batch::{Intent as IssueIntent, IssueFailure, IssuedBatch},
+    purchase_store, required,
     terms::{Command, Decision, Failure, Terms},
     terms_store,
 };
@@ -15,7 +17,7 @@ use axum::{
     middleware::{self, Next},
     routing::get,
 };
-use erp4us_identity::{Auth, Denial};
+use erp4us_identity::{Auth, Denial, ORGANIZATION_HEADER, TENANT_HEADER};
 use serde::Serialize;
 use std::{env, future::Future, io, sync::Arc, time::Duration};
 use tokio::{
@@ -29,9 +31,12 @@ const SAVE_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_OPERATIONS: usize = 16;
 const TERMS_BODY_LIMIT: usize = 16 * 1024;
 const APPROVAL_BODY_LIMIT: usize = 2 * 1024;
+const ISSUE_BODY_LIMIT: usize = 2 * 1024;
 const READ_PERMISSION: &str = "procurement.proposal.read";
 const WRITE_TERMS_PERMISSION: &str = "procurement.proposal.terms.write";
 const READ_PARTNERS_PERMISSION: &str = "master-data.partner.read";
+const READ_PURCHASE_PERMISSION: &str = "procurement.purchase-order.read";
+const ISSUE_PURCHASE_PERMISSION: &str = "procurement.purchase-order.issue";
 
 #[derive(Clone)]
 struct Api {
@@ -131,6 +136,18 @@ impl From<budget_approvals::Failure> for StatusCode {
             budget_approvals::Failure::NotFound => Self::NOT_FOUND,
             budget_approvals::Failure::Conflict => Self::CONFLICT,
             budget_approvals::Failure::Unavailable => Self::SERVICE_UNAVAILABLE,
+        }
+    }
+}
+
+impl From<IssueFailure> for StatusCode {
+    fn from(error: IssueFailure) -> Self {
+        match error {
+            IssueFailure::Invalid => Self::BAD_REQUEST,
+            IssueFailure::Forbidden => Self::FORBIDDEN,
+            IssueFailure::NotFound => Self::NOT_FOUND,
+            IssueFailure::Conflict => Self::CONFLICT,
+            IssueFailure::Unavailable => Self::SERVICE_UNAVAILABLE,
         }
     }
 }
@@ -336,6 +353,87 @@ async fn record_approval(
     .await
 }
 
+fn purchase_identity(
+    auth: &Auth,
+    headers: &HeaderMap,
+    issue: bool,
+) -> Result<erp4us_identity::Scope, StatusCode> {
+    let identity = authorize(auth, headers, READ_PURCHASE_PERMISSION)?;
+    if issue {
+        authorize(auth, headers, ISSUE_PURCHASE_PERMISSION)?;
+    }
+    if identity.actor.is_nil() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    for name in [TENANT_HEADER, ORGANIZATION_HEADER] {
+        if headers
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .and_then(canonical_uuid)
+            .is_none()
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    Ok(identity)
+}
+
+async fn get_purchase_batch(
+    State(api): State<Api>,
+    headers: HeaderMap,
+    Path(plan): Path<String>,
+) -> Result<Json<IssuedBatch>, StatusCode> {
+    let identity = purchase_identity(&api.auth, &headers, false)?;
+    let plan_id = canonical_uuid(&plan).ok_or(StatusCode::BAD_REQUEST)?;
+    bounded(
+        &api.operations,
+        Instant::now() + LOOKUP_TIMEOUT,
+        async move {
+            let batch = api.terms.purchases().get(identity.into(), plan_id).await?;
+            Ok(Json(batch.try_into()?))
+        },
+    )
+    .await
+}
+
+async fn issue_purchase_batch(
+    State(api): State<Api>,
+    Path(plan): Path<String>,
+    request: Request,
+) -> Result<(StatusCode, Json<IssuedBatch>), StatusCode> {
+    let identity = purchase_identity(&api.auth, request.headers(), true)?;
+    let plan_id = canonical_uuid(&plan).ok_or(StatusCode::BAD_REQUEST)?;
+    let Json(JsonObject(intent)) = Json::<JsonObject<IssueIntent>>::from_request(request, &api)
+        .await
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let issue_intent = intent.validate()?;
+    let deadline = Instant::now() + SAVE_TIMEOUT;
+    bounded(&api.operations, deadline, async move {
+        let saved = api
+            .terms
+            .purchases()
+            .issue(
+                purchase_store::Issue {
+                    drafts: &api.store,
+                    terms: &api.terms,
+                    approvals: &api.approvals,
+                    policy: api.budget_policy.as_deref(),
+                    identity,
+                    plan_id,
+                    intent: issue_intent,
+                },
+                deadline,
+            )
+            .await?;
+        let (status, batch) = match saved {
+            purchase_store::Saved::Created(batch) => (StatusCode::CREATED, batch),
+            purchase_store::Saved::Replay(batch) => (StatusCode::OK, batch),
+        };
+        Ok((status, Json(batch.try_into()?)))
+    })
+    .await
+}
+
 pub(super) async fn serve() -> io::Result<()> {
     let auth = Auth::load(
         &required("ERP4US_IDENTITY_POLICY")?,
@@ -387,6 +485,12 @@ pub(super) async fn serve() -> io::Result<()> {
                     .post(record_approval)
                     .layer(DefaultBodyLimit::max(APPROVAL_BODY_LIMIT)),
             )
+            .route(
+                "/v1/procurement/proposals/by-plan/{plan_id}/purchase-orders",
+                get(get_purchase_batch)
+                    .post(issue_purchase_batch)
+                    .layer(DefaultBodyLimit::max(ISSUE_BODY_LIMIT)),
+            )
             .layer(middleware::from_fn(
                 |request: Request, next: Next| async move {
                     let mut response = next.run(request).await;
@@ -423,6 +527,20 @@ mod tests {
     #[test]
     fn approval_failures_map_to_contract_status_without_outcome_leaks() {
         use budget_approvals::Failure::*;
+        for (failure, code) in [
+            (Invalid, StatusCode::BAD_REQUEST),
+            (Forbidden, StatusCode::FORBIDDEN),
+            (NotFound, StatusCode::NOT_FOUND),
+            (Conflict, StatusCode::CONFLICT),
+            (Unavailable, StatusCode::SERVICE_UNAVAILABLE),
+        ] {
+            assert_eq!(StatusCode::from(failure), code);
+        }
+    }
+
+    #[test]
+    fn issuance_failures_map_to_contract_status_without_outcome_leaks() {
+        use IssueFailure::*;
         for (failure, code) in [
             (Invalid, StatusCode::BAD_REQUEST),
             (Forbidden, StatusCode::FORBIDDEN),

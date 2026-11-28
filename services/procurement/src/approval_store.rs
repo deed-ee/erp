@@ -71,7 +71,7 @@ impl Store {
         Ok(Self(collection))
     }
 
-    async fn decisions(
+    pub(super) async fn decisions(
         &self,
         scope: Scope,
         plan_id: Uuid,

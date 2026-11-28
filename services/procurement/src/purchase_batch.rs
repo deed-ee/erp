@@ -1,6 +1,9 @@
 //! Formation of a local purchase issuance record; no supplier or inventory effects.
 
 use crate::{
+    Scope,
+    budget_approvals::{self, Record, Review},
+    budget_policy::Policy,
     drafts::Draft,
     material_plan::{BuyRow, canonical_id, revision, sku},
     terms::{Cents, Currency, MAX_LINES, Saved, Supplier},
@@ -23,6 +26,27 @@ pub(super) enum Failure {
     InvalidAllocatedId,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum IssueFailure {
+    Invalid,
+    Forbidden,
+    NotFound,
+    Conflict,
+    Unavailable,
+}
+
+impl From<budget_approvals::Failure> for IssueFailure {
+    fn from(error: budget_approvals::Failure) -> Self {
+        match error {
+            budget_approvals::Failure::Invalid => Self::Invalid,
+            budget_approvals::Failure::Forbidden => Self::Forbidden,
+            budget_approvals::Failure::NotFound => Self::NotFound,
+            budget_approvals::Failure::Conflict => Self::Conflict,
+            budget_approvals::Failure::Unavailable => Self::Unavailable,
+        }
+    }
+}
+
 /// Explicit command identity and reviewed versions. Not evidence of approval or permission.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +57,23 @@ pub(super) struct Intent {
     #[serde(with = "canonical_id")]
     pub policy_id: Uuid,
     pub policy_revision: i32,
+}
+
+impl Intent {
+    pub(super) fn validate(self) -> Result<Self, IssueFailure> {
+        if self.command_id.is_nil()
+            || self.policy_id.is_nil()
+            || self.terms_revision < 1
+            || self.policy_revision < 1
+        {
+            return Err(IssueFailure::Invalid);
+        }
+        Ok(self)
+    }
+
+    fn version(self) -> (i32, Uuid, i32) {
+        (self.terms_revision, self.policy_id, self.policy_revision)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -86,11 +127,105 @@ struct Group<'a> {
     lines: Vec<(&'a BuyRow, Cents, Cents)>,
 }
 
+/// A new attempt bound to the latest terms and configured policy. Checking
+/// the stored approval prefix is still required before forming a batch.
+pub(super) struct Issuance<'a> {
+    review: Review<'a>,
+    intent: Intent,
+    actor_id: Uuid,
+}
+
+impl<'a> Issuance<'a> {
+    pub(super) fn new(
+        scope: Scope,
+        saved: &'a Saved,
+        policy: Option<&'a Policy>,
+        intent: Intent,
+        actor_id: Uuid,
+    ) -> Result<Self, IssueFailure> {
+        let intent = intent.validate()?;
+        if actor_id.is_nil() || actor_id == saved.actor_id {
+            return Err(IssueFailure::Forbidden);
+        }
+        let review = Review::new(scope, saved, policy)?;
+        if review.version() != intent.version() {
+            return Err(IssueFailure::Conflict);
+        }
+        Ok(Self {
+            review,
+            intent,
+            actor_id,
+        })
+    }
+
+    pub(super) fn version(&self) -> (i32, Uuid, i32) {
+        self.review.version()
+    }
+
+    pub(super) fn form(self, draft: &Draft, decisions: &[Record]) -> Result<Batch, IssueFailure> {
+        let (saved, approved_total) = self.review.approved_terms(decisions)?;
+        Batch::form(
+            draft,
+            saved,
+            Origin {
+                intent: self.intent,
+                actor_id: self.actor_id,
+                issued_at: DateTime::now(),
+            },
+            approved_total,
+            Uuid::new_v4,
+        )
+        .map_err(|_| IssueFailure::Unavailable)
+    }
+}
+
+// The wire result is a separate allowlist, never a serialization of the
+// internal issuance receipt or its audit data.
+#[derive(Debug, Serialize)]
+pub(super) struct IssuedBatch {
+    batch_id: Uuid,
+    plan_id: Uuid,
+    proposal_id: Uuid,
+    order_id: Uuid,
+    line_id: Uuid,
+    terms_revision: i32,
+    policy_id: Uuid,
+    policy_revision: i32,
+    state: IssuedState,
+    currency: Currency,
+    total: Cents,
+    issued_at: String,
+    purchase_orders: Vec<IssuedOrder>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum IssuedState {
+    Issued,
+}
+
+#[derive(Debug, Serialize)]
+struct IssuedOrder {
+    purchase_order_id: Uuid,
+    supplier: Supplier,
+    total: Cents,
+    lines: Vec<IssuedLine>,
+}
+
+#[derive(Debug, Serialize)]
+struct IssuedLine {
+    purchase_line_id: Uuid,
+    #[serde(flatten)]
+    row: BuyRow,
+    unit_price: Cents,
+    line_total: Cents,
+}
+
 impl Batch {
     /// Call only for a new issuance after verifying scope, issuer separation and all
     /// stages against the same policy, saved terms, and whole EUR total. The caller
     /// owns that check and replay; it must not use a client total or re-form a stored batch.
-    pub(super) fn form(
+    fn form(
         draft: &Draft,
         saved: &Saved,
         origin: Origin,
@@ -99,12 +234,7 @@ impl Batch {
     ) -> Result<Self, Failure> {
         let terms = &saved.terms;
         let plan = &draft.plan;
-        if origin.intent.command_id.is_nil()
-            || origin.actor_id.is_nil()
-            || origin.intent.policy_id.is_nil()
-            || origin.intent.policy_revision < 1
-            || origin.intent.terms_revision < 1
-        {
+        if origin.intent.validate().is_err() || origin.actor_id.is_nil() {
             return Err(Failure::InvalidIntent);
         }
         if origin.intent.terms_revision != terms.revision {
@@ -229,16 +359,69 @@ impl Batch {
         })
     }
 
-    pub(super) fn origin(&self) -> Origin {
+    #[cfg(test)]
+    fn origin(&self) -> Origin {
         self.origin
     }
 
-    pub(super) fn batch_id(&self) -> Uuid {
+    #[cfg(test)]
+    fn batch_id(&self) -> Uuid {
         self.batch_id
     }
 
     pub(super) fn plan_id(&self) -> Uuid {
         self.plan_id
+    }
+
+    pub(super) fn replay(self, intent: Intent, actor_id: Uuid) -> Result<Self, IssueFailure> {
+        if self.origin.intent != intent || self.origin.actor_id != actor_id {
+            return Err(IssueFailure::Conflict);
+        }
+        Ok(self)
+    }
+}
+
+impl TryFrom<Batch> for IssuedBatch {
+    type Error = IssueFailure;
+
+    fn try_from(batch: Batch) -> Result<Self, Self::Error> {
+        Ok(Self {
+            batch_id: batch.batch_id,
+            plan_id: batch.plan_id,
+            proposal_id: batch.proposal_id,
+            order_id: batch.source_order_id,
+            line_id: batch.source_line_id,
+            terms_revision: batch.origin.intent.terms_revision,
+            policy_id: batch.origin.intent.policy_id,
+            policy_revision: batch.origin.intent.policy_revision,
+            state: IssuedState::Issued,
+            currency: batch.currency,
+            total: batch.total,
+            issued_at: batch
+                .origin
+                .issued_at
+                .try_to_rfc3339_string()
+                .map_err(|_| IssueFailure::Unavailable)?,
+            purchase_orders: batch
+                .orders
+                .into_iter()
+                .map(|order| IssuedOrder {
+                    purchase_order_id: order.order_id,
+                    supplier: order.supplier,
+                    total: order.total,
+                    lines: order
+                        .lines
+                        .into_iter()
+                        .map(|line| IssuedLine {
+                            purchase_line_id: line.line_id,
+                            row: line.row,
+                            unit_price: line.unit_price,
+                            line_total: line.line_total,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        })
     }
 }
 
@@ -256,13 +439,19 @@ fn valid_supplier(supplier: &Supplier) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
-    use crate::{material_plan::tests::read, terms::tests::command};
+    use crate::{
+        budget_approvals::tests::{APPROVER, policy, stage},
+        budget_policy::JsonObject,
+        material_plan::tests::read,
+        terms::tests::command,
+    };
     use serde_json::{Value, json};
     use std::collections::HashMap;
 
     const APPROVED: u64 = 188_240;
+    pub(crate) const ISSUER: Uuid = Uuid::from_u128(6);
     const FIXTURE: &str =
         include_str!("../../../contracts/examples/nats/inventory-material-plan-netted-v1.json");
     const ORIGIN: Origin = Origin {
@@ -316,6 +505,189 @@ mod tests {
 
     fn ids() -> impl Iterator<Item = Uuid> {
         (100..).map(Uuid::from_u128)
+    }
+
+    pub(crate) fn approval_fixture() -> (Scope, Draft, Saved, Policy, Intent, [Record; 2]) {
+        let scope = read(&serde_json::from_str(FIXTURE).unwrap()).unwrap().scope;
+        let (draft, saved, _) = fixture(true);
+        let policy = policy();
+        let review = Review::new(scope, &saved, Some(&policy)).unwrap();
+        let (terms_revision, policy_id, policy_revision) = review.version();
+        let intent = Intent {
+            command_id: Uuid::from_u128(7),
+            terms_revision,
+            policy_id,
+            policy_revision,
+        };
+        let first = review
+            .decide(&[], &stage(&review, "department"), APPROVER)
+            .unwrap();
+        let second = review
+            .decide(
+                std::slice::from_ref(&first),
+                &stage(&review, "budget"),
+                Uuid::from_u128(10),
+            )
+            .unwrap();
+        (scope, draft, saved, policy, intent, [first, second])
+    }
+
+    #[test]
+    fn issue_command_accepts_only_exact_canonical_intent() {
+        let original = serde_json::to_value(ORIGIN.intent).unwrap();
+        let parse = |value: Value| {
+            let JsonObject(intent) = serde_json::from_value::<JsonObject<Intent>>(value)
+                .map_err(|_| IssueFailure::Invalid)?;
+            intent.validate()
+        };
+        assert_eq!(parse(original.clone()), Ok(ORIGIN.intent));
+        for field in original.as_object().unwrap().keys() {
+            let mut missing = original.clone();
+            missing.as_object_mut().unwrap().remove(field);
+            assert_eq!(parse(missing), Err(IssueFailure::Invalid));
+        }
+        for (field, invalid) in [
+            ("command_id", json!(Uuid::nil())),
+            ("policy_id", json!("00000000-0000-0000-0000-00000000000A")),
+            ("policy_revision", json!("1")),
+            ("terms_revision", json!(0)),
+            ("actor_id", json!(ISSUER)),
+            ("supplier_id", json!(Uuid::new_v4())),
+            ("lines", json!([])),
+            ("total", json!("1.00")),
+        ] {
+            let mut changed = original.clone();
+            changed[field] = invalid;
+            assert_eq!(parse(changed), Err(IssueFailure::Invalid), "{field}");
+        }
+        assert_eq!(parse(json!([])), Err(IssueFailure::Invalid));
+        assert!(
+            serde_json::from_str::<JsonObject<Intent>>(&original.to_string().replacen(
+                '{',
+                r#"{"policy_revision":2,"#,
+                1
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn issuance_requires_complete_untampered_approval_for_the_whole_split_draft() {
+        let (scope, draft, saved, policy, intent, mut approvals) = approval_fixture();
+        let attempt = || Issuance::new(scope, &saved, Some(&policy), intent, ISSUER).unwrap();
+        // Each supplier is below the second threshold. That does not exempt
+        // either from the full-draft second approval.
+        assert_eq!(
+            attempt().form(&draft, &approvals[..1]),
+            Err(IssueFailure::Conflict)
+        );
+        let batch = attempt().form(&draft, &approvals).unwrap();
+        assert_eq!(batch.total.to_string(), "1882.40");
+        assert_eq!(batch.orders.len(), 2);
+        approvals.swap(0, 1);
+        assert_eq!(
+            attempt().form(&draft, &approvals),
+            Err(IssueFailure::Unavailable)
+        );
+        approvals.swap(0, 1);
+        let mut altered = serde_json::to_value(&approvals[1]).unwrap();
+        altered["originalResult"]["total"] = json!("1882.39");
+        approvals[1] = serde_json::from_value(altered).unwrap();
+        assert_eq!(
+            attempt().form(&draft, &approvals),
+            Err(IssueFailure::Unavailable)
+        );
+    }
+
+    #[test]
+    fn issuance_rejects_preparer_missing_policy_foreign_scope_and_stale_versions() {
+        let (scope, draft, saved, policy, intent, approvals) = approval_fixture();
+        for actor in [saved.actor_id, Uuid::nil()] {
+            assert!(matches!(
+                Issuance::new(scope, &saved, Some(&policy), intent, actor),
+                Err(IssueFailure::Forbidden)
+            ));
+        }
+        assert!(matches!(
+            Issuance::new(scope, &saved, None, intent, ISSUER),
+            Err(IssueFailure::Unavailable)
+        ));
+        let foreign = Scope {
+            organization_id: Uuid::new_v4(),
+            ..scope
+        };
+        assert!(matches!(
+            Issuance::new(foreign, &saved, Some(&policy), intent, ISSUER),
+            Err(IssueFailure::Unavailable)
+        ));
+        for stale in [
+            Intent {
+                terms_revision: 2,
+                ..intent
+            },
+            Intent {
+                policy_revision: 2,
+                ..intent
+            },
+            Intent {
+                policy_id: Uuid::new_v4(),
+                ..intent
+            },
+        ] {
+            assert!(matches!(
+                Issuance::new(scope, &saved, Some(&policy), stale, ISSUER),
+                Err(IssueFailure::Conflict)
+            ));
+        }
+        let mut config: Value = serde_json::from_slice(include_bytes!(
+            "../../../contracts/examples/procurement/budget-policy-v1.json"
+        ))
+        .unwrap();
+        config["stages"][1]["minimum_amount"] = json!("1999.00");
+        let edited = Policy::parse(Some(&serde_json::to_vec(&config).unwrap())).unwrap();
+        let attempt = Issuance::new(scope, &saved, Some(&edited), intent, ISSUER).unwrap();
+        // A policy edited in place cannot borrow even the first-stage approval.
+        assert_eq!(
+            attempt.form(&draft, &approvals[..1]),
+            Err(IssueFailure::Unavailable)
+        );
+    }
+
+    #[test]
+    fn public_batch_returns_only_contract_fields_and_historical_source_references() {
+        let (draft, saved, suppliers) = fixture(false);
+        let mut ids = ids();
+        let batch = Batch::form(&draft, &saved, ORIGIN, APPROVED, || ids.next().unwrap()).unwrap();
+        let expected_lines = [
+            ("NM-ENDPLATE", "12", "30.10", "361.20"),
+            ("NM-MOTOR", "6", "149.95", "899.70"),
+            ("NM-RAIL", "8", "12.00", "96.00"),
+            ("NM-SENSOR", "10", "7.35", "73.50"),
+            ("NM-SPINDLE", "10", "45.20", "452.00"),
+        ]
+        .into_iter()
+        .zip(102..)
+        .map(|((sku, pieces, price, total), id)| {
+            json!({
+                "purchase_line_id": Uuid::from_u128(id), "sku": sku, "revision": null,
+                "unit": "EA", "pieces": pieces, "unit_price": price, "line_total": total,
+            })
+        })
+        .collect::<Vec<_>>();
+        assert_eq!(
+            serde_json::to_value(IssuedBatch::try_from(batch).unwrap()).unwrap(),
+            json!({
+                "batch_id": Uuid::from_u128(100), "proposal_id": draft.proposal_id,
+                "plan_id": draft.plan.plan_id, "order_id": draft.plan.order_id,
+                "line_id": draft.plan.line_id, "state": "issued", "currency": "EUR",
+                "terms_revision": 1, "policy_id": ORIGIN.intent.policy_id, "policy_revision": 1,
+                "total": "1882.40", "issued_at": "2026-03-20T09:46:40Z",
+                "purchase_orders": [{
+                    "purchase_order_id": Uuid::from_u128(101), "supplier": suppliers[0],
+                    "total": "1882.40", "lines": expected_lines,
+                }],
+            })
+        );
     }
 
     #[test]
