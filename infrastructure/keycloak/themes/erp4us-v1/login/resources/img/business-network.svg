@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 480" fill="none">
+  <defs>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#44606c"/>
+    </pattern>
+  </defs>
+  <rect x="42" y="30" width="476" height="420" rx="22" fill="url(#grid)"/>
+  <g stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+    <path d="M84 323h75l55-65h91l60-92h110M132 152h73l50 55h107l58 74h62M158 378h88l64-52h61l57 43"
+          stroke="#557783"/>
+    <path d="M133 152h72l50 55M214 258h91l60-92M310 326h61l57 43" stroke="#75a7ab"/>
+  </g>
+  <g fill="#22313c" stroke="#84b4b8" stroke-width="2.5">
+    <rect x="71" y="310" width="26" height="26" rx="6"/>
+    <rect x="119" y="139" width="26" height="26" rx="6"/>
+    <rect x="237" y="189" width="36" height="36" rx="8"/>
+    <rect x="346" y="147" width="38" height="38" rx="8"/>
+    <rect x="466" y="270" width="22" height="22" rx="11"/>
+    <rect x="416" y="357" width="24" height="24" rx="12"/>
+  </g>
+  <g fill="#80a8ad">
+    <circle cx="158" cy="378" r="5"/>
+    <circle cx="214" cy="258" r="5"/>
+    <circle cx="475" cy="166" r="5"/>
+    <circle cx="310" cy="326" r="5"/>
+  </g>
+</svg>
