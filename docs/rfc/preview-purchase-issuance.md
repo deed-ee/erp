@@ -45,3 +45,14 @@ An authorized operator can reconcile a gap by comparing against Inventory's comm
 **End plates:** the original plan requests 20, reserves 8 and records 12 uncovered; issuance orders 12 and changes no stock. Before any receipt Procurement's projection is unknown (the ordered quantity is still 12). Post 6: Inventory's held quantity is 14, the receipt allocation is 6 and both line open and plan shortage are 6. After the fact is observed Procurement shows received 6/open 6; replay returns the same receipt with no additional effects. Post another 6 under a new ID: held 20, receipt allocation 12, line open and shortage 0, and Procurement eventually shows 12 received/open 0. The original snapshot still says reserved 8/uncovered 12, and the original shortage fact still has a buy row of 12. A thirteenth plate, an unissued line and a row that is no longer waiting are counterexamples, not stock movements.
 
 Runtime proof still needs two competing receipts, changed retry intent, missing grants, receiver separation, cross-tenant and cross-organization denies, source and broker outages, lost acknowledgement/restart, out-of-order delivery and gap reconciliation without duplicate movement or allocation. Confirm the exact actor separation/delegation mechanics and operational recovery authority before activation. No new service, deployed grants, supplier transmission, receipt corrections or production acceptance are implied by these contracts.
+
+The test-only persistence proofs use separate, randomly named databases on a **dedicated disposable MongoDB replica set**, not the browser preview or an existing deployment. To run both against that isolated replica set:
+
+```sh
+export INVENTORY_RECEIPT_TEST_MONGO_URI='<dedicated replica-set URI>'
+export PROCUREMENT_RECEIPT_TEST_MONGO_URI="$INVENTORY_RECEIPT_TEST_MONGO_URI"
+cargo test --locked -p inventory mongo_competing_lots_and_rollback_keep_all_effects_atomic -- --ignored
+cargo test --locked -p procurement mongo_persists_gaps_replay_conflicts_and_bounded_continuation -- --ignored
+```
+
+Inventory checks concurrent admission and all-or-none rollback. Procurement checks gap and replay behavior after reopening the store, rejecting a conflicting lot without advancing the last verified prefix, and bounded continuation. These do not test a deployed broker consumer, role grants, the cross-service request, or complete process recovery.

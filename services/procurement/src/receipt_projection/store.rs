@@ -7,7 +7,9 @@
 //! Procurement line. Staged/replay outcomes are durable only after majority
 //! commit. Other outcomes are not accepted deliveries: the first linked
 //! conflict marker is not a per-delivery quarantine or terminal ACK policy.
-//! Known gaps/integrity issues are unknown, not inferred zero.
+//! Known gaps/integrity issues are unknown, not inferred zero. The caller must
+//! keep the store operation alive through commit resolution; a broker lease
+//! or HTTP deadline must not cancel the underlying transaction.
 
 use super::*;
 use crate::terms_store::{DB_TIMEOUT, ensure_collection, majority_collection};
@@ -20,7 +22,7 @@ use mongodb::{
     },
     options::{IndexOptions, ReadConcern},
 };
-use tokio::time::{sleep, timeout};
+use tokio::time::{Instant, sleep, timeout};
 
 mod records;
 mod tests;
@@ -368,50 +370,52 @@ impl Store {
         &self,
         apply: impl for<'a> AsyncFn(&'a mut ClientSession) -> mongodb::error::Result<T>,
     ) -> Result<T, Failure> {
-        timeout(DB_TIMEOUT, async {
-            let mut session = self
-                .0
-                .client()
-                .start_session()
+        let deadline = Instant::now() + DB_TIMEOUT;
+        let mut session = self
+            .0
+            .client()
+            .start_session()
+            .await
+            .map_err(|_| Failure::Unavailable)?;
+        for attempt in 0..MAX_ATTEMPTS {
+            // Bound fresh attempts, not the lifetime of an in-flight commit. In
+            // particular, never replace the session while its result is uncertain.
+            if Instant::now() >= deadline {
+                break;
+            }
+            let opts = majority_collection();
+            session
+                .start_transaction()
+                .read_concern(ReadConcern::snapshot())
+                .selection_criteria(opts.selection_criteria.ok_or(Failure::Unavailable)?)
+                .write_concern(opts.write_concern.ok_or(Failure::Unavailable)?)
+                .max_commit_time(DB_TIMEOUT)
                 .await
                 .map_err(|_| Failure::Unavailable)?;
-            for attempt in 0..MAX_ATTEMPTS {
-                let opts = majority_collection();
-                session
-                    .start_transaction()
-                    .read_concern(ReadConcern::snapshot())
-                    .selection_criteria(opts.selection_criteria.ok_or(Failure::Unavailable)?)
-                    .write_concern(opts.write_concern.ok_or(Failure::Unavailable)?)
-                    .max_commit_time(DB_TIMEOUT)
-                    .await
-                    .map_err(|_| Failure::Unavailable)?;
-                match apply(&mut session).await {
-                    Ok(value) => {
-                        if confirm_commit(&mut session).await? {
-                            return Ok(value);
-                        }
-                    }
-                    Err(error) => {
-                        session
-                            .abort_transaction()
-                            .await
-                            .map_err(|_| Failure::Unavailable)?;
-                        // An insert race can be unlabeled (first summary or
-                        // independently unique inbox IDs across two lines).
-                        if !transient(&error) && !duplicate(&error) {
-                            return Err(error
-                                .get_custom::<Failure>()
-                                .copied()
-                                .unwrap_or(Failure::Unavailable));
-                        }
+            match apply(&mut session).await {
+                Ok(value) => {
+                    if confirm_commit(&mut session).await? {
+                        return Ok(value);
                     }
                 }
-                retry_pause(attempt).await;
+                Err(error) => {
+                    session
+                        .abort_transaction()
+                        .await
+                        .map_err(|_| Failure::Unavailable)?;
+                    // An insert race can be unlabeled (first summary or
+                    // independently unique inbox IDs across two lines).
+                    if !transient(&error) && !duplicate(&error) {
+                        return Err(error
+                            .get_custom::<Failure>()
+                            .copied()
+                            .unwrap_or(Failure::Unavailable));
+                    }
+                }
             }
-            Err(Failure::Unavailable)
-        })
-        .await
-        .map_err(|_| Failure::Unavailable)?
+            retry_pause(attempt).await;
+        }
+        Err(Failure::Unavailable)
     }
 }
 
