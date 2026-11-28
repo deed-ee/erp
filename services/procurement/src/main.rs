@@ -9,6 +9,7 @@ mod partners;
 mod purchase_batch;
 mod purchase_store;
 mod query;
+mod receipt_projection;
 #[cfg(test)]
 mod receipt_wire;
 mod store;
