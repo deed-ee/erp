@@ -1,8 +1,10 @@
 import { Component, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ArticleApi } from './article-api';
+import { DiagnosticLogs } from './diagnostic-logs';
 import type { Message } from './messages';
 import { Preferences } from './preferences';
+import { RuntimeDiagnostics } from './runtime-diagnostics';
 import { Feedback, PageHeading } from './ui';
 
 type Readiness = 'ready' | 'unready' | 'unreachable';
@@ -33,14 +35,16 @@ interface Report {
 }
 
 @Component({
-  imports: [RouterLink, Feedback, PageHeading],
+  imports: [RouterLink, Feedback, PageHeading, RuntimeDiagnostics, DiagnosticLogs],
   template: `
-    <erp-page-heading [title]="t()('administration')" [description]="t()('healthIntro')" />
-    @if (!api.canReadHealth()) {
+    <erp-page-heading [title]="t()('administration')" [description]="t()('diagnosticsIntro')" />
+    @if (!api.diagnosticsPermissions().length) {
       <p>{{ t()('platformGrantRequired') }}</p><a routerLink="/local-access">{{ t()('access') }}</a>
-    } @else {
+    }
+    @if (api.canReadHealth()) {
       <section class="card">
         <h2>{{ t()('applicationHealth') }}</h2>
+        <p>{{ t()('healthIntro') }}</p>
         <erp-feedback [message]="message() ? t()(message()!) : ''" />
         @if (report(); as latest) {
           <p>{{ t()('healthObservedAt') }}: {{ observed(latest.observed_at_unix_ms) }}</p>
@@ -91,6 +95,10 @@ interface Report {
           }
         }
       </section>
+    }
+    @for (context of [api.diagnosticsContext()]; track context) {
+      @if (api.canReadRuntime()) { <erp-runtime-diagnostics /> }
+      @if (api.canReadLogs()) { <erp-diagnostic-logs /> }
     }
   `,
   styles: [`table {width:100%; border-collapse:collapse} td,th {text-align:left; padding:.5rem}`],

@@ -6,6 +6,7 @@ export interface Article extends Registration { id: string; revision: number }
 export type Result = { article: Article } | { error: Message };
 export const isArticleId = (id: string) => /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(id);
 export const isLoopback = () => ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+export const platformDiagnosticsPermissions = ['platform.health.read', 'platform.runtime.read', 'platform.logs.read'] as const;
 
 interface Grant { tenant_id: string; organization_id: string; permissions: string[] }
 const fixtureScope = {
@@ -19,6 +20,7 @@ export class ArticleApi {
   private readonly verifiedGrants = signal<Grant[]>([]);
   private readonly verifiedPlatform = signal<string[]>([]);
   private readonly selected = signal(0);
+  private readonly sessionVersion = signal(0);
   private pending?: AbortController;
   readonly hasCredential = computed(() => Boolean(this.credential()));
   readonly grants = this.verifiedGrants.asReadonly();
@@ -38,7 +40,12 @@ export class ArticleApi {
     && (this.grant()?.permissions.includes('procurement.proposal.terms.write') ?? false));
   readonly canCreateSalesDraft = computed(() => this.canReadPartners() && this.canPlan()
     && (this.grant()?.permissions.includes('sales.order.draft.create') ?? false));
-  readonly canReadHealth = computed(() => this.verifiedPlatform().includes('platform.health.read'));
+  readonly diagnosticsPermissions = computed(() =>
+    platformDiagnosticsPermissions.filter(permission => this.verifiedPlatform().includes(permission)));
+  readonly canReadHealth = computed(() => this.diagnosticsPermissions().includes('platform.health.read'));
+  readonly canReadRuntime = computed(() => this.diagnosticsPermissions().includes('platform.runtime.read'));
+  readonly canReadLogs = computed(() => this.diagnosticsPermissions().includes('platform.logs.read'));
+  readonly diagnosticsContext = computed(() => [this.sessionVersion(), this.selected()] as const);
 
   setCredential(value: string) {
     if (!isLoopback() || !value.trim()) return false;
@@ -59,6 +66,7 @@ export class ArticleApi {
 
   clearCredential() {
     this.pending?.abort();
+    this.sessionVersion.update(version => version + 1);
     this.credential.set('');
     this.verifiedGrants.set([]);
     this.verifiedPlatform.set([]);

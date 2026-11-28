@@ -12,7 +12,7 @@
           <option [value]="$index">{{ api.scopeLabel(grant) }}</option>
         }
       </select>
-    } @else if (api.canReadHealth()) { {{ t()('platformContext') }} }
+    } @else if (api.diagnosticsPermissions().length) { {{ t()('platformContext') }} }
     @else { {{ t()('scope') }} }
   </span>
   <div class="top-actions">

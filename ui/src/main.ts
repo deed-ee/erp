@@ -3,7 +3,7 @@ import { provideRouter, type Routes } from '@angular/router';
 import { LucideActivity, LucideBoxes, LucideFactory, LucideLayoutDashboard, LucideShoppingCart } from '@lucide/angular';
 import { Shell } from './shell';
 import { Workspace, DemoAccess } from './workspace';
-import { isLoopback } from './article-api';
+import { isLoopback, platformDiagnosticsPermissions } from './article-api';
 import { Products, ProductRegistration, ProductDetail, ProductGuide, confirmLeave } from './products';
 import { SHELL_REGISTRATION, type ShellRegistration } from './navigation';
 import { Manufacturing } from './manufacturing';
@@ -27,7 +27,7 @@ const registration: ShellRegistration = {
     { schemaVersion: 1, id: 'sales', label: 'salesOrders', icon: LucideShoppingCart,
       route: '/sales/orders', groups: [], permissions: ['sales.order.read'] },
     { schemaVersion: 1, id: 'administration', label: 'administration', icon: LucideActivity,
-      route: '/administration', groups: [], permissions: ['platform.health.read'] }
+      route: '/administration', groups: [], anyPermission: platformDiagnosticsPermissions }
   ],
   panels: [{ id: 'product-guide', title: 'productGuide', component: ProductGuide }],
   access: {

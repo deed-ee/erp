@@ -24,7 +24,7 @@ export class Shell {
     ...this.registration.access,
     permissions: new Set([
       ...(this.api.grant()?.permissions ?? []).filter(permission => !permission.startsWith('platform.')),
-      ...(this.api.canReadHealth() ? ['platform.health.read'] : []),
+      ...this.api.diagnosticsPermissions(),
     ]),
   }));
   readonly routeData = signal<Record<string, unknown>>({});
