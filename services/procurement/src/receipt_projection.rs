@@ -21,6 +21,8 @@ use uuid::Uuid;
 
 const MAX_SEQUENCE: u32 = 1_000_000;
 
+mod store;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct LineKey<'a> {
     // These are the verified scope on each side, not authority inferred from IDs.
@@ -87,8 +89,9 @@ struct VerifiedReceipt<'a> {
 
 impl<'a> VerifiedReceipt<'a> {
     /// Supply only a positively verified committed receipt and its independently verified
-    /// `scope`. `owner_content` is a lossless comparable representation
-    /// of the immutable owner envelope (including metadata, excluding broker replay headers).
+    /// `scope`. `owner_content` is a lossless comparable representation of
+    /// immutable owner attestation not already held by the typed receipt.
+    /// Transport replay headers and diagnostic metadata do not belong in it.
     /// These local shape checks are not a wire validator or a proof of authority.
     fn from_verified(
         scope: Scope,
