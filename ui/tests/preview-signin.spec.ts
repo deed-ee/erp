@@ -1,9 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { verifyReceiptOwners } from './receipt-owner-probe';
 
 test.use({ ignoreHTTPSErrors: true }); // Only for the locally generated preview certificate.
 
-async function login(page: Page, user: 'production' | 'auditor' | 'platform-monitor' | 'department-approver' | 'budget-approver' | 'purchase-issuer') {
+async function login(page: Page, user: 'production' | 'auditor' | 'platform-monitor' | 'department-approver' | 'budget-approver' | 'purchase-issuer' | 'purchase-receiver') {
   const passwords: Record<string, string> = JSON.parse(readFileSync('../.erp4us-preview/credentials.json', 'utf8'));
   await page.goto('/local-access');
   await page.getByRole('button', { name: 'Sign in with Keycloak' }).click();
@@ -72,7 +73,9 @@ test('real OIDC: platform monitor sees actual application health', async ({ page
 test('real OIDC: production user saves and confirms a priced order; an authorized issuer records its approved purchase', async ({ page, browser }) => {
   test.skip(process.env.ERP4US_REAL_OIDC_E2E !== '1', 'Requires the dedicated Keycloak preview stack');
   const issuance = process.env.ERP4US_PURCHASE_ISSUANCE_E2E === '1';
-  if (process.env.ERP4US_BUDGET_APPROVAL_E2E === '1') test.setTimeout(issuance ? 100000 : 70000);
+  const receiptProbe = process.env.ERP4US_RECEIVING_OWNER_E2E === '1';
+  if (receiptProbe && !issuance) throw new Error('Receiving proof needs the issued NovaMotion order');
+  if (process.env.ERP4US_BUDGET_APPROVAL_E2E === '1') test.setTimeout(receiptProbe ? 150000 : issuance ? 100000 : 70000);
   await login(page, 'production');
   await page.getByRole('link', { name: 'Sales orders' }).click();
   await expect(page.getByRole('option', { name: /CUS-ATLAS/ })).toHaveCount(1);
@@ -210,11 +213,16 @@ test('real OIDC: production user saves and confirms a priced order; an authorize
     await match.getByRole('link', { name: 'Check reservation' }).click();
     const response = await retrieved;
     expect(response.status()).toBe(200);
-    expect((await response.json()).purchase_orders[0].purchase_order_id).toBe(purchaseOrderId);
+    const batch = await response.json();
+    expect(batch.purchase_orders[0].purchase_order_id).toBe(purchaseOrderId);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     const issued = page.getByRole('table', { name: 'SUP-VECTORDRIVE · VectorDrive Components GmbH' });
     await expect(issued.getByRole('row').filter({ hasText: 'NM-ENDPLATE' })).toContainText('12 EA');
     await expect(page.getByRole('button', { name: reviewName })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Save draft purchase terms' })).toHaveCount(0);
+    if (receiptProbe) {
+      await test.step('Verify both receipt owners with real OIDC, a lost reply and a new session', () =>
+        verifyReceiptOwners(browser, login, batch));
+    }
   }
 });

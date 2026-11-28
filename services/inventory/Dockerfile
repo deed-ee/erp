@@ -11,7 +11,12 @@ ARG CARGO_BUILD_JOBS
 COPY --from=planner /recipe.json /recipe.json
 RUN cargo chef cook --locked --release -p inventory --recipe-path /recipe.json
 COPY . .
-RUN cargo build --locked --release -p inventory
+ARG ERP4US_INVENTORY_RECEIVING_PROOF_BUILD=0
+RUN case "$ERP4US_INVENTORY_RECEIVING_PROOF_BUILD" in \
+      0) cargo build --locked --release -p inventory ;; \
+      1) cargo build --locked --release -p inventory --features preview-receiving-proof ;; \
+      *) exit 2 ;; \
+    esac
 
 FROM debian:bookworm-20261104-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
 # Remove these pins when a reviewed base includes the PAM and zstd fixes.

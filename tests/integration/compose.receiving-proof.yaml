@@ -1,0 +1,6 @@
+# Only the hosted synthetic receipt-owner proof uses this override.
+services:
+  inventory:
+    image: erp4us-ci-inventory-receiving-proof:latest
+    environment:
+      ERP4US_INVENTORY_RECEIVING_PROOF: "1"

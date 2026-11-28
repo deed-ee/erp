@@ -175,6 +175,15 @@ jobs:
           load: true
           cache-from: type=gha,scope=inventory-${{ env.CACHE_NAMESPACE }}
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,ignore-error=true,scope=inventory-{0}', env.CACHE_NAMESPACE) || '' }}
+      - name: Build the separate synthetic Inventory receiving proof image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: services/inventory/Dockerfile
+          tags: erp4us-ci-inventory-receiving-proof:latest
+          build-args: ERP4US_INVENTORY_RECEIVING_PROOF_BUILD=1
+          load: true
+          cache-from: type=gha,scope=inventory-${{ env.CACHE_NAMESPACE }}
       - name: Build Procurement release image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
@@ -252,7 +261,7 @@ jobs:
           npm run build
           npx playwright install --with-deps chromium
           npm run test:e2e
-      - name: Run real preview login and wrong-tenant browser checks
+      - name: Verify real preview login and the synthetic receipt owners
         env:
           ERP4US_PORT: '8180'
           ERP4US_MANUFACTURING_PORT: '8190'
@@ -267,6 +276,8 @@ jobs:
           ERP4US_BUDGET_APPROVAL_E2E: '1'
           ERP4US_PREVIEW_PURCHASE_ISSUANCE: '1'
           ERP4US_PURCHASE_ISSUANCE_E2E: '1'
+          ERP4US_PREVIEW_RECEIVING: '1'
+          ERP4US_RECEIVING_OWNER_E2E: '1'
         run: |
           python3 scripts/preview-identity.py prepare
           jq -r 'to_entries[].value | "::add-mask::" + .' .erp4us-preview/credentials.json
@@ -275,9 +286,8 @@ jobs:
           docker tag erp4us-ci-diagnostics erp4us-ci-identity-diagnostics
           docker tag erp4us-ci-article-delivery erp4us-ci-identity-article-delivery
           docker tag erp4us-ci-sales erp4us-ci-identity-sales
-          docker tag erp4us-ci-inventory erp4us-ci-identity-inventory
           docker tag erp4us-ci-procurement erp4us-ci-identity-procurement
-          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml -f compose.procurement-approvals.yaml "$@"; }
+          preview() { docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml -f compose.procurement-approvals.yaml -f tests/integration/compose.receiving-proof.yaml "$@"; }
           preview up -d preview-identity
           python3 scripts/preview-identity.py configure
           preview up --no-build -d --wait nats
@@ -305,7 +315,7 @@ jobs:
           ERP4US_IDENTITY_DIR: ./.erp4us-preview
         run: |
           if [ -f .erp4us-preview/identity-policy.json ]; then
-            docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml down -v
+            docker compose -p erp4us-ci-identity -f compose.yaml -f compose.delivery.yaml -f compose.manufacturing.yaml -f compose.preview-identity.yaml -f compose.diagnostics.yaml -f compose.sales.yaml -f compose.sales-events.yaml -f compose.inventory.yaml -f compose.procurement.yaml -f tests/integration/compose.receiving-proof.yaml down -v
           fi
   audit:
     needs: impact
