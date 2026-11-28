@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Pinned Debian's `libzstd1` security update in the service images while the upstream Bookworm image still ships the earlier package.
 - Replaced the shared demo bearer token with verified OAuth access tokens and per-operation grants scoped to the tenant and organization.
 - Added a local German/English Angular workspace for registering and retrieving articles, with labeled icon buttons and a keyboard-driven browser scenario.
 
