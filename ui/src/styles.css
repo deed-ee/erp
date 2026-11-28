@@ -57,6 +57,12 @@ erp-command-bar { display: block; flex: 1 1 40rem; min-width: 0; max-width: 48re
 .lookup-candidates { list-style: none; display: grid; gap: .35rem; padding: 0; margin-block: .55rem; }
 .lookup-candidates .button { justify-content: start; }
 .exact-filter { white-space: pre-wrap; }
+.command-context {
+  display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: .5rem var(--space-3);
+  border-block-start: 1px solid var(--edge-strong); margin-block: var(--space-3);
+  padding-block-start: var(--space-3); font-size: .85rem;
+}
+.command-context > div { flex: 1 1 12rem; min-inline-size: 0; }
 .shell-body { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: stretch; }
 .rail, .secondary { background: var(--nav); border-inline-end: 1px solid var(--edge); }
 .rail { min-inline-size: 10.5rem; display: flex; flex-direction: column; padding: var(--space-3) var(--space-2); gap: var(--space-3); }

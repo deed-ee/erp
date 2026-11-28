@@ -13,6 +13,7 @@ import { Preferences } from './preferences';
     <p role="status" class="lookup-result-status" [attr.id]="statusId()">
       @if (statusKey(); as key) { {{ t()(key) }} }
     </p>
+    <ng-content select="[lookup-context]" />
     @if (result?.status === 'success') {
       @if (inSection()) {
         <h3 class="lookup-result-title">{{ result.article.name }}</h3>

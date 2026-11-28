@@ -4,7 +4,7 @@
 
 ## Interaction
 
-An operator who already knows a product code or exact Article name should not need to know which service owns it. Enter a SKU, a canonical Article UUID, or a supported prefix and one value. For example, enter `Find article with SKU BRACKET-1` or `Zeige mir den Artikel mit SKU BRACKET-1`. The UI normalizes ASCII SKU casing and surrounding whitespace and accepts an optional trailing question mark for SKU/ID input. For a name, explicitly ask `Find article named "Steel bracket"` or `Finde Artikel mit Bezeichnung "Stahlwinkel"`. Exact names preserve case, internal whitespace, punctuation and Unicode representation; use quotes to preserve leading or trailing whitespace. The prototype does not guess name intent from bare text, silently change matching rules, or infer stock, orders or a revision. There is no conversational context.
+An operator who already knows a product code or exact Article name should not need to know which service owns it. Enter a SKU, a canonical Article UUID, or a supported prefix and one value. For example, enter `Find article with SKU BRACKET-1` or `Zeige mir den Artikel mit SKU BRACKET-1`. The UI normalizes ASCII SKU casing and surrounding whitespace and accepts an optional trailing question mark for SKU/ID input. For a name, explicitly ask `Find article named "Steel bracket"` or `Finde Artikel mit Bezeichnung "Stahlwinkel"`. Exact names preserve case, internal whitespace, punctuation and Unicode representation; use quotes to preserve leading or trailing whitespace. The prototype does not guess name intent from bare text, silently change matching rules, or infer stock, orders or a revision.
 
 The compact desktop header remains available on scroll. The input and native submit button occupy a separate row at narrow widths to preserve reading and touch targets. Ctrl+K and Cmd+K focus search; tab to a permitted suggestion or result link; Escape clears the search and returns focus to the input. In **Products → Find article by exact name**, enter the stored name directly, without an intent phrase or quotes for whitespace. Both name entry points use the same lookup adapter and result component. If several authorized articles share the name, choose by SKU. The result shows at most the first five records in ascending SKU order; it never selects one automatically. A truncation notice directs the user to an exact SKU rather than implying the list is complete. The result exposes the interpreted operation, filter, selected demo scope, source and, for a single article, its revision. The preview does not claim source freshness from a record revision. Products also supports exact SKU and ID lookup without AI. Opening any Article rechecks its current owner-side read permission.
 
@@ -18,6 +18,14 @@ flowchart LR
     A -->|Indexed equality in tenant and organization| D[(Master Data)]
     A --> R[Shared name result and evidence: choose SKU if ambiguous]
 ```
+
+### One bounded follow-up
+
+After a successful global exact-name lookup, type `Only SKU BRACKET-1` or `Nur SKU BRACKET-1` with a SKU displayed in the answer. The original name remains visible while narrowing. This alternative to choosing a result link can only refer to the displayed candidates, even when more results exist. An unshown SKU cannot trigger a follow-up read; use a separate standalone SKU lookup instead. The Products form and its SKU choice still work without a command.
+
+The client keeps at most the displayed Article IDs, SKUs and revisions with the exact name, a two-minute expiry and the in-memory credential version. This is bound to the fixed demo scope, not a browser assertion of verified identity or additional authority. The follow-up issues a fresh owner-authorized `findArticleBySku` request and checks that the returned ID and name still match and the revision is not older. Changed evidence is not rendered as a valid continuation. Missing context, rejected access, unknown results and an unavailable service remain distinct.
+
+The context is not persisted or sent to the server. Clear it with **Clear search context** or Escape. Leaving the search interaction, navigating, replacing the credential, starting a new standalone lookup or reaching expiry discards it. No generalized conversation, cross-service follow-up, write or saved query is enabled.
 
 ## Authority and extension
 

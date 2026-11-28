@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { articleContextLifetimeMs } from '../src/article-follow-up';
 import { demoToken, setDemoAccess } from './demo-access';
 
 const tenant = 'ddcae139-c1e8-47d2-8b48-349cb6f30ce5';
@@ -238,6 +239,89 @@ test('direct name lookup distinguishes invalid input, access denial and no scope
   await field.press('Enter');
   await expect(results.getByRole('status')).toHaveText('No article matches this filter in the selected scope.');
   await expect(results.getByRole('link')).toHaveCount(0);
+});
+
+test('a name follow-up narrows only displayed SKUs with a fresh authorized read', async ({ page }) => {
+  const marker = randomUUID().slice(0, 8).toUpperCase();
+  const name = `Drive module ${marker}`;
+  const own = await seed(page, 'synthetic-writer', tenant, organization, { name, sku: `FOLLOW-${marker}-A` });
+  await seed(page, 'synthetic-writer', tenant, organization, { name, sku: `FOLLOW-${marker}-B` });
+  const foreign = await seed(page, 'synthetic-registration', tenant, otherOrganization, {
+    name, sku: `FOLLOW-${marker}-X`
+  });
+  await page.goto('/');
+  await setDemoAccess(page, demoToken('synthetic-reader'));
+  await page.keyboard.press('Control+k');
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  const results = page.getByRole('region', { name: 'Search results' });
+  const ask = async (input: string) => { await query.fill(input); await query.press('Enter'); };
+  const skuReads: string[] = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (request.method() === 'GET' && url.pathname === '/v1/articles:find-by-sku') skuReads.push(url.searchParams.get('sku')!);
+  });
+  await ask(`Find article named "${name}"`);
+  await expect(results.getByRole('link')).toHaveCount(2);
+  await expect(results.getByText('Continuing from exact name')).toBeVisible();
+  await ask(`Only SKU ${foreign.sku}`);
+  await expect(results.getByRole('status')).toHaveText(/not one of the shown matches/);
+  expect(skuReads).toEqual([]);
+
+  const freshRead = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/v1/articles:find-by-sku' && url.searchParams.get('sku') === own.sku;
+  });
+  await ask(`Nur SKU ${own.sku.toLowerCase()}`);
+  expect((await freshRead).status()).toBe(200);
+  await expect(results.getByRole('status')).toHaveText('One matching article');
+  await expect(results.getByText('Continuing from exact name')).toBeVisible();
+  await expect(results).toContainText(own.sku);
+  await expect(results.getByRole('link')).toHaveAttribute('href', `/products/${own.id}`);
+
+  await results.getByRole('button', { name: 'Clear search context' }).press('Enter');
+  await expect(query).toBeFocused();
+  await expect(query).toBeEmpty();
+  await expect(results).toHaveCount(0);
+  await ask(`Only SKU ${own.sku}`);
+  await expect(results.getByRole('status')).toHaveText(/Run an exact-name search/);
+  expect(skuReads).toEqual([own.sku]);
+});
+
+test('an expired or changed Article name context cannot produce a follow-up answer', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/');
+  await setDemoAccess(page, 'synthetic-fixture');
+  const article = { id: randomUUID(), sku: 'PART-1', name: 'Synthetic module', revision: 3 };
+  let skuReads = 0;
+  await page.route('**/v1/**', async route => {
+    if (route.request().method() === 'HEAD') return route.fulfill({ status: 204 });
+    if (new URL(route.request().url()).pathname === '/v1/articles:find-by-name') {
+      return route.fulfill({ json: { matches: [article], hasMore: false } });
+    }
+    skuReads++;
+    return route.fulfill({ json: { ...article, name: 'Different name from the owner' } });
+  });
+  const query = page.getByRole('searchbox', { name: 'Global search' });
+  const results = page.getByRole('region', { name: 'Search results' });
+  const ask = async (input: string) => { await query.fill(input); await query.press('Enter'); };
+  await ask('Find article named "Synthetic module"');
+  await expect(results.getByRole('status')).toHaveText('One matching article');
+  await results.getByRole('button', { name: 'Clear search context' }).focus();
+  await page.clock.fastForward(articleContextLifetimeMs + 1000);
+  await expect(results.getByRole('status')).toHaveText(/search context expired/);
+  await expect(query).toBeFocused();
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await ask('Only SKU PART-1');
+  await expect(results.getByRole('status')).toHaveText(/Run an exact-name search/);
+  expect(skuReads).toBe(0);
+
+  await ask('Find article named "Synthetic module"');
+  await expect(results.getByRole('status')).toHaveText('One matching article');
+  await ask('Only SKU PART-1');
+  await expect(results.getByRole('status')).toHaveText(/no longer matches the earlier result/);
+  await expect(results.getByRole('link')).toHaveCount(0);
+  await expect(results.getByText('Different name from the owner')).toHaveCount(0);
+  expect(skuReads).toBe(1);
 });
 
 test('editing the direct name field discards a pending answer', async ({ page }) => {

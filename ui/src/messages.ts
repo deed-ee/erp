@@ -41,6 +41,14 @@ const en = {
   commandNameRequired: 'Enter one exact article name. Use double quotes to preserve spaces at the beginning or end.',
   commandChooseArticle: 'Several articles have this name. Choose an article by SKU.',
   commandMoreMatches: 'Only the first five matches are shown. Enter its exact SKU to find another article.',
+  commandContext: 'Continuing from exact name',
+  commandContextHint: 'For two minutes, type “Only SKU” followed by a SKU from these results.',
+  commandResetContext: 'Clear search context',
+  commandFollowUpNoContext: 'Run an exact-name search with a match before narrowing by SKU.',
+  commandFollowUpNeedsSku: 'Enter one exact SKU after “Only SKU”.',
+  commandFollowUpOutsideResults: 'That SKU is not one of the shown matches. Choose a shown SKU or search for a SKU directly.',
+  commandContextExpired: 'The search context expired. Run the name lookup again.',
+  commandContextChanged: 'The article no longer matches the earlier result. Run the name lookup again.',
   executionError: 'The service returned an unexpected response. No result can be shown.',
   invalidSku: 'Enter an exact SKU: 1–32 letters, digits or hyphens.'
 };
@@ -87,6 +95,14 @@ const de: typeof en = {
   commandNameRequired: 'Gib eine exakte Artikelbezeichnung ein. Anführungszeichen erhalten Leerzeichen am Anfang oder Ende.',
   commandChooseArticle: 'Mehrere Artikel haben diese Bezeichnung. Wähle einen Artikel anhand seiner SKU.',
   commandMoreMatches: 'Nur die ersten fünf Treffer werden angezeigt. Gib die exakte SKU ein, um einen anderen Artikel zu finden.',
+  commandContext: 'Ausgangspunkt: exakte Bezeichnung',
+  commandContextHint: 'Gib innerhalb von zwei Minuten „Nur SKU“ und eine SKU aus diesen Treffern ein.',
+  commandResetContext: 'Suchkontext löschen',
+  commandFollowUpNoContext: 'Suche zuerst nach einer exakten Bezeichnung mit mindestens einem Treffer.',
+  commandFollowUpNeedsSku: 'Gib nach „Nur SKU“ genau eine exakte SKU ein.',
+  commandFollowUpOutsideResults: 'Diese SKU gehört nicht zu den angezeigten Treffern. Wähle eine davon oder suche direkt nach einer SKU.',
+  commandContextExpired: 'Der Suchkontext ist abgelaufen. Suche erneut nach der exakten Bezeichnung.',
+  commandContextChanged: 'Der Artikel entspricht nicht mehr dem früheren Treffer. Suche erneut nach der exakten Bezeichnung.',
   executionError: 'Der Dienst hat unerwartet geantwortet. Es kann kein Ergebnis angezeigt werden.',
   invalidSku: 'Gib eine exakte SKU ein: 1–32 Buchstaben, Ziffern oder Bindestriche.'
 };

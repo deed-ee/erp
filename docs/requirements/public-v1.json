@@ -1327,7 +1327,7 @@
       "status": "proposed",
       "priority": "P2",
       "milestone": "M1",
-      "revision": 2,
+      "revision": 3,
       "scenarios": [
         "SC-05",
         "SC-08"
@@ -1345,7 +1345,8 @@
       ],
       "prs": [],
       "tests": [
-        "ui/tests/command.spec.ts"
+        "ui/tests/command.spec.ts",
+        "ui/tests/article-follow-up.spec.ts"
       ],
       "evidence": []
     },
