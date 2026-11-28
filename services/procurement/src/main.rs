@@ -2,8 +2,11 @@
 mod consumer;
 mod drafts;
 mod material_plan;
+mod partners;
 mod query;
 mod store;
+mod terms;
+mod terms_store;
 
 use mongodb::Client;
 use serde::{Deserialize, Serialize};

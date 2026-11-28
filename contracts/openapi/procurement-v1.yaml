@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: erp4us Procurement drafts
   version: 1.0.0
-  description: Read Procurement's draft recommendation for material shortages. This API cannot approve a proposal or issue a purchase order.
+  description: Read Procurement's draft recommendation for material shortages and save non-binding terms. This API cannot approve a proposal, contact a supplier, commit spend, issue a purchase order or receive goods.
 security:
   - AccessToken: []
 paths:
@@ -41,9 +41,86 @@ paths:
         '403': { description: Missing proposal read grant for the requested scope }
         '404': { description: No proposal for that plan in the authorized scope }
         '503': { description: Procurement storage unavailable }
+  /v1/procurement/proposals/by-plan/{plan_id}/terms:
+    parameters:
+      - in: header
+        name: X-Erp4us-Tenant
+        required: true
+        schema: { type: string, format: uuid }
+      - in: header
+        name: X-Erp4us-Organization
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: plan_id
+        required: true
+        schema: { $ref: '#/components/schemas/Id' }
+    get:
+      operationId: getDraftPurchaseTermsByPlan
+      description: >
+        Requires procurement.proposal.read for the verified tenant and organization.
+        Returns the latest saved terms, not live partner data. A proposal without
+        saved terms has no revision to retrieve; use expected_revision 0 for the first save.
+      responses:
+        '200':
+          description: Latest saved terms for the authorized scope
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurchaseTerms' }
+        '400': { description: Invalid scope selectors or plan reference }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing proposal read grant for the requested scope }
+        '404': { description: No saved terms for that plan in the authorized scope }
+        '503': { description: Procurement storage unavailable }
+    post:
+      operationId: saveDraftPurchaseTermsByPlan
+      description: >
+        Requires procurement.proposal.terms.write and master-data.partner.read in the
+        verified tenant and organization. Master Data authorizes new partner reads
+        using the same actor and scope. Each immutable positive shortage row must
+        be included exactly once with its exact SKU and revision, including explicit
+        null for an unrevisioned row. Procurement uses the original quantities and units,
+        snapshots scoped partners with the supplier role, and computes exact EUR totals.
+        This saves the entire set of terms as a new revision, starting at 1, without
+        modifying the proposal or its draft status. No approval, supplier communication,
+        order, receipt, or spend results. Command IDs are scoped to tenant, organization
+        and plan. An authorized retry with the same command ID, expected revision and
+        terms returns the original saved revision without consulting Master Data; input
+        order is not significant. Retry a 503 with the same command if its outcome is
+        unknown. A new edit must use a new command ID and the current terms revision.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SavePurchaseTerms' }
+      responses:
+        '200':
+          description: Original saved terms for an identical command retry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurchaseTerms' }
+        '201':
+          description: New terms revision saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurchaseTerms' }
+        '400':
+          description: Invalid scope, plan reference, malformed or oversized JSON command, exact row set, price or supplier (missing, outside the authorized scope or not a supplier)
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing required scoped grant in Procurement or Master Data }
+        '404': { description: No proposal for that plan in the authorized scope }
+        '409': { description: 'Stale or exhausted terms revision, or changed intent under an already saved command ID' }
+        '503': { description: 'Procurement storage or supplier verification unavailable, or write outcome uncertain' }
 components:
   securitySchemes:
     AccessToken: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      headers:
+        WWW-Authenticate:
+          required: true
+          schema: { type: string, const: Bearer }
   schemas:
     Id:
       type: string
@@ -51,6 +128,10 @@ components:
       not: { const: '00000000-0000-0000-0000-000000000000' }
     Sku: { type: string, pattern: '^[A-Z0-9-]{1,64}(?![\s\S])' }
     Revision: { type: string, pattern: '^[A-Za-z0-9._-]{1,32}(?![\s\S])' }
+    OptionalRevision:
+      oneOf:
+        - { $ref: '#/components/schemas/Revision' }
+        - { type: 'null' }
     Pieces: { type: string, pattern: '^(?:[1-9][0-9]{0,5}|1000000)(?![\s\S])' }
     Proposal:
       type: object
@@ -83,3 +164,71 @@ components:
                   - { type: 'null' }
               unit: { type: string, const: EA }
               pieces: { $ref: '#/components/schemas/Pieces' }
+    CanonicalId:
+      allOf:
+        - { $ref: '#/components/schemas/Id' }
+        - { type: string, pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\s\S])' }
+    UnitPrice:
+      type: string
+      pattern: '^(?:0|[1-9][0-9]{0,6})\.[0-9]{2}(?![\s\S])'
+      description: Canonical exact EUR decimal, from 0.00 to 9999999.99. No rounding, sign, whitespace or leading zeroes.
+    Amount:
+      type: string
+      pattern: '^(?:0|[1-9][0-9]{0,14})\.[0-9]{2}(?![\s\S])'
+      description: Exact computed EUR decimal, with two fractional places.
+    SavePurchaseTerms:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_revision, lines]
+      properties:
+        command_id: { $ref: '#/components/schemas/CanonicalId' }
+        expected_revision: { type: integer, minimum: 0, maximum: 2147483647 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: Complete set of immutable shortage row keys, unique by the pair of SKU and revision.
+          items:
+            type: object
+            additionalProperties: false
+            required: [sku, revision, supplier_id, unit_price]
+            properties:
+              sku: { $ref: '#/components/schemas/Sku' }
+              revision: { $ref: '#/components/schemas/OptionalRevision' }
+              supplier_id: { $ref: '#/components/schemas/CanonicalId' }
+              unit_price: { $ref: '#/components/schemas/UnitPrice' }
+    PurchaseTerms:
+      type: object
+      additionalProperties: false
+      required: [proposal_id, plan_id, status, revision, currency, lines, total]
+      properties:
+        proposal_id: { $ref: '#/components/schemas/Id' }
+        plan_id: { $ref: '#/components/schemas/Id' }
+        status: { type: string, const: draft }
+        revision: { type: integer, minimum: 1, maximum: 2147483647 }
+        currency: { type: string, const: EUR }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: Sorted by SKU, then revision (null first). Quantities and units are unchanged from the proposal.
+          items:
+            type: object
+            additionalProperties: false
+            required: [sku, revision, unit, pieces, supplier, unit_price, line_total]
+            properties:
+              sku: { $ref: '#/components/schemas/Sku' }
+              revision: { $ref: '#/components/schemas/OptionalRevision' }
+              unit: { type: string, const: EA }
+              pieces: { $ref: '#/components/schemas/Pieces' }
+              supplier:
+                type: object
+                additionalProperties: false
+                required: [id, code, name]
+                properties:
+                  id: { $ref: '#/components/schemas/Id' }
+                  code: { type: string, pattern: '^[A-Z0-9-]{1,32}(?![\s\S])' }
+                  name: { type: string, minLength: 1, maxLength: 120 }
+              unit_price: { $ref: '#/components/schemas/UnitPrice' }
+              line_total: { $ref: '#/components/schemas/Amount' }
+        total: { $ref: '#/components/schemas/Amount' }

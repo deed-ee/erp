@@ -37,6 +37,18 @@ pub(super) struct BuyRow {
     pieces: String,
 }
 
+impl BuyRow {
+    pub(super) fn key(&self) -> (&str, Option<&str>) {
+        (&self.sku, self.revision.as_deref())
+    }
+
+    pub(super) fn whole_pieces(&self) -> Option<u64> {
+        pieces(&self.pieces)
+            .then(|| self.pieces.parse().ok())
+            .flatten()
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 enum Unit {
     #[serde(rename = "EA")]
@@ -44,18 +56,20 @@ enum Unit {
 }
 
 // Missing and explicitly null are different on the wire.
-fn required_revision<'de, D: Deserializer<'de>>(input: D) -> Result<Option<String>, D::Error> {
+pub(super) fn required_revision<'de, D: Deserializer<'de>>(
+    input: D,
+) -> Result<Option<String>, D::Error> {
     Option::deserialize(input)
 }
 
-fn sku(value: &str) -> bool {
+pub(super) fn sku(value: &str) -> bool {
     (1..=64).contains(&value.len())
         && value
             .bytes()
             .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'-')
 }
 
-fn revision(value: &str) -> bool {
+pub(super) fn revision(value: &str) -> bool {
     (1..=32).contains(&value.len())
         && value
             .bytes()

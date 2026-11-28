@@ -2,11 +2,13 @@ use crate::{
     Scope,
     drafts::{Draft, Status, Store},
     material_plan::{Bom, BuyRow},
-    required,
+    partners, required,
+    terms::{Command, Decision, Failure, Terms},
+    terms_store,
 };
 use axum::{
     Json, Router,
-    extract::{Path, Request, State},
+    extract::{DefaultBodyLimit, FromRequest, Path, Request, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     middleware::{self, Next},
     routing::get,
@@ -18,11 +20,16 @@ use tokio::time::timeout;
 use uuid::Uuid;
 
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
+const SAVE_TIMEOUT: Duration = Duration::from_secs(8);
+const TERMS_BODY_LIMIT: usize = 16 * 1024;
 const READ_PERMISSION: &str = "procurement.proposal.read";
+const WRITE_TERMS_PERMISSION: &str = "procurement.proposal.terms.write";
+const READ_PARTNERS_PERMISSION: &str = "master-data.partner.read";
 
 #[derive(Clone)]
 struct Api {
     store: Store,
+    terms: terms_store::Store,
     auth: Auth,
 }
 
@@ -51,9 +58,13 @@ impl From<Draft> for Proposal {
     }
 }
 
-fn authorize(auth: &Auth, headers: &HeaderMap) -> Result<Scope, StatusCode> {
+fn authorize(
+    auth: &Auth,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<erp4us_identity::Scope, StatusCode> {
     let scope = auth
-        .authorize(headers, READ_PERMISSION)
+        .authorize(headers, permission)
         .map_err(|error| match error {
             Denial::Unauthenticated => StatusCode::UNAUTHORIZED,
             Denial::InvalidScope => StatusCode::BAD_REQUEST,
@@ -62,23 +73,53 @@ fn authorize(auth: &Auth, headers: &HeaderMap) -> Result<Scope, StatusCode> {
     if scope.tenant.is_nil() || scope.organization.is_nil() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    Ok(Scope {
-        tenant_id: scope.tenant,
-        organization_id: scope.organization,
-    })
+    Ok(scope)
+}
+
+impl From<erp4us_identity::Scope> for Scope {
+    fn from(scope: erp4us_identity::Scope) -> Self {
+        Self {
+            tenant_id: scope.tenant,
+            organization_id: scope.organization,
+        }
+    }
+}
+
+fn plan_id(value: &str) -> Result<Uuid, StatusCode> {
+    Uuid::try_parse(value)
+        .ok()
+        .filter(|id| !id.is_nil())
+        .ok_or(StatusCode::BAD_REQUEST)
+}
+
+impl From<Failure> for StatusCode {
+    fn from(error: Failure) -> Self {
+        match error {
+            Failure::Invalid => Self::BAD_REQUEST,
+            Failure::Conflict => Self::CONFLICT,
+            Failure::Unavailable => Self::SERVICE_UNAVAILABLE,
+        }
+    }
+}
+
+impl From<partners::Failure> for StatusCode {
+    fn from(error: partners::Failure) -> Self {
+        match error {
+            partners::Failure::Invalid => Self::BAD_REQUEST,
+            partners::Failure::Unauthenticated => Self::UNAUTHORIZED,
+            partners::Failure::Forbidden => Self::FORBIDDEN,
+            partners::Failure::Unavailable => Self::SERVICE_UNAVAILABLE,
+        }
+    }
 }
 
 async fn lookup(
     State(api): State<Api>,
     headers: HeaderMap,
-    Path(plan_id): Path<String>,
+    Path(plan): Path<String>,
 ) -> Result<Json<Proposal>, StatusCode> {
-    let scope = authorize(&api.auth, &headers)?;
-    let plan_id = Uuid::try_parse(&plan_id)
-        .ok()
-        .filter(|id| !id.is_nil())
-        .ok_or(StatusCode::BAD_REQUEST)?;
-    let draft = timeout(LOOKUP_TIMEOUT, api.store.get(scope, plan_id))
+    let scope = authorize(&api.auth, &headers, READ_PERMISSION)?;
+    let draft = timeout(LOOKUP_TIMEOUT, api.store.get(scope.into(), plan_id(&plan)?))
         .await
         .ok()
         .and_then(Result::ok)
@@ -87,12 +128,97 @@ async fn lookup(
     Ok(Json(draft.into()))
 }
 
+async fn latest_terms(
+    State(api): State<Api>,
+    headers: HeaderMap,
+    Path(plan): Path<String>,
+) -> Result<Json<Terms>, StatusCode> {
+    let scope = authorize(&api.auth, &headers, READ_PERMISSION)?;
+    let terms = timeout(
+        LOOKUP_TIMEOUT,
+        api.terms.latest(scope.into(), plan_id(&plan)?),
+    )
+    .await
+    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)??
+    .ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(terms))
+}
+
+async fn save_terms(
+    State(api): State<Api>,
+    Path(plan): Path<String>,
+    request: Request,
+) -> Result<(StatusCode, Json<Terms>), StatusCode> {
+    let headers = request.headers();
+    let identity = authorize(&api.auth, headers, WRITE_TERMS_PERMISSION)?;
+    authorize(&api.auth, headers, READ_PARTNERS_PERMISSION)?;
+    if identity.actor.is_nil() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let bearer = headers
+        .get(header::AUTHORIZATION)
+        .cloned()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let plan_id = plan_id(&plan)?;
+    let Json(command) = Json::<Command>::from_request(request, &api)
+        .await
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let command = command.normalize()?;
+    let scope = identity.into();
+
+    timeout(SAVE_TIMEOUT, async {
+        let draft = api
+            .store
+            .get(scope, plan_id)
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+            .ok_or(StatusCode::NOT_FOUND)?;
+        let revision = match api.terms.decide(scope, plan_id, &command).await? {
+            Decision::Replay(terms) => return Ok((StatusCode::OK, Json(terms))),
+            Decision::Create(revision) => revision,
+        };
+        let bound = command.bind(&draft)?;
+        let suppliers = match partners::resolve(&bearer, scope, bound.supplier_ids()).await {
+            Ok(suppliers) => suppliers,
+            Err(partners::Failure::Unavailable) => {
+                // A concurrent attempt may already have saved this command.
+                return resolve_race(&api.terms, scope, plan_id, &command).await;
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let saved = bound.snapshot(revision, &suppliers, identity.actor)?;
+        if api.terms.append(scope, &saved).await.is_err() {
+            // If a unique index or an uncertain commit raced us, recover only
+            // a majority-visible result. Otherwise leave the outcome unknown.
+            return resolve_race(&api.terms, scope, plan_id, &command).await;
+        }
+        Ok((StatusCode::CREATED, Json(saved.terms)))
+    })
+    .await
+    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+}
+
+async fn resolve_race(
+    store: &terms_store::Store,
+    scope: Scope,
+    plan_id: Uuid,
+    command: &Command,
+) -> Result<(StatusCode, Json<Terms>), StatusCode> {
+    match store.decide(scope, plan_id, command).await? {
+        Decision::Replay(terms) => Ok((StatusCode::OK, Json(terms))),
+        Decision::Create(_) => Err(StatusCode::SERVICE_UNAVAILABLE),
+    }
+}
+
 pub(super) async fn serve() -> io::Result<()> {
     let auth = Auth::load(
         &required("ERP4US_IDENTITY_POLICY")?,
         &required("ERP4US_ISSUER_JWKS")?,
     )?;
     let store = Store::open().await?;
+    let terms = timeout(LOOKUP_TIMEOUT, store.open_terms())
+        .await
+        .map_err(|_| io::Error::other("Timed out initializing Procurement terms indexes"))??;
     let ready = store.clone();
     let bind = env::var("ERP4US_BIND").unwrap_or_else(|_| {
         let port = env::var("ERP4US_PROCUREMENT_PORT").unwrap_or_else(|_| "8094".into());
@@ -114,6 +240,12 @@ pub(super) async fn serve() -> io::Result<()> {
                 }),
             )
             .route("/v1/procurement/proposals/by-plan/{plan_id}", get(lookup))
+            .route(
+                "/v1/procurement/proposals/by-plan/{plan_id}/terms",
+                get(latest_terms)
+                    .post(save_terms)
+                    .layer(DefaultBodyLimit::max(TERMS_BODY_LIMIT)),
+            )
             .layer(middleware::from_fn(
                 |request: Request, next: Next| async move {
                     let mut response = next.run(request).await;
@@ -127,7 +259,7 @@ pub(super) async fn serve() -> io::Result<()> {
                     response
                 },
             ))
-            .with_state(Api { store, auth }),
+            .with_state(Api { store, terms, auth }),
     )
     .await
 }

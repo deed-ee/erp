@@ -69,7 +69,7 @@ pub(super) struct Draft {
 }
 
 impl Draft {
-    fn new(event: &AuthorizedPlan) -> Self {
+    pub(super) fn new(event: &AuthorizedPlan) -> Self {
         Self {
             proposal_id: Uuid::new_v4(),
             status: Status::Draft,
@@ -132,6 +132,10 @@ impl Store {
 
     pub async fn ready(&self) -> bool {
         self.0.run_command(doc! {"ping": 1}).await.is_ok()
+    }
+
+    pub(super) async fn open_terms(&self) -> io::Result<crate::terms_store::Store> {
+        crate::terms_store::Store::open(&self.0).await
     }
 
     pub async fn get(&self, scope: Scope, plan_id: Uuid) -> Result<Option<Draft>, Failure> {
