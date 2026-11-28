@@ -128,6 +128,20 @@ pub(super) struct Record {
 }
 
 impl Record {
+    pub(super) fn actor_id(&self) -> Uuid {
+        self.actor_id
+    }
+
+    pub(super) fn historical_policy(&self, scope: Scope) -> Result<Policy, Failure> {
+        Policy::from_snapshot(
+            scope,
+            self.intent.policy_id,
+            self.intent.policy_revision,
+            &self.policy_snapshot,
+        )
+        .map_err(|_| Failure::Unavailable)
+    }
+
     pub(super) fn replay(
         self,
         command: &Command,

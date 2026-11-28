@@ -221,16 +221,13 @@ struct IssuedLine {
     line_total: Cents,
 }
 
-// The receipt source is deliberately not the commercial batch. Keep this
-// projection unexposed while receiver authorization is under review.
-#[cfg(test)]
+// The receipt source is deliberately not the commercial batch or private audit.
 #[derive(Debug, Serialize)]
-struct ReceiptSource {
+pub(super) struct ReceiptSource {
     plan_id: Uuid,
     lines: Vec<ReceiptSourceLine>,
 }
 
-#[cfg(test)]
 #[derive(Debug, Serialize)]
 struct ReceiptSourceLine {
     purchase_order_id: Uuid,
@@ -270,69 +267,7 @@ impl Batch {
         {
             return Err(Failure::InvalidSnapshot);
         }
-        if terms.total().as_u64() != approved_total_cents {
-            return Err(Failure::InconsistentTotal);
-        }
-        let lines = terms.issuance_lines();
-        if !(1..=MAX_LINES).contains(&lines.len()) || lines.len() != plan.buy_rows.len() {
-            return Err(Failure::InvalidSnapshot);
-        }
-        // The saved snapshot is normally sorted. Canonicalize independently of storage order.
-        let mut lines: Vec<_> = lines.collect();
-        lines.sort_unstable_by_key(|(row, ..)| row.key());
-        if !lines.iter().all(|(row, ..)| {
-            let (item, rev) = row.key();
-            sku(item) && rev.is_none_or(revision)
-        }) {
-            return Err(Failure::InvalidLineKey);
-        }
-        if lines
-            .windows(2)
-            .any(|pair| pair[0].0.key() == pair[1].0.key())
-        {
-            return Err(Failure::DuplicateLineKey);
-        }
-
-        let mut planned: Vec<_> = plan.buy_rows.iter().collect();
-        planned.sort_unstable_by_key(|row| row.key());
-        let mut groups = BTreeMap::new();
-        for ((row, supplier, unit_price, line_total), planned) in lines.into_iter().zip(planned) {
-            if row != planned {
-                return Err(Failure::InvalidSnapshot);
-            }
-            let pieces = row.whole_pieces().ok_or(Failure::InvalidSnapshot)?;
-            if unit_price
-                .checked_mul(pieces)
-                .map_err(|_| Failure::Overflow)?
-                != line_total
-            {
-                return Err(Failure::InconsistentTotal);
-            }
-            if !valid_supplier(supplier) {
-                return Err(Failure::InconsistentSupplier);
-            }
-            let group = groups.entry(supplier.id).or_insert_with(|| Group {
-                supplier,
-                total: Cents::ZERO,
-                lines: Vec::new(),
-            });
-            if group.supplier != supplier {
-                return Err(Failure::InconsistentSupplier);
-            }
-            group.total = group
-                .total
-                .checked_add(line_total)
-                .map_err(|_| Failure::Overflow)?;
-            group.lines.push((row, unit_price, line_total));
-        }
-        let total = groups.values().try_fold(Cents::ZERO, |total, group| {
-            total
-                .checked_add(group.total)
-                .map_err(|_| Failure::Overflow)
-        })?;
-        if total != terms.total() {
-            return Err(Failure::InconsistentTotal);
-        }
+        let groups = approved_groups(saved, approved_total_cents, Some(&plan.buy_rows))?;
 
         // Allocate only after verifying the whole snapshot. Refuse rather than reuse an ID.
         let mut ids = HashSet::new();
@@ -374,7 +309,7 @@ impl Batch {
             source_order_id: plan.order_id,
             source_line_id: plan.line_id,
             currency: Currency::Eur,
-            total,
+            total: terms.total(),
             orders,
         })
     }
@@ -400,7 +335,74 @@ impl Batch {
         Ok(self)
     }
 
-    #[cfg(test)]
+    pub(super) fn receipt_source_for(
+        &self,
+        scope: Scope,
+        saved: &Saved,
+        decisions: &[Record],
+        receiver: Uuid,
+    ) -> Result<ReceiptSource, IssueFailure> {
+        if !saved.has_valid_revision()
+            || saved.terms.plan_id != self.plan_id
+            || saved.terms.proposal_id != self.proposal_id
+            || saved.terms.total() != self.total
+        {
+            return Err(IssueFailure::Unavailable);
+        }
+
+        // The first decision supplies the historical policy. The same review
+        // used for issuance checks the full prefix, including every snapshot,
+        // version, result, stage and actor. No current policy is consulted.
+        let policy = decisions
+            .first()
+            .ok_or(IssueFailure::Unavailable)?
+            .historical_policy(scope)?;
+        let issued = Issuance::new(
+            scope,
+            saved,
+            Some(&policy),
+            self.origin.intent,
+            self.origin.actor_id,
+        )
+        .map_err(|_| IssueFailure::Unavailable)?;
+        let (_, approved_total) = issued
+            .review
+            .approved_terms(decisions)
+            .map_err(|_| IssueFailure::Unavailable)?;
+        let mut groups =
+            approved_groups(saved, approved_total, None).map_err(|_| IssueFailure::Unavailable)?;
+        if groups.len() != self.orders.len()
+            || !self.orders.iter().all(|order| {
+                let Some(group) = groups.remove(&order.supplier.id) else {
+                    return false;
+                };
+                if order.supplier != *group.supplier
+                    || order.total != group.total
+                    || order.lines.len() != group.lines.len()
+                {
+                    return false;
+                }
+                let mut lines: Vec<_> = order.lines.iter().collect();
+                lines.sort_unstable_by_key(|line| line.row.key());
+                lines.iter().zip(group.lines).all(|(line, expected)| {
+                    (&line.row, line.unit_price, line.line_total) == expected
+                })
+            })
+        {
+            return Err(IssueFailure::Unavailable);
+        }
+
+        let source = self.receipt_source()?;
+        if receiver.is_nil()
+            || receiver == saved.actor_id
+            || receiver == self.origin.actor_id
+            || decisions.iter().any(|record| receiver == record.actor_id())
+        {
+            return Err(IssueFailure::Forbidden);
+        }
+        Ok(source)
+    }
+
     fn receipt_source(&self) -> Result<ReceiptSource, IssueFailure> {
         if self.plan_id.is_nil() || self.batch_id.is_nil() {
             return Err(IssueFailure::Unavailable);
@@ -444,6 +446,81 @@ impl Batch {
             lines,
         })
     }
+}
+
+fn approved_groups<'a>(
+    saved: &'a Saved,
+    approved_total_cents: u64,
+    expected_rows: Option<&[BuyRow]>,
+) -> Result<BTreeMap<Uuid, Group<'a>>, Failure> {
+    let terms = &saved.terms;
+    if terms.total().as_u64() != approved_total_cents {
+        return Err(Failure::InconsistentTotal);
+    }
+    let lines = terms.issuance_lines();
+    if !(1..=MAX_LINES).contains(&lines.len())
+        || expected_rows.is_some_and(|rows| rows.len() != lines.len())
+    {
+        return Err(Failure::InvalidSnapshot);
+    }
+    // The saved snapshot is normally sorted. Canonicalize independently of storage order.
+    let mut lines: Vec<_> = lines.collect();
+    lines.sort_unstable_by_key(|(row, ..)| row.key());
+    if !lines.iter().all(|(row, ..)| {
+        let (item, rev) = row.key();
+        sku(item) && rev.is_none_or(revision)
+    }) {
+        return Err(Failure::InvalidLineKey);
+    }
+    if lines
+        .windows(2)
+        .any(|pair| pair[0].0.key() == pair[1].0.key())
+    {
+        return Err(Failure::DuplicateLineKey);
+    }
+    if let Some(rows) = expected_rows {
+        let mut planned: Vec<_> = rows.iter().collect();
+        planned.sort_unstable_by_key(|row| row.key());
+        if !lines.iter().map(|(row, ..)| *row).eq(planned) {
+            return Err(Failure::InvalidSnapshot);
+        }
+    }
+    let mut groups = BTreeMap::new();
+    for (row, supplier, unit_price, line_total) in lines {
+        let pieces = row.whole_pieces().ok_or(Failure::InvalidSnapshot)?;
+        if unit_price
+            .checked_mul(pieces)
+            .map_err(|_| Failure::Overflow)?
+            != line_total
+        {
+            return Err(Failure::InconsistentTotal);
+        }
+        if !valid_supplier(supplier) {
+            return Err(Failure::InconsistentSupplier);
+        }
+        let group = groups.entry(supplier.id).or_insert_with(|| Group {
+            supplier,
+            total: Cents::ZERO,
+            lines: Vec::new(),
+        });
+        if group.supplier != supplier {
+            return Err(Failure::InconsistentSupplier);
+        }
+        group.total = group
+            .total
+            .checked_add(line_total)
+            .map_err(|_| Failure::Overflow)?;
+        group.lines.push((row, unit_price, line_total));
+    }
+    let total = groups.values().try_fold(Cents::ZERO, |total, group| {
+        total
+            .checked_add(group.total)
+            .map_err(|_| Failure::Overflow)
+    })?;
+    if total != terms.total() {
+        return Err(Failure::InconsistentTotal);
+    }
+    Ok(groups)
 }
 
 impl TryFrom<Batch> for IssuedBatch {
@@ -659,6 +736,37 @@ pub(super) mod tests {
         assert_eq!(
             issued.receipt_source().unwrap_err(),
             IssueFailure::Unavailable
+        );
+    }
+
+    #[test]
+    fn receipt_source_uses_only_stages_required_by_the_saved_policy_and_total() {
+        let (scope, draft, saved, _, intent, _) = approval_fixture();
+        let mut config: Value = serde_json::from_slice(include_bytes!(
+            "../../../contracts/examples/procurement/budget-policy-v1.json"
+        ))
+        .unwrap();
+        config["stages"][1]["minimum_amount"] = json!("2000.00");
+        let historical = Policy::parse(Some(&serde_json::to_vec(&config).unwrap())).unwrap();
+        let review = Review::new(scope, &saved, Some(&historical)).unwrap();
+        // Issuance allows an approver to issue, but never to receive that batch.
+        let decisions = [review
+            .decide(&[], &stage(&review, "department"), ISSUER)
+            .unwrap()];
+        let batch = Issuance::new(scope, &saved, Some(&historical), intent, ISSUER)
+            .unwrap()
+            .form(&draft, &decisions)
+            .unwrap();
+        assert!(
+            batch
+                .receipt_source_for(scope, &saved, &decisions, APPROVER)
+                .is_ok()
+        );
+        assert_eq!(
+            batch
+                .receipt_source_for(scope, &saved, &decisions, ISSUER)
+                .unwrap_err(),
+            IssueFailure::Forbidden,
         );
     }
 

@@ -9,6 +9,7 @@ const CURRENCY: &str = "EUR";
 pub(super) const MAX_STAGES: usize = 8;
 const MAX_KEY_BYTES: usize = 32;
 const MAX_THRESHOLD_EURO_DIGITS: usize = 15;
+const MAX_THRESHOLD_CENTS: u64 = 10u64.pow(MAX_THRESHOLD_EURO_DIGITS as u32 + 2) - 1;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(super) enum Failure {
@@ -26,7 +27,7 @@ pub(super) enum Failure {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Document {
-    schema_version: u32,
+    schema_version: i32,
     #[serde(with = "canonical_id")]
     tenant_id: Uuid,
     #[serde(with = "canonical_id")]
@@ -141,43 +142,71 @@ impl Policy {
         let input = input.ok_or(Failure::MissingPolicy)?;
         let JsonObject(document): JsonObject<Document> =
             serde_json::from_slice(input).map_err(|_| Failure::InvalidPolicy)?;
-        if document.schema_version != 1
-            || document.revision < 1
-            || document.currency != CURRENCY
-            || !(1..=MAX_STAGES).contains(&document.stages.len())
+        let snapshot = PolicySnapshot {
+            schema_version: document.schema_version,
+            currency: document.currency,
+            require_distinct_approvers: document.require_distinct_approvers,
+            ordered_thresholds_in_cents: document
+                .stages
+                .into_iter()
+                .map(|JsonObject(stage)| {
+                    let cents =
+                        threshold_cents(&stage.minimum_amount).ok_or(Failure::InvalidPolicy)?;
+                    Ok((stage.key, cents))
+                })
+                .collect::<Result<_, _>>()?,
+        };
+        Self::from_snapshot(
+            Scope {
+                tenant_id: document.tenant_id,
+                organization_id: document.organization_id,
+            },
+            document.policy_id,
+            document.revision,
+            &snapshot,
+        )
+    }
+
+    /// Restore policy content bound to the scope and versions of an immutable
+    /// decision, not to the policy currently configured for new decisions.
+    pub(super) fn from_snapshot(
+        scope: Scope,
+        id: Uuid,
+        revision: i32,
+        snapshot: &PolicySnapshot,
+    ) -> Result<Self, Failure> {
+        if snapshot.schema_version != 1
+            || revision < 1
+            || snapshot.currency != CURRENCY
+            || !(1..=MAX_STAGES).contains(&snapshot.ordered_thresholds_in_cents.len())
         {
             return Err(Failure::InvalidPolicy);
         }
-
-        let mut stages: Vec<Stage> = Vec::with_capacity(document.stages.len());
-        for JsonObject(StageDocument {
-            key,
-            minimum_amount,
-        }) in document.stages
-        {
-            let minimum_cents = threshold_cents(&minimum_amount).ok_or(Failure::InvalidPolicy)?;
-            let permission = stage_permission(&key).ok_or(Failure::InvalidPolicy)?;
-            if stages.iter().any(|stage| stage.key == key)
+        let mut stages: Vec<Stage> = Vec::with_capacity(snapshot.ordered_thresholds_in_cents.len());
+        for (key, minimum_cents) in &snapshot.ordered_thresholds_in_cents {
+            let permission = stage_permission(key).ok_or(Failure::InvalidPolicy)?;
+            if *minimum_cents > MAX_THRESHOLD_CENTS
+                || stages.iter().any(|stage| &stage.key == key)
                 || match stages.last() {
-                    None => minimum_cents != 0,
-                    Some(previous) => minimum_cents <= previous.minimum_cents,
+                    None => *minimum_cents != 0,
+                    Some(previous) => *minimum_cents <= previous.minimum_cents,
                 }
             {
                 return Err(Failure::InvalidPolicy);
             }
             stages.push(Stage {
                 permission,
-                key,
-                minimum_cents,
+                key: key.clone(),
+                minimum_cents: *minimum_cents,
             });
         }
 
         Ok(Self {
-            tenant_id: document.tenant_id,
-            organization_id: document.organization_id,
-            id: document.policy_id,
-            revision: document.revision,
-            require_distinct_approvers: document.require_distinct_approvers,
+            tenant_id: scope.tenant_id,
+            organization_id: scope.organization_id,
+            id,
+            revision,
+            require_distinct_approvers: snapshot.require_distinct_approvers,
             stages,
         })
     }

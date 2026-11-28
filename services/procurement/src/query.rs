@@ -15,6 +15,7 @@ use axum::{
     extract::{DefaultBodyLimit, FromRequest, Path, Request, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::get,
 };
 use erp4us_identity::{Auth, Denial, ORGANIZATION_HEADER, TENANT_HEADER};
@@ -32,11 +33,13 @@ const MAX_OPERATIONS: usize = 16;
 const TERMS_BODY_LIMIT: usize = 16 * 1024;
 const APPROVAL_BODY_LIMIT: usize = 2 * 1024;
 const ISSUE_BODY_LIMIT: usize = 2 * 1024;
+const RECEIPT_SOURCE_LIMIT: usize = 16 * 1024;
 const READ_PERMISSION: &str = "procurement.proposal.read";
 const WRITE_TERMS_PERMISSION: &str = "procurement.proposal.terms.write";
 const READ_PARTNERS_PERMISSION: &str = "master-data.partner.read";
 const READ_PURCHASE_PERMISSION: &str = "procurement.purchase-order.read";
 const ISSUE_PURCHASE_PERMISSION: &str = "procurement.purchase-order.issue";
+const READ_RECEIPT_SOURCE_PERMISSION: &str = "procurement.purchase-order.receipt-source.read";
 
 #[derive(Clone)]
 struct Api {
@@ -362,9 +365,21 @@ fn purchase_identity(
     if issue {
         authorize(auth, headers, ISSUE_PURCHASE_PERMISSION)?;
     }
+    canonical_identity(identity, headers)
+}
+
+fn canonical_identity(
+    identity: erp4us_identity::Scope,
+    headers: &HeaderMap,
+) -> Result<erp4us_identity::Scope, StatusCode> {
     if identity.actor.is_nil() {
         return Err(StatusCode::FORBIDDEN);
     }
+    canonical_scope(headers)?;
+    Ok(identity)
+}
+
+fn canonical_scope(headers: &HeaderMap) -> Result<(), StatusCode> {
     for name in [TENANT_HEADER, ORGANIZATION_HEADER] {
         if headers
             .get(name)
@@ -375,7 +390,7 @@ fn purchase_identity(
             return Err(StatusCode::BAD_REQUEST);
         }
     }
-    Ok(identity)
+    Ok(())
 }
 
 async fn get_purchase_batch(
@@ -391,6 +406,46 @@ async fn get_purchase_batch(
         async move {
             let batch = api.terms.purchases().get(identity.into(), plan_id).await?;
             Ok(Json(batch.try_into()?))
+        },
+    )
+    .await
+}
+
+fn receipt_source_request(
+    auth: &Auth,
+    headers: &HeaderMap,
+    plan: &str,
+) -> Result<(erp4us_identity::Scope, Uuid), StatusCode> {
+    let identity = authorize(auth, headers, READ_RECEIPT_SOURCE_PERMISSION);
+    // A verified token with a malformed selector has no canonical scope.
+    if matches!(identity, Err(StatusCode::FORBIDDEN)) {
+        canonical_scope(headers)?;
+    }
+    let identity = canonical_identity(identity?, headers)?;
+    let plan_id = canonical_uuid(plan).ok_or(StatusCode::BAD_REQUEST)?;
+    Ok((identity, plan_id))
+}
+
+async fn get_receipt_source(
+    State(api): State<Api>,
+    headers: HeaderMap,
+    Path(plan): Path<String>,
+) -> Result<Response, StatusCode> {
+    let (identity, plan_id) = receipt_source_request(&api.auth, &headers, &plan)?;
+    bounded(
+        &api.operations,
+        Instant::now() + LOOKUP_TIMEOUT,
+        async move {
+            let source = api
+                .terms
+                .purchases()
+                .receipt_source(identity, plan_id)
+                .await?;
+            let body = serde_json::to_vec(&source).map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+            if body.len() > RECEIPT_SOURCE_LIMIT {
+                return Err(StatusCode::SERVICE_UNAVAILABLE);
+            }
+            Ok(([(header::CONTENT_TYPE, "application/json")], body).into_response())
         },
     )
     .await
@@ -491,6 +546,10 @@ pub(super) async fn serve() -> io::Result<()> {
                     .post(issue_purchase_batch)
                     .layer(DefaultBodyLimit::max(ISSUE_BODY_LIMIT)),
             )
+            .route(
+                "/v1/procurement/proposals/by-plan/{plan_id}/purchase-orders/receipt-source",
+                get(get_receipt_source),
+            )
             .layer(middleware::from_fn(
                 |request: Request, next: Next| async move {
                     let mut response = next.run(request).await;
@@ -515,6 +574,10 @@ pub(super) async fn serve() -> io::Result<()> {
     )
     .await
 }
+
+#[cfg(test)]
+#[path = "query/receipt_source_tests.rs"]
+mod receipt_source_tests;
 
 #[cfg(test)]
 mod tests {
