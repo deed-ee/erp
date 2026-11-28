@@ -1,0 +1,20 @@
+# Infrastructure, tooling and dependencies
+
+**Purpose and scope.** This standard covers Dockerfiles, Compose, GitHub Actions, NATS configuration, shell, Python, JavaScript tooling, YAML, JSON, TOML and Markdown currently maintained here. No Kubernetes deployment is tracked in the three repositories; adopt schemas, probes, resource limits, least privilege, secret handling and tested restore with the first actual Kubernetes deployment, not before.
+
+## Mandatory rules
+
+- Use pinned, verified bases and build dependencies, lockfiles and staged builds. Keep runtime images minimal and non-root where viable. Do not embed secrets or unnecessary build tools. Define startup/readiness, shutdown and persistence ownership. Preserve service image and base image advisory gates, including Preview's separate identity image gate.
+- Use minimally scoped workflow tokens, immutable action SHAs, explicit event and job dependencies, disposable GitHub-hosted runners for public PR code, and trusted-only cache writes. Treat branch names and PR data as input, not shell source. Never run PR code in a privileged context, expose private networks/credentials to public PRs, or let failed path detection satisfy a required aggregate. Use concurrency and periodically run the entire suite. Preview feature gates are not optional just because the same branch also runs CI.
+- For a material dependency change, document need, alternatives, license/notice, maintenance, advisories, transitive cost, features, compatibility and rollback. Use the workspace's shared definitions where compatible. Keep `Cargo.lock` and npm lockfiles; test with `--locked` and `npm ci`. Do not create alternate update or waiver policies; follow the [organization's dependency maintenance policy](https://github.com/erp4us-org/.github/blob/aa48974aa69b337a8376327ff269beefc481bc0f/docs/dependency-maintenance.md).
+- Shell scripts must declare their interpreter, quote input, fail nonzero and clean up only resources they own. Python tools should use existing pinned packages or the standard library, separate validation from I/O and report invalid input with a path or field. Validate structured files with the native parser/schema, not text substitutions. Use the repo's EditorConfig, stable filenames and linked canonical Markdown. Keep dependencies and check scripts read-only by default with respect to tracked sources.
+
+## Recommended and prohibited patterns
+
+Use native checks first. Review Compose overlays together and use static validation with disposable synthetic values; never print rendered secrets. Keep health and non-production fixture behavior independent. Review duplicate dependencies without version consolidation that introduces incompatibility. Avoid adding parallel scanners or general-purpose deployment systems without evidence. No automatic `audit fix --force`, arbitrary remote shell installers, reusable workflow revision `main`, or personal access token in application PR workflows.
+
+**Good example:** [CI workflow and Compose patterns](references.md#tooling). **Counterexample:** interpolate a PR title into `run`, install mutable remote tools, or replace a failing image predicate with `continue-on-error`.
+
+**Enforcement.** actionlint and ShellCheck, Compose model validation, npm/Rust/container advisories, cargo-deny license/source/bans, and GitHub secret scanning/push protection. GitHub settings and trust still require maintainer review. Do not treat advisory scans as general Dockerfile lint.
+
+**Exceptions and references.** Use the [exception process](README.md#rule-strength-and-exceptions). Follow [Docker build practices](https://docs.docker.com/build/building/best-practices/), [GitHub Actions security](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions), [ShellCheck](https://www.shellcheck.net/), [Python docs](https://docs.python.org/3/) and [EditorConfig](https://editorconfig.org/). Use [PEP 8](https://peps.python.org/pep-0008/) as guidance, not a warrant to reformat legacy Python.

@@ -1,0 +1,11 @@
+{
+  "singleQuote": true,
+  "trailingComma": "all",
+  "overrides": [
+    {
+      "files": "src/**/*.html",
+      "excludeFiles": "src/index.html",
+      "options": { "parser": "angular" }
+    }
+  ]
+}

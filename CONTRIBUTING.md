@@ -2,7 +2,7 @@
 
 Start with the [README](README.md), [roadmap](ROADMAP.md) and [architecture](docs/architecture/baseline.md). Reproduce bugs using synthetic data; open a focused issue with steps, expected behavior and version. Keep public discussion and code in English. No AI tooling is required.
 
-Keep changes focused, add tests for behavior, run the checks in the README and document migration/rollback and contract impacts. Use a pull request and request review rather than pushing to the default branch. For architecture or protocol changes, follow the RFC process in [GOVERNANCE.md](GOVERNANCE.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md). Follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Follow the [engineering standards](docs/engineering/README.md) and [Definition of Done](docs/engineering/agent-workflow.md#definition-of-done). Keep changes focused, add tests for behavior, run the applicable [local checks](docs/engineering/quality-gates.md) and document migration/rollback and contract impacts. Use a pull request and request review rather than pushing to the default branch. For architecture or protocol changes, follow the RFC process in [GOVERNANCE.md](GOVERNANCE.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md). Follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Sign off your contributions
 

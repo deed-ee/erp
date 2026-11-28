@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node"] },
+  "files": [],
+  "include": ["tests/**/*.ts", "identity-tests/**/*.ts", "playwright*.ts"]
+}
