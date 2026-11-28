@@ -273,6 +273,33 @@ fn pending_wire_fact_is_a_new_root_and_excludes_internal_fields() {
 }
 
 #[tokio::test]
+async fn posting_deadline_keeps_an_in_flight_task_alive_and_bounded() {
+    let slots = Arc::new(Semaphore::new(1));
+    let (release, work) = tokio::sync::oneshot::channel();
+    let operation = async {
+        work.await.map_err(|_| Failure::Unavailable)?;
+        Ok::<_, Failure>(())
+    };
+    assert_eq!(
+        bounded_post(&slots, Instant::now() + Duration::from_millis(5), operation).await,
+        Err(Failure::Unavailable)
+    );
+    assert_eq!(slots.available_permits(), 0);
+    assert_eq!(
+        bounded_post(&slots, Instant::now() + Duration::from_secs(1), async {
+            Ok::<_, Failure>(())
+        })
+        .await,
+        Err(Failure::Unavailable)
+    );
+    release.send(()).unwrap();
+    let _slot = timeout(Duration::from_secs(1), slots.acquire())
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
 #[ignore = "requires INVENTORY_RECEIPT_TEST_MONGO_URI for a dedicated disposable replica set"]
 async fn mongo_competing_lots_and_rollback_keep_all_effects_atomic() {
     let uri = std::env::var("INVENTORY_RECEIPT_TEST_MONGO_URI").expect("dedicated test Mongo URI");

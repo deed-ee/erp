@@ -29,8 +29,11 @@ use mongodb::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
-use tokio::time::{sleep, timeout};
+use std::{future::Future, sync::Arc, time::Duration};
+use tokio::{
+    sync::Semaphore,
+    time::{Instant, sleep, timeout, timeout_at},
+};
 use uuid::Uuid;
 
 mod fact;
@@ -46,6 +49,7 @@ const LEDGER: &str = "stock_movements";
 const DB_LIMIT: Duration = Duration::from_secs(5);
 const COMMIT_LIMIT: Duration = Duration::from_secs(2);
 const MAX_ATTEMPTS: u32 = 5;
+const MAX_POSTS: usize = 16;
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -129,7 +133,11 @@ fn purchase_index() -> IndexModel {
         .build()
 }
 
-struct Store(Database);
+#[derive(Clone)]
+struct Store {
+    db: Database,
+    posting_slots: Arc<Semaphore>,
+}
 
 impl Store {
     /// Mongo's `_id` indexes cover the scoped command and scoped plan row. The
@@ -153,14 +161,17 @@ impl Store {
                 .write_concern(majority_write())
                 .await
                 .map_err(|_| Failure::Unavailable)?;
-            Ok(Self(db.clone()))
+            Ok(Self {
+                db: db.clone(),
+                posting_slots: Arc::new(Semaphore::new(MAX_POSTS)),
+            })
         })
         .await
         .map_err(|_| Failure::Unavailable)?
     }
 
     fn majority_read(&self, name: &str) -> Collection<Document> {
-        self.0.collection_with_options(
+        self.db.collection_with_options(
             name,
             CollectionOptions::builder()
                 .read_concern(ReadConcern::majority())
@@ -219,12 +230,35 @@ impl Store {
         destination: &StockKey,
         actor_kind: ActorKind,
     ) -> Result<Post, Failure> {
-        timeout(
-            DB_LIMIT,
-            self.transact(command, issued, destination, actor_kind),
-        )
+        let store = self.clone();
+        let destination = destination.clone();
+        let IssuedLine {
+            scope,
+            actor,
+            plan,
+            purchase,
+            item,
+            unit,
+            ordered,
+        } = *issued;
+        let item = item.clone();
+        let unit = unit.to_owned();
+        let deadline = Instant::now() + DB_LIMIT;
+        bounded_post(&self.posting_slots, deadline, async move {
+            let issued = IssuedLine {
+                scope,
+                actor,
+                plan,
+                purchase,
+                item: &item,
+                unit: &unit,
+                ordered,
+            };
+            store
+                .transact(command, &issued, &destination, actor_kind, deadline)
+                .await
+        })
         .await
-        .map_err(|_| Failure::Unavailable)?
     }
 
     async fn transact(
@@ -233,15 +267,19 @@ impl Store {
         issued: &IssuedLine<'_>,
         destination: &StockKey,
         actor_kind: ActorKind,
+        deadline: Instant,
     ) -> Result<Post, Failure> {
         let mut session = self
-            .0
+            .db
             .client()
             .start_session()
             .await
             .map_err(|_| Failure::Unavailable)?;
         let message_id = Uuid::new_v4();
         for attempt in 0..MAX_ATTEMPTS {
+            if Instant::now() >= deadline {
+                return Err(Failure::Unavailable);
+            }
             session
                 .start_transaction()
                 .read_concern(ReadConcern::snapshot())
@@ -294,7 +332,7 @@ impl Store {
         actor_kind: ActorKind,
         message_id: Uuid,
     ) -> Result<Post, Step> {
-        let receipts = self.0.collection::<Document>(RECEIPTS);
+        let receipts = self.db.collection::<Document>(RECEIPTS);
         if let Some(document) = receipts
             .find_one(doc! {"_id": receipt_key(command)})
             .session(&mut *session)
@@ -310,7 +348,7 @@ impl Store {
         }
 
         let saved_plan = self
-            .0
+            .db
             .collection::<Document>("material_plans")
             .find_one(doc! {"_id": sales_key(command.sales)})
             .session(&mut *session)
@@ -320,7 +358,7 @@ impl Store {
             records::original(&saved_plan, command.sales, issued.plan, issued.item)?;
         let row = row_key(&plan.key);
         let purchase = purchase_key(command.sales.scope, plan.key.plan, command.purchase);
-        let lines = self.0.collection::<Document>(LINES);
+        let lines = self.db.collection::<Document>(LINES);
         let old = lines
             .find_one(doc! {"_id": &row})
             .session(&mut *session)
@@ -348,7 +386,7 @@ impl Store {
             return Err(Reject::PlanIneligible.into());
         }
 
-        let reservations = self.0.collection::<Document>("reservations");
+        let reservations = self.db.collection::<Document>("reservations");
         let waiting = reservations
             .find_one(waiting_filter.clone())
             .session(&mut *session)
@@ -366,7 +404,7 @@ impl Store {
                 .as_ref()
                 .map_or(plan.original.held, |(_, allocation)| allocation.held),
         };
-        let balances = self.0.collection::<Document>("balances");
+        let balances = self.db.collection::<Document>("balances");
         let stock = stock_key(&plan.key.stock);
         let stock_filter = doc! {"_id": &stock, "schemaVersion": SCHEMA, "available": {"$gte": 0}};
         let mapped = destination == &plan.key.stock
@@ -416,13 +454,35 @@ impl Store {
             lines.insert_one(next).session(&mut *session).await?;
         }
         receipts.insert_one(receipt).session(&mut *session).await?;
-        self.0
+        self.db
             .collection::<Document>(LEDGER)
             .insert_one(records::movement(&saved))
             .session(session)
             .await?;
         Ok(Post::Created(saved))
     }
+}
+
+async fn bounded_post<T: Send + 'static>(
+    slots: &Arc<Semaphore>,
+    deadline: Instant,
+    operation: impl Future<Output = Result<T, Failure>> + Send + 'static,
+) -> Result<T, Failure> {
+    let slot = slots
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| Failure::Unavailable)?;
+    // Timing out or dropping the caller does not cancel the Mongo future,
+    // including an in-flight commit. The task retains its slot until it
+    // finishes; a client with an uncertain outcome retries the same intent.
+    let task = tokio::spawn(async move {
+        let _slot = slot;
+        operation.await
+    });
+    timeout_at(deadline, task)
+        .await
+        .map_err(|_| Failure::Unavailable)?
+        .map_err(|_| Failure::Unavailable)?
 }
 
 async fn guard(
